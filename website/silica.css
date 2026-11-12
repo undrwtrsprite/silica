@@ -64,7 +64,7 @@ a { color: inherit; }
 
 .eyebrow { margin: 0 0 18px; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
 h1 { margin: 0; font-size: clamp(40px, 5.2vw, 72px); line-height: 1.02; letter-spacing: -0.035em; font-weight: 800; text-wrap: balance; }
-.lede { margin: 22px 0 0; font-size: clamp(17px, 1.5vw, 20px); color: var(--muted); max-width: 46ch; }
+.lede { margin: 22px 0 0; font-size: clamp(17px, 1.5vw, 20px); color: #b4beca; max-width: 46ch; }
 
 .stats { display: grid; grid-template-columns: repeat(3, auto); gap: 8px 30px; margin: 34px 0 0; padding: 22px 0 0; border-top: 1px solid var(--line); width: fit-content; }
 .stat b { display: block; font-size: clamp(30px, 3.2vw, 44px); line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
@@ -83,7 +83,7 @@ h1 { margin: 0; font-size: clamp(40px, 5.2vw, 72px); line-height: 1.02; letter-s
 /* the tilted launcher */
 .stage {
   position: absolute; z-index: 1;
-  left: max(47vw, calc(var(--gutter) + 545px)); top: 50%; width: min(1120px, 92vw);
+  left: 47vw; top: 50%; width: min(1120px, 92vw);
   transform: translateY(-50%);
   perspective: 2000px; perspective-origin: 0% 50%;
   pointer-events: none;
@@ -114,7 +114,7 @@ h1 { margin: 0; font-size: clamp(40px, 5.2vw, 72px); line-height: 1.02; letter-s
 .shot.back { position: absolute; width: 78%; left: 14%; top: 17%; transform: translateZ(-170px); opacity: 0.9; filter: saturate(0.9) brightness(0.72); }
 .shot.front { transform: translateZ(0); }
 
-.fade-left { position: absolute; z-index: 2; inset: 0 auto 0 0; width: 56vw; background: linear-gradient(to right, var(--bg) 22%, rgba(10, 13, 17, 0.0)); pointer-events: none; }
+.fade-left { position: absolute; z-index: 2; inset: 0 auto 0 0; width: min(100vw, calc(var(--gutter) + 740px)); background: linear-gradient(to right, var(--bg) 0%, rgba(10, 13, 17, 0.96) 52%, rgba(10, 13, 17, 0.84) 72%, rgba(10, 13, 17, 0.35) 88%, rgba(10, 13, 17, 0) 100%); pointer-events: none; }
 .fade-bottom { position: absolute; z-index: 2; inset: auto 0 0 0; height: 140px; background: linear-gradient(to top, var(--bg), transparent); pointer-events: none; }
 
 /* ---------- panels ---------- */
@@ -124,24 +124,24 @@ h1 { margin: 0; font-size: clamp(40px, 5.2vw, 72px); line-height: 1.02; letter-s
   min-height: 86svh; display: flex; align-items: center;
   border-top: 1px solid var(--line);
 }
-.panel .copy { position: relative; z-index: 3; width: min(500px, 100%); }
+.panel .copy { position: relative; z-index: 3; width: min(500px, 100%); text-shadow: 0 1px 24px rgba(10, 13, 17, 0.9); }
 .panel.reverse { justify-content: flex-end; }
 .panel h2 { margin: 0; font-size: clamp(32px, 3.8vw, 52px); line-height: 1.05; letter-spacing: -0.03em; font-weight: 800; text-wrap: balance; }
-.panel .sub { margin: 18px 0 0; color: var(--muted); max-width: 44ch; }
+.panel .sub { margin: 18px 0 0; color: #b4beca; max-width: 44ch; }
 .panel ul { list-style: none; margin: 26px 0 0; padding: 0; display: grid; gap: 14px; }
 .panel li { position: relative; padding-left: 22px; color: #cfd6dd; font-size: 16px; }
 .panel li::before { content: ""; position: absolute; left: 0; top: 0.58em; width: 8px; height: 8px; background: var(--accent); }
 .panel li b { color: var(--text); font-weight: 650; }
 
-.panel .stage { left: auto; right: -14vw; width: clamp(420px, calc(100vw - 560px - var(--gutter) * 2 + 14vw), 980px); }
+.panel .stage { left: auto; right: -14vw; width: min(980px, 88vw); }
 .panel.reverse .stage { right: auto; left: -14vw; perspective-origin: 100% 50%; }
 .panel.reverse .rig { transform-origin: 100% 50%;
   transform:
     rotateY(calc(26deg - var(--p) * 12deg))
     rotateX(calc(8deg - var(--p) * 4deg))
     rotateZ(calc(-2.5deg + var(--p) * 1.5deg)); }
-.panel .fade-left { width: 48vw; }
-.panel.reverse .fade-left { inset: 0 0 0 auto; background: linear-gradient(to left, var(--bg) 22%, rgba(10, 13, 17, 0)); }
+
+.panel.reverse .fade-left { inset: 0 0 0 auto; background: linear-gradient(to left, var(--bg) 0%, rgba(10, 13, 17, 0.96) 52%, rgba(10, 13, 17, 0.84) 72%, rgba(10, 13, 17, 0.35) 88%, rgba(10, 13, 17, 0) 100%); }
 
 /* ---------- benchmark ---------- */
 .bench { margin-top: 30px; display: grid; gap: 22px; }

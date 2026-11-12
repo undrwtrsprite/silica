@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0c1013">
+  <meta name="description" content="Silica brings Minecraft Beta 1.7.3 to Apple Silicon with native rendering and built-in quality-of-life features. Free and open source at release.">
+  <title>Silica — Minecraft Beta 1.7.3 on Apple Silicon</title>
+  <link rel="icon" href="assets/icon.png">
+  <link rel="stylesheet" href="silica.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="masthead">
+    <div class="wrap nav">
+      <a class="brand" href="#main"><img src="assets/icon.png" width="36" height="36" alt=""><span>Silica</span></a>
+      <nav aria-label="Main navigation">
+        <a href="#features">Features</a>
+        <a href="#performance">Performance</a>
+      </nav>
+      <a class="release-link" href="#release">Coming soon</a>
+    </div>
+  </header>
+  <main id="main">
+    <section class="wrap hero" id="launcher" aria-labelledby="headline">
+      <h1 id="headline">Silica</h1>
+      <p class="intro">Minecraft Beta 1.7.3 on Apple Silicon.</p>
+      <figure class="hero-shot">
+        <a href="assets/play.webp"><img src="assets/play.webp" width="1650" height="1070" alt="Silica’s Play screen, with its illustrated landscape, Microsoft sign-in, and display and renderer controls" fetchpriority="high"></a>
+      </figure>
+      <div class="gallery" aria-label="More launcher screenshots">
+        <figure><a href="assets/launcher.webp"><img src="assets/launcher.webp" loading="lazy" alt="The guided setup wizard"></a><figcaption>Guided setup</figcaption></figure>
+        <figure><a href="assets/worlds.webp"><img src="assets/worlds.webp" loading="lazy" alt="The Worlds page with its import controls"></a><figcaption>Worlds</figcaption></figure>
+        <figure><a href="assets/settings.webp"><img src="assets/settings.webp" loading="lazy" alt="Launcher Settings showing performance presets and fullscreen controls"></a><figcaption>Settings</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="section wrap" id="features" aria-labelledby="features-title">
+      <div class="section-head">
+        <h2 id="features-title">What Silica adds</h2>
+      </div>
+      <ul class="feature-highlights">
+        <li><h3>Native performance</h3><p>Vulkan and OpenGL on Apple Silicon, with chunk loading and saves handled in the background.</p></li>
+        <li><h3>Inventory shortcuts</h3><p>Sort chests, drag to split stacks, and shift-click to craft in bulk.</p></li>
+        <li><h3>World management</h3><p>Resume your last world, set an autosave interval, and import, export, or back up saves.</p></li>
+        <li><h3>Controls &amp; audio</h3><p>Toggle sneak, rebind zoom, and turn on directional sound captions or continuous music.</p></li>
+        <li><h3>Commands &amp; debug</h3><p>Optional world cheats with Tab completion and history, plus a more detailed F3 screen.</p></li>
+        <li><h3>Guided setup</h3><p>Prepare Beta locally, verify ownership with Microsoft sign-in, and compare renderers in the launcher.</p></li>
+      </ul>
+      <details class="feature-details">
+        <summary>Full feature list</summary>
+        <div class="features">
+            <article><h3>Performance &amp; display</h3><ul>
+              <li>Native ARM64 Java 21 and modern macOS windowing.</li>
+              <li>Vulkan through MoltenVK, with an OpenGL option.</li>
+              <li>Background chunk meshing, terrain prefetch, and chunk saves.</li>
+              <li>Fullscreen that survives app switching, window sizing, VSync, an FPS cap, and an FPS counter.</li>
+              <li>Field-of-view slider and GUI scaling up to 4×.</li>
+            </ul></article>
+            <article><h3>Inventory &amp; crafting</h3><ul>
+              <li>Drag to spread or collect items across slots.</li>
+              <li>Number keys swap items into the hotbar.</li>
+              <li>Q drops one item. Ctrl+Q drops a stack.</li>
+              <li>Shift-double-click moves matching stacks. Scroll to move one item.</li>
+              <li>Inventory and chest sorting, durability tooltips, and bulk shift-crafting.</li>
+              <li>Middle-click picks the block from your inventory.</li>
+            </ul></article>
+            <article><h3>Worlds &amp; saves</h3><ul>
+              <li>Resume the last world from the game’s title screen.</li>
+              <li>View seeds and sort worlds by name or last played.</li>
+              <li>Choose an autosave interval and keep rotating world backups.</li>
+              <li>Import, export, or back up worlds in the launcher.</li>
+              <li>Set your respawn point by using a bed without sleeping.</li>
+            </ul></article>
+            <article><h3>Controls, sound &amp; accessibility</h3><ul>
+              <li>Toggle Sneak, a rebindable zoom key, and sensitivity shown as a percentage.</li>
+              <li>Mouse inversion and sensitivity live in Controls.</li>
+              <li>Master, music, effects, and ambient volume controls with audio levels tuned against Beta.</li>
+              <li>Optional continuous music and directional sound captions.</li>
+              <li>Mouse and movement input fixes when opening and closing menus.</li>
+            </ul></article>
+            <article><h3>Commands &amp; debug</h3><ul>
+              <li>Optional per-world cheats for <code>/help</code>, <code>/seed</code>, <code>/time</code>, <code>/give</code>, and <code>/weather</code>.</li>
+              <li>Command list, suggestions with Tab completion, and Up/Down history that resets when you start a world.</li>
+              <li>Expanded F3 with coordinates, facing, biome, light, targeted block, and time.</li>
+            </ul></article>
+            <article><h3>Launcher &amp; setup</h3><ul>
+              <li>Guided installation restores the original sounds and prepares the game locally.</li>
+              <li>Microsoft sign-in and Java Edition ownership verification before play.</li>
+              <li>Performance presets and controls for memory, renderer, and worker threads.</li>
+              <li>Renderer benchmarks with a cancellable countdown, per-distance results, and side-by-side comparisons.</li>
+              <li>Game logs and crash hints in the launcher.</li>
+            </ul></article>
+        </div>
+        <figure class="game">
+          <a href="assets/beta-world.webp"><img src="assets/beta-world.webp" width="1520" height="855" alt="Minecraft Beta landscape with grassy hills, a snowy ridge, and pools of water" loading="lazy"></a>
+          <figcaption>In-game capture · Vulkan · Far render distance</figcaption>
+        </figure>
+      </details>
+    </section>
+
+    <section class="section wrap" id="performance" aria-labelledby="performance-title">
+      <div class="section-head">
+        <h2 id="performance-title">OpenGL vs. Vulkan</h2>
+      </div>
+      <div class="bench">
+        <div class="bench-top"><strong>Average FPS</strong><span>Apple M5 · 1080p fullscreen</span></div>
+        <table>
+          <thead><tr><th scope="col">Render distance</th><th scope="col">OpenGL</th><th scope="col">Vulkan</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Far <small>256 blocks</small></th><td><b>83</b><span class="bar gl" style="--value:20.75%"></span></td><td><b>289</b><span class="bar vk" style="--value:72.28%"></span></td></tr>
+            <tr><th scope="row">Normal <small>128 blocks</small></th><td><b>160</b><span class="bar gl" style="--value:40%"></span></td><td><b>374</b><span class="bar vk" style="--value:93.5%"></span></td></tr>
+          </tbody>
+        </table>
+        <details class="method"><summary>Test setup</summary><p>One run per renderer and distance on Nov 12, 2026. Fixed camera path and seed (1337), 10 s warm-up, 20 s measured. FPS rounded to whole frames.</p></details>
+      </div>
+    </section>
+
+    <section class="wrap release" id="release" aria-labelledby="release-title">
+      <div>
+        <h2 id="release-title">Coming soon.</h2>
+        <p>Free and open source at release. No charges or revenue.</p>
+        <p class="requirements">Requires macOS 14+, Apple Silicon, and a Minecraft: Java Edition purchase.</p>
+      </div>
+    </section>
+  </main>
+  <footer class="wrap footer">
+    <span class="brand"><img src="assets/icon.png" width="30" height="30" alt="">Silica</span>
+    <p>Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</p>
+    <a href="#main">Back to top ↑</a>
+  </footer>
+</body>
+</html>

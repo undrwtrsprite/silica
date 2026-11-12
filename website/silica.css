@@ -190,3 +190,16 @@ footer p { margin: 0 auto 6px; max-width: 70ch; }
   .panel.reverse .rig { transform: rotateY(22deg) rotateX(6deg) rotateZ(-2deg) !important; }
   .bar { transform: scaleX(1); transition: none; }
 }
+
+/* ---------- privacy and terms ---------- */
+.docpage .masthead { background: rgba(10, 13, 17, 0.9); backdrop-filter: blur(14px); }
+.doc { max-width: 760px; margin: 0 auto; padding: 130px var(--gutter) 70px; }
+.doc h1 { font-size: clamp(34px, 5vw, 52px); letter-spacing: -0.03em; margin: 0; }
+.doc .updated { margin: 8px 0 0; color: #75808c; font-size: 14px; }
+.doc .lead { margin: 28px 0 0; font-size: 19px; color: #d6dde4; }
+.doc h2 { margin: 44px 0 8px; font-size: 22px; letter-spacing: -0.015em; }
+.doc p, .doc li { color: #b4beca; }
+.doc ul { padding-left: 20px; display: grid; gap: 10px; }
+.doc code { font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(255, 255, 255, 0.07); padding: 2px 6px; border-radius: 6px; color: #dfe6ec; }
+.doc a, footer a { color: var(--accent); }
+.doc b { color: var(--text); }

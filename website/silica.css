@@ -169,6 +169,13 @@ details p { margin: 0 0 18px; color: var(--muted); max-width: 62ch; }
 footer { padding: 40px var(--gutter) 56px; color: #75808c; font-size: 13px; line-height: 1.6; text-align: center; }
 footer p { margin: 0 auto 6px; max-width: 70ch; }
 
+/* ---------- wide screens: let the screenshots grow so there is no empty gap beside the text ---------- */
+@media (min-width: 1500px) {
+  .stage { left: 38vw; width: min(1500px, 80vw); }
+  .panel .stage { left: auto; right: -10vw; width: min(1500px, 80vw); }
+  .panel.reverse .stage { right: auto; left: -10vw; }
+}
+
 /* ---------- small screens ---------- */
 @media (max-width: 900px) {
   .masthead { background: rgba(10, 13, 17, 0.88); backdrop-filter: blur(14px); }

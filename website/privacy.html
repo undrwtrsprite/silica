@@ -27,13 +27,14 @@
 <h2>Signing in with Microsoft</h2>
 <p>Silica asks you to sign in with the Microsoft account that owns Minecraft: Java Edition, to check that you own the game before it starts.</p>
 <ul>
-  <li><b>How it works.</b> Sign-in happens on Microsoft’s own page (login.microsoftonline.com) in a system web sheet. Silica never sees your Microsoft password. It asks only for the <code>XboxLive.signin</code> permission, which is what Minecraft sign-in needs.</li>
-  <li><b>What Silica receives.</b> A Microsoft access token, an Xbox Live token, a Minecraft Services token, whether your account owns Minecraft: Java Edition, and your Java Edition profile name (your in-game username).</li>
+  <li><b>How it works.</b> Sign-in happens on Microsoft’s own page (login.microsoftonline.com) in a system web sheet. Silica never sees your Microsoft password. It asks only for two permissions: <code>XboxLive.signin</code>, which Minecraft sign-in needs, and <code>offline_access</code>, which lets Silica keep you signed in.</li>
+  <li><b>What Silica receives.</b> A Microsoft access token and refresh token, an Xbox Live token, a Minecraft Services token, whether your account owns Minecraft: Java Edition, and your Java Edition profile name (your in-game username).</li>
   <li><b>Where it goes.</b> Silica talks directly to Microsoft (login.microsoftonline.com), Xbox Live (user.auth.xboxlive.com, xsts.auth.xboxlive.com) and Minecraft Services (api.minecraftservices.com). Nothing is sent to the developer or to any other third party.</li>
   <li><b>What it is used for.</b> Only to verify ownership and to start the game with your username.</li>
-  <li><b>How long it is kept.</b> In memory only, for the current session, until the token expires or you sign out or quit. Silica does not write tokens to disk and does not keep a refresh token, so you sign in again the next time you open it.</li>
+  <li><b>How long it is kept.</b> The access, Xbox and Minecraft tokens stay in memory only, and are renewed while Silica is open. So that you stay signed in, Silica saves the refresh token in your Mac’s Keychain, protected by macOS so other apps cannot read it without your permission, and only while this Mac is unlocked. It is never written to a plain file and never leaves your Mac except to ask Microsoft for new tokens. When Silica opens, it uses that token to sign you in again and re-checks that you still own the game.</li>
+  <li><b>Signing out.</b> Choosing Sign out deletes the refresh token from the Keychain, and nothing is kept. If Microsoft stops accepting the token (for example you changed your password or revoked access), Silica deletes it and shows you signed out.</li>
 </ul>
-<p>You can also remove Silica’s access at any time from your Microsoft account’s app permissions page (account.live.com/consent/Manage).</p>
+<p>You can also remove Silica’s access at any time from your Microsoft account’s app permissions page (account.live.com/consent/Manage). That invalidates the saved token.</p>
 
 <h2>Downloads on first run</h2>
 <p>Setup downloads files straight to your Mac. Each host sees your IP address and ordinary request details, under its own privacy policy.</p>

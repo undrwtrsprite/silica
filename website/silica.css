@@ -83,7 +83,7 @@ h1 { margin: 0; font-size: clamp(40px, 5.2vw, 72px); line-height: 1.02; letter-s
 /* the tilted launcher */
 .stage {
   position: absolute; z-index: 1;
-  left: 47vw; top: 50%; width: min(1120px, 92vw);
+  left: max(47vw, calc(var(--gutter) + 545px)); top: 50%; width: min(1120px, 92vw);
   transform: translateY(-50%);
   perspective: 2000px; perspective-origin: 0% 50%;
   pointer-events: none;
@@ -133,7 +133,7 @@ h1 { margin: 0; font-size: clamp(40px, 5.2vw, 72px); line-height: 1.02; letter-s
 .panel li::before { content: ""; position: absolute; left: 0; top: 0.58em; width: 8px; height: 8px; background: var(--accent); }
 .panel li b { color: var(--text); font-weight: 650; }
 
-.panel .stage { left: auto; right: -14vw; width: min(980px, 88vw); }
+.panel .stage { left: auto; right: -14vw; width: clamp(420px, calc(100vw - 560px - var(--gutter) * 2 + 14vw), 980px); }
 .panel.reverse .stage { right: auto; left: -14vw; perspective-origin: 100% 50%; }
 .panel.reverse .rig { transform-origin: 100% 50%;
   transform:

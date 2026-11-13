@@ -123,6 +123,27 @@
 <script>
 (() => {
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // A reload lands at the top. Without this the browser restores the old scroll position, or jumps to a #section
+  // that a nav link left in the address bar. Opening a shared link like /#faq still goes to that section.
+  const navType = (performance.getEntriesByType('navigation')[0] || {}).type;
+  if (navType === 'reload') {
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+    if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+    scrollTo(0, 0);
+  }
+
+  // Nav links scroll smoothly without leaving a #hash behind in the address bar.
+  document.querySelectorAll('a[href^="#"]').forEach(link => {
+    link.addEventListener('click', event => {
+      const target = document.getElementById(link.getAttribute('href').slice(1));
+      if (!target) return;
+      event.preventDefault();
+      target.scrollIntoView({ behavior: still ? 'auto' : 'smooth' });
+      history.replaceState(null, '', location.pathname + location.search);
+    });
+  });
+
   const stages = [...document.querySelectorAll('[data-stage]')];
 
   function update() {

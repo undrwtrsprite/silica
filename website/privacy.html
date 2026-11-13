@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0d11">
+<meta name="description" content="What Silica does and does not do with your data: no accounts, no servers, no analytics.">
+<title>Privacy Policy — Silica</title>
+<link rel="icon" href="assets/icon.png">
+<link rel="stylesheet" href="silica.css">
+</head>
+<body class="docpage">
+<header class="masthead">
+  <a class="brand" href="/"><img src="assets/icon.png" width="34" height="34" alt=""><span>Silica</span></a>
+  <a class="soon" href="/">Back to the site</a>
+</header>
+<main class="doc">
+
+<h1>Privacy Policy</h1>
+<p class="updated">Last updated 12 November 2026</p>
+
+<p class="lead">Silica has no accounts, no servers of its own and no analytics. It does not collect, store or sell your personal data. Everything it keeps stays on your Mac. The only network traffic is between your Mac and Microsoft, Mojang and the download hosts listed below.</p>
+
+<h2>Who this covers</h2>
+<p>Silica is a launcher and an improved build of Minecraft: Java Edition Beta 1.7.3 for Apple Silicon Macs, made by an independent developer (GitHub: undrwtrsprite). This policy covers the Silica launcher app and this website.</p>
+
+<h2>Signing in with Microsoft</h2>
+<p>Silica asks you to sign in with the Microsoft account that owns Minecraft: Java Edition, to check that you own the game before it starts.</p>
+<ul>
+  <li><b>How it works.</b> Sign-in happens on Microsoft’s own page (login.microsoftonline.com) in a system web sheet. Silica never sees your Microsoft password. It asks only for two permissions: <code>XboxLive.signin</code>, which Minecraft sign-in needs, and <code>offline_access</code>, which lets Silica keep you signed in.</li>
+  <li><b>What Silica receives.</b> A Microsoft access token and refresh token, an Xbox Live token, a Minecraft Services token, whether your account owns Minecraft: Java Edition, and your Java Edition profile name (your in-game username).</li>
+  <li><b>Where it goes.</b> Silica talks directly to Microsoft (login.microsoftonline.com), Xbox Live (user.auth.xboxlive.com, xsts.auth.xboxlive.com) and Minecraft Services (api.minecraftservices.com). Nothing is sent to the developer or to any other third party.</li>
+  <li><b>What it is used for.</b> Only to verify ownership and to start the game with your username.</li>
+  <li><b>How long it is kept.</b> The access, Xbox and Minecraft tokens stay in memory only, and are renewed while Silica is open. So that you stay signed in, Silica saves the refresh token in your Mac’s Keychain, protected by macOS so other apps cannot read it without your permission, and only while this Mac is unlocked. It is never written to a plain file and never leaves your Mac except to ask Microsoft for new tokens. When Silica opens, it uses that token to sign you in again and re-checks that you still own the game.</li>
+  <li><b>Signing out.</b> Choosing Sign out deletes the refresh token from the Keychain, and nothing is kept. If Microsoft stops accepting the token (for example you changed your password or revoked access), Silica deletes it and shows you signed out.</li>
+</ul>
+<p>You can also remove Silica’s access at any time from your Microsoft account’s app permissions page (account.live.com/consent/Manage). That invalidates the saved token.</p>
+
+<h2>Downloads on first run</h2>
+<p>Setup downloads files straight to your Mac. Each host sees your IP address and ordinary request details, under its own privacy policy.</p>
+<ul>
+  <li>Java 21 for Apple Silicon from Eclipse Adoptium (api.adoptium.net).</li>
+  <li>Minecraft Beta 1.7.3 and its sounds from Mojang (piston-meta.mojang.com, resources.download.minecraft.net), checked against the checksums Mojang publishes.</li>
+  <li>An open-source name-mapping tool, RetroMCP-Java, from GitHub (github.com/MCPHackers).</li>
+</ul>
+
+<h2>What stays on your Mac</h2>
+<p>Settings, Java, the game files, your worlds, logs and benchmark results live in <code>~/Library/Application Support/BetaVulkan</code>. None of it is uploaded. Deleting that folder removes it.</p>
+
+<h2>The game</h2>
+<p>The game itself has no telemetry. It connects to a multiplayer server only if you choose to join one, and that server’s operator has their own policies.</p>
+
+<h2>This website</h2>
+<p>The site is a static page with no cookies, no forms, no analytics and no advertising. It is hosted on Vercel, which keeps standard server logs (such as IP address and requested page) for security and operations under Vercel’s own privacy policy.</p>
+
+<h2>Children</h2>
+<p>Silica is not aimed at children and does not knowingly collect information from anyone. Minecraft’s own age rules and Microsoft’s account rules apply when you sign in.</p>
+
+<h2>Changes and contact</h2>
+<p>If this policy changes, the date above changes with it. Questions or requests: open an issue at <a href="https://github.com/undrwtrsprite/silica/issues">github.com/undrwtrsprite/silica/issues</a>.</p>
+
+</main>
+<footer>
+  <p><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+  <p>Silica is an unofficial project. It is not affiliated with Mojang or Microsoft.</p>
+  <p>Minecraft is a trademark of Mojang Synergies AB.</p>
+</footer>
+</body>
+</html>

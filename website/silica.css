@@ -169,11 +169,15 @@ details p { margin: 0 0 18px; color: var(--muted); max-width: 62ch; }
 footer { padding: 40px var(--gutter) 56px; color: #75808c; font-size: 13px; line-height: 1.6; text-align: center; }
 footer p { margin: 0 auto 6px; max-width: 70ch; }
 
-/* ---------- wide screens: let the screenshots grow so there is no empty gap beside the text ---------- */
-@media (min-width: 1500px) {
-  .stage { left: 38vw; width: min(1500px, 80vw); }
-  .panel .stage { left: auto; right: -10vw; width: min(1500px, 80vw); }
-  .panel.reverse .stage { right: auto; left: -10vw; }
+/* ---------- wide screens: keep everything at its 1440 px size and centre the composition, so nothing balloons ---------- */
+@media (min-width: 1441px) {
+  :root { --edge: calc((100vw - 1440px) / 2); }
+  .hero { padding-left: calc(var(--gutter) + var(--edge)); }
+  .panel { padding-inline: calc(var(--gutter) + var(--edge)); }
+  .stage { left: calc(50vw - 43px); width: min(1120px, 92vw); }
+  .panel .stage { left: auto; right: -202px; width: min(1180px, calc(980px + var(--edge))); }
+  .panel.reverse .stage { right: auto; left: -202px; }
+  .fade-left { width: min(100vw, calc(var(--gutter) + var(--edge) + 740px)); }
 }
 
 /* ---------- small screens ---------- */

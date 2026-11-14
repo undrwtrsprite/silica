@@ -1,0 +1,49 @@
+#version 450
+// Fixed-function emulation vertex stage. One packed vertex format (32 bytes): pos, uv, rgba8, normal8.
+layout(location = 0) in vec3 inPos;
+layout(location = 1) in vec2 inUV;
+layout(location = 2) in vec4 inColor;    // R8G8B8A8_UNORM
+layout(location = 3) in vec4 inNormal;   // R8G8B8A8_SNORM
+
+layout(set = 0, binding = 0) uniform Params {
+    mat4 mvp;
+    mat4 mv;
+    vec4 color;       // current glColor (used when no color array)
+    vec4 normal;      // current glNormal (used when no normal array)
+    vec4 fogColor;
+    vec4 fogParams;   // start, end, density, mode (0 off, 1 linear, 2 exp, 3 exp2)
+    vec4 alpha;       // compare op (VkCompareOp), ref, enabled, fog distance mode (0 planar |z|, 1 radial; NV_fog_distance)
+    vec4 flags;       // hasTexture, hasColorArray, lighting, hasNormalArray
+    vec4 light0;      // eye-space direction
+    vec4 light0diff;
+    vec4 light1;
+    vec4 light1diff;
+    vec4 ambient;     // glLightModel ambient
+} u;
+
+layout(location = 0) out vec2 vUV;
+layout(location = 1) out vec4 vColor;
+layout(location = 2) out float vFogDist;
+
+void main() {
+    vec4 p = u.mvp * vec4(inPos, 1.0);
+    // Reversed depth (1 at the near plane, 0 far away): float depth precision then stays even over the whole range. A perspective matrix
+    // arrives with z already = near (infinite-far form, built on the CPU); orthographic ones (the GUI) get GL's [-w, w] flipped to [w, 0].
+    // Y is flipped by the negative-height viewport.
+    bool persp = u.normal.w > 0.5;   // set by the renderer from the projection matrix (inferring it from the combined matrix breaks for scaled models such as the hand)
+    gl_Position = vec4(p.xy, persp ? p.z : (p.w - p.z) * 0.5, p.w);
+    vUV = inUV;
+
+    vec4 c = u.flags.y > 0.5 ? inColor : u.color;
+    if (u.flags.z > 0.5) {
+        vec3 n = u.flags.w > 0.5 ? inNormal.xyz : u.normal.xyz;
+        n = normalize(mat3(u.mv) * n);
+        vec3 lit = u.ambient.rgb
+                 + max(dot(n, u.light0.xyz), 0.0) * u.light0diff.rgb
+                 + max(dot(n, u.light1.xyz), 0.0) * u.light1diff.rgb;
+        c.rgb *= clamp(lit, 0.0, 1.0);   // GL_COLOR_MATERIAL ambient+diffuse
+    }
+    vColor = c;
+    vec3 eye = (u.mv * vec4(inPos, 1.0)).xyz;
+    vFogDist = u.alpha.w > 0.5 ? length(eye) : abs(eye.z);
+}

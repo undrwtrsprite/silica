@@ -1,3 +1,29 @@
 .vercel
 .env*
 .DS_Store
+
+# Build output
+build/
+.gradle/
+.kotlin/
+out/
+*.class
+launcher/.build/
+launcher/*.app
+
+# Profiling scratch
+*.jfr
+*.hprof
+hs_err_pid*.log
+
+# Never commit Mojang code, jars or assets: anything derived from the original client stays local
+/mojang/
+/mc-src/
+/assets/
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/

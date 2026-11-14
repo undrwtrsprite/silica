@@ -1,0 +1,134 @@
+import SwiftUI
+
+struct RootView: View {
+    @EnvironmentObject private var state: AppState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var runner: GameRunner
+
+    @State private var sceneAwake = true
+    private var showsScene: Bool { state.tab == .play && !state.wizardOpen }
+
+    var body: some View {
+        ZStack {
+            Theme.bg.ignoresSafeArea()
+            // The scene stays in the tree and only its opacity changes, so it really fades in when Play opens and out when you leave.
+            HeroScene(paused: runner.isRunning || !sceneAwake)
+                .overlay {
+                    LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .bottomLeading, endPoint: UnitPoint(x: 0.55, y: 0.45))
+                }
+                .overlay {
+                    LinearGradient(stops: [.init(color: Theme.bg.opacity(0), location: 0.42), .init(color: Theme.bg.opacity(0.10), location: 0.55),
+                                           .init(color: Theme.bg.opacity(0.35), location: 0.68), .init(color: Theme.bg.opacity(0.72), location: 0.84),
+                                           .init(color: Theme.bg, location: 1)], startPoint: .top, endPoint: .bottom)
+                }
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .opacity(showsScene ? 1 : 0)
+                .animation(reduceMotion ? nil : (showsScene ? .easeInOut(duration: 0.9) : .easeOut(duration: 0.3)), value: showsScene)   // in slowly, out quickly
+                .onChange(of: showsScene) { _, shown in
+                    if shown { sceneAwake = true; return }
+                    // keep drawing until it has faded out, then stop so a hidden scene costs nothing
+                    Task {
+                        try? await Task.sleep(for: .seconds(0.6))
+                        if !showsScene { sceneAwake = false }
+                    }
+                }
+            VStack(spacing: 0) {
+                LauncherNavigation()
+                    .environment(\.colorScheme, state.tab == .play ? .dark : colorScheme)
+                GeometryReader { geometry in
+                    ScrollOrPlain {
+                        ZStack(alignment: .topLeading) {
+                            Group {
+                                switch state.tab {
+                                case .play: PlayView(viewportHeight: geometry.size.height)
+                                case .worlds: WorldsView().padding(32)
+                                case .settings: SettingsView().padding(32)
+                                case .advanced: AdvancedView().padding(32)
+                                }
+                            }
+                            .id(state.tab)
+                            .transition(reduceMotion ? .identity : LauncherMotion.page)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                        }
+                        .animation(reduceMotion ? nil : LauncherMotion.change, value: state.tab)
+                    }
+                }
+            }
+            .allowsHitTesting(!state.wizardOpen)
+            .accessibilityHidden(state.wizardOpen)
+
+            if state.wizardOpen {
+                SetupWizard()
+                    .transition(.opacity)
+            }
+        }
+        .animation(reduceMotion ? nil : LauncherMotion.change, value: state.wizardOpen)
+        .alert("Silica", isPresented: Binding(get: { state.message != nil }, set: { if !$0 { state.message = nil } })) {
+            Button("OK", role: .cancel) { state.message = nil }
+        } message: { Text(state.message ?? "") }
+    }
+}
+
+/// The floating bar at the top: the app's name, then the four pages. The selected page carries the accent underline.
+private struct LauncherNavigation: View {
+    @EnvironmentObject private var state: AppState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var selection
+
+    var body: some View {
+        HStack(spacing: 30) {
+            HStack(spacing: 24) {
+                ForEach(Array(Tab.allCases.enumerated()), id: \.element) { index, tab in
+                    navItem(tab)
+                        .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
+                }
+            }
+        }
+        .animation(reduceMotion ? nil : LauncherMotion.change, value: state.tab)
+        .padding(.horizontal, 14)
+        .background {
+            if state.tab == .play {
+                Capsule().fill(.ultraThinMaterial)
+            } else {
+                Capsule().fill(Theme.sidebar)
+            }
+        }
+        .overlay { Capsule().strokeBorder(Theme.stroke).allowsHitTesting(false) }
+        .padding(.horizontal, 24)
+        .padding(.top, 28)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity)
+        .overlay(alignment: .leading) {
+            // the name sits in the corner beside the window buttons, so the bar itself is only the four pages
+            HStack(spacing: 8) {
+                Image(nsImage: NSApplication.shared.applicationIconImage)
+                    .resizable().frame(width: 28, height: 28).accessibilityHidden(true)
+                Text("Silica").font(.system(size: 17, weight: .semibold))
+            }
+            .padding(.leading, 84)
+            .offset(y: 10)   // the bar has 28 pt above it and 8 below: this puts the name on the bar's own centre line
+        }
+        .overlay(alignment: .trailing) {
+            AccountMenu()
+                .padding(.trailing, 28)
+                .offset(y: 10)   // same centre line as the bar and the logo
+        }
+    }
+
+    private func navItem(_ tab: Tab) -> some View {
+        let selected = state.tab == tab
+        return Button { state.tab = tab } label: {
+            PillControlLabel(title: tab.rawValue, symbol: tab.symbol, selected: selected)
+                .overlay(alignment: .bottom) {
+                    if selected {
+                        Rectangle().fill(Theme.accent).frame(height: 2)
+                            .matchedGeometryEffect(id: "underline", in: selection)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}

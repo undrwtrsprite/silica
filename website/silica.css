@@ -225,3 +225,5 @@ footer p { margin: 0 auto 6px; max-width: 70ch; }
 .demo-frame { margin: 40px auto 0; max-width: 1040px; border-radius: 16px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.14); box-shadow: 0 60px 120px -30px rgba(0, 0, 0, 0.7), 0 0 100px rgba(67, 112, 214, 0.2); background: #111; }
 .demo-frame video { display: block; width: 100%; height: auto; }
 @media (prefers-reduced-motion: reduce) { .demo-frame video { animation: none; } }
+
+.shot video { display: block; width: 100%; height: auto; }

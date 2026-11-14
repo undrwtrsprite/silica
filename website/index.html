@@ -47,7 +47,7 @@
     <div class="stage" data-stage aria-hidden="false">
       <div class="rig">
         <div class="shot back"><img src="assets/shot-advanced.webp" width="1476" height="827" alt="" loading="eager"></div>
-        <div class="shot front"><img src="assets/shot-play.webp" width="1476" height="827" alt="Silica’s Play page: an animated blocky landscape behind the Minecraft Beta 1.7.3 title, with Account, Screen and Renderer choices" fetchpriority="high"></div>
+        <div class="shot front"><video autoplay muted loop playsinline preload="auto" poster="assets/shot-play.webp" width="1280" height="718" aria-label="Silica’s Play page: an animated blocky landscape behind the Minecraft Beta 1.7.3 title, with Account, Screen and Renderer choices"><source src="assets/hero-loop.webm" type="video/webm"><source src="assets/hero-loop.mp4" type="video/mp4"></video></div>
       </div>
     </div>
     <div class="fade-left"></div>
@@ -183,6 +183,8 @@
   // People who ask for less motion get a still video with controls instead of one that plays by itself
   const demo = document.querySelector('.demo-frame video');
   if (demo && still) { demo.removeAttribute('autoplay'); demo.pause(); demo.controls = true; }
+  // the big hero picture just holds its first frame (the poster) when motion is reduced
+  document.querySelectorAll('.shot video').forEach(v => { if (still) { v.removeAttribute('autoplay'); v.pause(); } });
 
   const bench = document.querySelector('[data-bench]');
   if (bench) {

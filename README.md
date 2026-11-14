@@ -96,6 +96,7 @@ You need macOS on Apple Silicon with the Swift toolchain and JDK 21.
 cd launcher
 ./build_app.sh        # builds Silica.app
 swift test            # runs the launcher's tests
+./make_dmg.sh        # packs Silica-<version>.dmg, a drag-to-Applications installer
 ```
 
 The game build, the preparation steps and the benchmark scripts are described in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).

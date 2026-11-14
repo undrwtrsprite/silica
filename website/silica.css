@@ -234,3 +234,4 @@ footer p { margin: 0 auto 6px; max-width: 70ch; }
 .versions li small { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; }
 .versions li.now { background: var(--accent); color: var(--accent-ink); }
 .soon:hover { color: var(--text); border-color: rgba(255, 255, 255, 0.3); }
+.req b { color: var(--text); font-weight: 650; }

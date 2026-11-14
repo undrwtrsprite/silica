@@ -25,9 +25,9 @@ cat > "$STAGE/Read me first.txt" <<'TXT'
 Install Silica
 
 1. Drag Silica into the Applications folder.
-2. Open it from Applications. Because Silica is not signed with an Apple Developer ID yet, macOS may say it
-   cannot verify the app. To open it anyway: right-click Silica, choose Open, then choose Open again.
-   (If there is no Open button: System Settings > Privacy & Security > "Open Anyway".)
+2. Open it from Applications. Because Silica is not signed with an Apple Developer ID, macOS blocks the first open
+   and says it cannot verify the app. Click Done, then open System Settings > Privacy & Security, scroll down to
+   the message about Silica and click "Open Anyway", then confirm. You only need to do this once.
 
 Silica needs a Mac with Apple Silicon, and a Minecraft: Java Edition purchase. It downloads the game from
 Mojang on first run. It is free and open source: https://github.com/undrwtrsprite/silica

@@ -226,13 +226,10 @@ footer p { margin: 0 auto 6px; max-width: 70ch; }
 
 .shot video { display: block; width: 100%; height: auto; }
 
-/* ---------- versions strip ---------- */
+/* ---------- versions strip: one launcher, a version picker that is only partly filled in yet ---------- */
 .versions { margin: 30px 0 0; padding-top: 22px; border-top: 1px solid var(--line); width: fit-content; max-width: 100%; }
 .versions .eyebrow { margin: 0 0 12px; color: var(--muted); font-size: 11px; }
-.versions ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
-.versions li { display: flex; flex-direction: column; gap: 3px; padding: 11px 16px; border: 1px dashed rgba(255, 255, 255, 0.18); border-radius: 12px; color: var(--muted); }
-.versions li b { font-size: 14px; font-weight: 650; color: var(--text); }
-.versions li span { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
-.versions li.now { border: 1px solid var(--accent); background: rgba(195, 226, 155, 0.07); }
-.versions li.now span { color: var(--accent); }
-.versions li:not(.now) b { color: var(--muted); }
+.versions ul { list-style: none; margin: 0; padding: 4px; display: flex; flex-wrap: wrap; gap: 4px; border: 1px solid var(--line); border-radius: 999px; background: rgba(16, 21, 27, 0.7); width: fit-content; max-width: 100%; }
+.versions li { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 600; color: #75808c; }
+.versions li small { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; }
+.versions li.now { background: var(--accent); color: var(--accent-ink); }

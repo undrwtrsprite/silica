@@ -97,8 +97,8 @@ private struct AccountRow: View {
                     .frame(width: 30, height: 30)
                     .background(Theme.accent, in: Circle())
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(name).font(.system(size: 14, weight: active ? .semibold : .medium)).lineLimit(1)
                     Text(active ? "Playing as" : "Switch to this account").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(name).font(.system(size: 14, weight: active ? .semibold : .medium)).lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 if active { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.accent) }

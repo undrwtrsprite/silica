@@ -80,6 +80,17 @@
     </div>
   </section>
 
+  <section class="demo" id="demo" aria-labelledby="demo-title">
+    <h2 id="demo-title">See it in action.</h2>
+    <p class="sub">The launcher on a real Mac: the animated Play page, your worlds, settings and the benchmark.</p>
+    <div class="demo-frame">
+      <video autoplay muted loop playsinline preload="metadata" poster="assets/shot-play.webp" aria-label="A short recording of the Silica launcher moving between its Play, Worlds, Settings and Advanced pages">
+        <source src="assets/launcher-demo.webm" type="video/webm">
+        <source src="assets/launcher-demo.mp4" type="video/mp4">
+      </video>
+    </div>
+  </section>
+
   <section class="panel" id="features" aria-labelledby="features-title">
     <div class="copy">
       <h2 id="features-title">The Beta you remember, with the rough edges sanded off.</h2>
@@ -168,6 +179,10 @@
     addEventListener('resize', update);
     update();
   }
+
+  // People who ask for less motion get a still video with controls instead of one that plays by itself
+  const demo = document.querySelector('.demo-frame video');
+  if (demo && still) { demo.removeAttribute('autoplay'); demo.pause(); demo.controls = true; }
 
   const bench = document.querySelector('[data-bench]');
   if (bench) {

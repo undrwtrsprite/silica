@@ -30,8 +30,30 @@ public final class PatchRegistry {
 
     private final java.util.List<GlobalStep> globals = new ArrayList<>();
 
+    /** Every "owner.name+desc" a patch found and edited; filled while patches are applied (the jar checker reads it to find overlaps with a modded jar). */
+    private final java.util.Set<String> touched = new java.util.LinkedHashSet<>();
+
     public ClassPatch on(String internalName) {
-        return byClass.computeIfAbsent(internalName, ClassPatch::new);
+        return byClass.computeIfAbsent(internalName, n -> new ClassPatch(n, touched));
+    }
+
+    /** True when a patch is registered for the class. */
+    public boolean targets(String internalName) {
+        return has(internalName);
+    }
+
+    /** True when a patch names this class itself (the everywhere-patches do not count). */
+    public boolean patchesClass(String internalName) {
+        return byClass.containsKey(internalName);
+    }
+
+    /** Applies the class's patches to a node and returns how many changes were made; throws when a patch target is missing (what the agent does at class load). */
+    public int applyTo(ClassNode cn) {
+        return apply(cn);
+    }
+
+    public java.util.Set<String> touchedMethods() {
+        return touched;
     }
 
     /**
@@ -82,8 +104,11 @@ public final class PatchRegistry {
         private final List<Step> steps = new ArrayList<>();
         private final java.util.Set<AbstractInsnNode> cancelReturns = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());   // returns we inserted ourselves: atEnd hooks are for the method's own returns
 
-        ClassPatch(String owner) {
+        private final java.util.Set<String> touched;
+
+        ClassPatch(String owner, java.util.Set<String> touched) {
             this.owner = owner;
+            this.touched = touched;
         }
 
         int apply(ClassNode cn) {
@@ -232,6 +257,7 @@ public final class PatchRegistry {
                 if (!m.name.equals(method) || (desc != null && !m.desc.equals(desc))) continue;
                 hits++;
                 n += e.edit(m);
+                touched.add(owner + "." + m.name + m.desc);
             }
             if (hits == 0) throw new IllegalStateException("patch target not found: " + owner + "." + method + (desc == null ? "" : desc));
             if (n == 0) throw new IllegalStateException("patch matched the method but changed nothing (call site missing?): " + owner + "." + method);

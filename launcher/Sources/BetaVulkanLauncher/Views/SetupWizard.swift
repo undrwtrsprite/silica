@@ -10,6 +10,9 @@ struct SetupWizard: View {
     @Local private var useOwn = false
     @Local private var chosen: URL? = nil
     @Local private var found: URL? = nil
+    /// An optional modded jar to add (and check) once the original game is installed.
+    @Local private var modJar: URL? = nil
+    @EnvironmentObject private var jars: JarLibrary
 
     private enum Stage { case account, welcome, running, done }
 
@@ -114,6 +117,7 @@ struct SetupWizard: View {
                 }
             }
 
+            modJarRow
             if let f = install.failure {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.sand)
@@ -150,6 +154,31 @@ struct SetupWizard: View {
             }
         }
         .padding(34)
+    }
+
+    /// Optional: bring a modded jar. It is added after the original game is installed and checked against Silica's patches.
+    private var modJarRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "puzzlepiece.extension.fill").font(.system(size: 18)).foregroundStyle(modJar == nil ? AnyShapeStyle(Color.secondary) : AnyShapeStyle(Theme.accent))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(modJar.map { "Also add \($0.lastPathComponent)" } ?? "Have a modded jar? (optional)").font(.system(size: 13, weight: .semibold))
+                Text("Silica keeps it untouched, checks that its improvements fit, and tells you if anything won't work.").font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            if modJar != nil { Button("Remove") { modJar = nil }.buttonStyle(SecondaryButtonStyle()) }
+            Button(modJar == nil ? "Choose jar…" : "Change…") { pickModJar() }.buttonStyle(SecondaryButtonStyle(tint: Theme.tint))
+        }
+        .padding(12).background(Theme.card.opacity(0.55), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.stroke))
+        .padding(.top, 14)
+    }
+
+    private func pickModJar() {
+        let panel = NSOpenPanel()
+        panel.message = "Choose a modded Minecraft Beta 1.7.3 jar"
+        panel.allowedContentTypes = [.init(filenameExtension: "jar")!]
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK { modJar = panel.url }
     }
 
     private var ownDetail: String {
@@ -198,9 +227,9 @@ struct SetupWizard: View {
     private func begin() {
         if useOwn {
             guard let chosen else { return }
-            state.setUp(source: .local(chosen))
+            state.setUp(source: .local(chosen), thenAdd: modJar)
         } else {
-            state.setUp(source: .mojang)
+            state.setUp(source: .mojang, thenAdd: modJar)
         }
     }
 
@@ -219,14 +248,31 @@ struct SetupWizard: View {
 
     // MARK: Done
 
+    /// What happened to the jar chosen in the setup: still being checked, the verdict, or why it was refused.
+    @ViewBuilder private var jarResult: some View {
+        if jars.busy {
+            HStack(spacing: 10) { ProgressView().controlSize(.small); Text(jars.status.isEmpty ? "Checking your jar…" : jars.status).font(.system(size: 13)).foregroundStyle(.secondary) }
+        } else if let j = jars.jar(state.wizardJarID) {
+            VStack(spacing: 8) {
+                JarVerdictBadge(report: j.report, failure: j.failure)
+                Text(j.name).font(.system(size: 13, weight: .semibold))
+                Text(j.failure ?? (j.report?.reasons.first ?? j.report?.notes.first ?? "")).font(.system(size: 12)).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 420)
+                if j.report?.level == .red { Text("It stays in your list; the original game is selected.").font(.system(size: 11.5)).foregroundStyle(.secondary) }
+            }
+        } else if let p = jars.problem {
+            Label(p, systemImage: "exclamationmark.triangle.fill").font(.system(size: 12.5)).foregroundStyle(Theme.sand).multilineTextAlignment(.center).frame(maxWidth: 420)
+        }
+    }
+
     private var finished: some View {
         VStack(spacing: 0) {
             Spacer()
             SetupCompleteMark()
             Text("You're all set").font(.system(size: 30, weight: .bold, design: .rounded)).padding(.top, 26)
             Text(verified ? "Minecraft Beta 1.7.3 is installed." : "Minecraft Beta 1.7.3 is installed. Sign in on the Play page to continue.").font(.system(size: 14)).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.top, 8)
+            jarResult.padding(.top, 18)
             Button { state.tab = .play; state.wizardOpen = false } label: { Label("Continue to Play", systemImage: "arrow.right") }
-                .buttonStyle(PrimaryButtonStyle(large: true)).keyboardShortcut(.defaultAction).padding(.top, 28)
+                .buttonStyle(PrimaryButtonStyle(large: true)).keyboardShortcut(.defaultAction).padding(.top, 24).disabled(jars.busy)
             Spacer()
         }
         .padding(34)

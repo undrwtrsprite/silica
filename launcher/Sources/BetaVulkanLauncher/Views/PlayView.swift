@@ -4,6 +4,7 @@ struct PlayView: View {
     @EnvironmentObject private var state: AppState
     @EnvironmentObject private var runner: GameRunner
     @EnvironmentObject private var install: InstallManager
+    @EnvironmentObject private var jars: JarLibrary
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -17,6 +18,7 @@ struct PlayView: View {
             VStack(alignment: .leading, spacing: 20) {
                 launchOptions
                 if !state.worlds.isEmpty { recentWorlds }
+                jarWarning
                 if !runner.isRunning { ForEach(runner.hints) { hint($0) } }
                 about
             }
@@ -65,9 +67,29 @@ struct PlayView: View {
                     launchChoice("OpenGL", symbol: "cube", selection: $state.settings.backend, value: Backend.gl)
                 }
             }
+            optionCell("Game jar") { JarPickerCell() }
         }
         .font(.callout)
         .padding(.horizontal, 24)
+    }
+
+    /// Shown when the jar you picked did not pass Silica's checks cleanly.
+    @ViewBuilder private var jarWarning: some View {
+        if let j = jars.jar(state.settings.jarID) {
+            let level: JarReport.Level = j.report?.level ?? .red
+            if level != .green {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: level.symbol).foregroundStyle(level.color)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(j.report?.headline ?? "This jar could not be checked").font(.system(size: 13, weight: .semibold))
+                        Text(j.failure ?? (j.report?.reasons.first ?? "")).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Button("See the details") { state.tab = .jars }.buttonStyle(SecondaryButtonStyle(tint: level.color))
+                    }
+                }
+                .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                .background(level.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous)).padding(.horizontal, 24)
+            }
+        }
     }
 
     private func optionCell<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {

@@ -12,6 +12,10 @@ enum AppPaths {
     /// Your own jar, remapped to readable names by our prepare tool (derived from Mojang's jar, so it stays on this machine).
     static var readableJar: URL { support.appendingPathComponent("versions/b1.7.3/readable.jar") }
     static var resources: URL { support.appendingPathComponent("versions/b1.7.3/resources", isDirectory: true) }
+    /// Extra jars you add (modded Beta 1.7.3 jars), each in its own folder: jars/<id>/{original.jar, readable.jar, resources/, game/}. The original client.jar is never touched.
+    static var jars: URL { support.appendingPathComponent("jars", isDirectory: true) }
+    static var jarIndex: URL { jars.appendingPathComponent("index.json") }
+    static var mappings: URL { retroMCP.appendingPathComponent("conf/mappings.tiny") }
     static var retroMCP: URL { support.appendingPathComponent("retromcp", isDirectory: true) }
     static var assets: URL { support.appendingPathComponent("assets", isDirectory: true) }
     static var gameDir: URL { support.appendingPathComponent("game", isDirectory: true) }

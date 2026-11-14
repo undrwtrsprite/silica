@@ -3,12 +3,13 @@ import Foundation
 import SwiftUI
 
 enum Tab: String, CaseIterable, Identifiable {
-    case play = "Play", worlds = "Worlds", settings = "Settings", advanced = "Advanced"
+    case play = "Play", worlds = "Worlds", jars = "Jars", settings = "Settings", advanced = "Advanced"
     var id: String { rawValue }
     var symbol: String {
         switch self {
         case .play: return "play.fill"
         case .worlds: return "globe.europe.africa.fill"
+        case .jars: return "shippingbox.fill"
         case .settings: return "slider.horizontal.3"
         case .advanced: return "wrench.and.screwdriver.fill"
         }
@@ -55,6 +56,9 @@ final class AppState: ObservableObject {
     let install = InstallManager()
     let updates = UpdateManager()
     let runner = GameRunner()
+    let jars = JarLibrary()
+    /// The jar the setup wizard imported last, so its final page can show the result.
+    @Published var wizardJarID: String?
 
     init() {
         settings = Settings.load()
@@ -63,6 +67,7 @@ final class AppState: ObservableObject {
         benchRuns = BenchmarkStore.runs()
         loadAccounts()
         activateActiveAccount()
+        if install.ready && stageReady { Task { [self] in await jars.recheckStale(stageDir: settings.stageDir, java: install.javaPath) } }
     }
 
     var stageReady: Bool { GameRunner.stageConfig(settings.stageDir) != nil }
@@ -206,16 +211,40 @@ final class AppState: ObservableObject {
         Task { [self] in
             // opened already signed in: the game still needs the sign-in token for online-mode servers, which the quiet renewal brings (a second at most)
             if player?.accessToken == nil { await renewal?.value }
-            message = runner.launch(settings: settings, java: java, player: player)
+            let chosen = jars.selection(for: settings.jarID)
+            if settings.jarID != nil && chosen == nil { message = "That jar is no longer in your list. Pick another one or the original game."; settings.jarID = nil; return }
+            message = runner.launch(settings: settings, java: java, player: player, jar: chosen)
         }
     }
 
-    func setUp(source: InstallManager.ClientSource) {
+    /// Adds a jar from the Play page or the setup, runs the checks and, when it is usable, makes it the one that launches.
+    func addJar(_ url: URL, select: Bool = true) {
+        Task { [self] in
+            if let added = await jars.importJar(url, stageDir: settings.stageDir, java: install.javaPath, official: install) {
+                wizardJarID = added.id
+                if select, added.report?.level != .red { settings.jarID = added.id }
+            }
+        }
+    }
+
+    func chooseJarFile(select: Bool = true) {
+        let panel = NSOpenPanel()
+        panel.message = "Choose a Minecraft Beta 1.7.3 jar (modded or not)"
+        panel.allowedContentTypes = [.init(filenameExtension: "jar")!]
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK, let url = panel.url { addJar(url, select: select) }
+    }
+
+    func setUp(source: InstallManager.ClientSource, thenAdd jar: URL? = nil) {
         guard let player, player.isValid, !install.busy else { return }
         install.stageDir = settings.stageDir
         install.clientSource = source
         install.client = .pending
-        Task { await install.installAll(player: player) }
+        Task { [self] in
+            await install.installAll(player: player)
+            // a jar chosen in the setup is added once the original game is in place (the check compares against it)
+            if let jar, install.ready { addJar(jar) }
+        }
     }
 
     /// Settings > Run setup again: starts the guided setup over the current state (it skips what is already in place).

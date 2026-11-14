@@ -27,9 +27,18 @@ import java.util.zip.ZipFile;
  */
 public final class LinkCheck {
     public static void main(String[] args) throws Exception {
-        File jar = new File(args[0]);
         List<URL> urls = new ArrayList<>();
         for (int i = 1; i < args.length; i++) urls.add(new File(args[i]).toURI().toURL());
+        Map<String, Set<String>>[] r = scan(new File(args[0]), urls);
+        System.out.println("== classes not found on the given classpath: " + r[0].size());
+        r[0].forEach((k, v) -> System.out.println("  " + k + "   (used by " + v.size() + " classes, e.g. " + v.iterator().next() + ")"));
+        System.out.println("== members not found: " + r[1].size());
+        r[1].forEach((k, v) -> System.out.println("  " + k + "   (used by " + v.size() + ", e.g. " + v.iterator().next() + ")"));
+    }
+
+    /** Returns {missing classes, missing members}, each mapping the thing to the classes that use it. */
+    @SuppressWarnings("unchecked")
+    static Map<String, Set<String>>[] scan(File jar, List<URL> urls) throws Exception {
         URLClassLoader ext = new URLClassLoader(urls.toArray(new URL[0]), LinkCheck.class.getClassLoader());
         Set<String> inJar = new HashSet<>();
         try (ZipFile z = new ZipFile(jar)) {
@@ -81,13 +90,17 @@ public final class LinkCheck {
                                     }
                                     if (name == null || owner.startsWith("java/")) return;
                                     boolean found = false;
-                                    if (method) {
-                                        for (Class<?> k = c; k != null && !found; k = k.getSuperclass()) found = hasMethod(k, name, desc);
-                                        if (!found) found = hasMethodInInterfaces(c, name, desc);
-                                    } else {
-                                        for (Class<?> k = c; k != null && !found; k = k.getSuperclass()) {
-                                            for (var f : k.getDeclaredFields()) if (f.getName().equals(name)) found = true;
+                                    try {
+                                        if (method) {
+                                            for (Class<?> k = c; k != null && !found; k = k.getSuperclass()) found = hasMethod(k, name, desc);
+                                            if (!found) found = hasMethodInInterfaces(c, name, desc);
+                                        } else {
+                                            for (Class<?> k = c; k != null && !found; k = k.getSuperclass()) {
+                                                for (var f : k.getDeclaredFields()) if (f.getName().equals(name)) found = true;
+                                            }
                                         }
+                                    } catch (LinkageError le) {
+                                        return;   // a library the class mentions is not on the given classpath: cannot tell, so do not blame the jar
                                     }
                                     if (!found) missingMember.computeIfAbsent(owner + "." + name + (method ? desc : ""), k -> new java.util.TreeSet<>()).add(user);
                                 }
@@ -96,10 +109,7 @@ public final class LinkCheck {
                     }, 0);
                 }
             }
-            System.out.println("== classes not found on the given classpath: " + missingClass.size());
-            missingClass.forEach((k, v) -> System.out.println("  " + k + "   (used by " + v.size() + " classes, e.g. " + v.iterator().next() + ")"));
-            System.out.println("== members not found: " + missingMember.size());
-            missingMember.forEach((k, v) -> System.out.println("  " + k + "   (used by " + v.size() + ", e.g. " + v.iterator().next() + ")"));
+            return new Map[]{missingClass, missingMember};
         }
     }
 

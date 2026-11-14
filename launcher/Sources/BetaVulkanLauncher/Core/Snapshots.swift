@@ -19,7 +19,7 @@ enum Snapshots {
         try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
         let state = AppState()
         func root(_ scheme: ColorScheme) -> some View {
-            RootView().environmentObject(state).environmentObject(state.install).environmentObject(state.runner).environmentObject(state.updates).environment(\.colorScheme, scheme)
+            RootView().environmentObject(state).environmentObject(state.install).environmentObject(state.runner).environmentObject(state.jars).environmentObject(state.updates).environment(\.colorScheme, scheme)
         }
         // everything installed: the normal pages
         state.install.jdk = .done("Java"); state.install.client = .done("client"); state.install.prepared = .done("ok"); state.install.assets = .done("ok")

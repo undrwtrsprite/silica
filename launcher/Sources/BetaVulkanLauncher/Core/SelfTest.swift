@@ -38,6 +38,14 @@ enum SelfTest {
             return 3
         }
         say("signed-out launch blocked before starting Java")
+        // SILICA_TEST_JAR=/path/to/modded.jar: runs the real import and check, prints the verdict, then removes the jar again
+        if let path = ProcessInfo.processInfo.environment["SILICA_TEST_JAR"] {
+            let added = await state.jars.importJar(URL(fileURLWithPath: path), stageDir: state.settings.stageDir, java: java, official: state.install)
+            guard let added else { say("FAIL: import refused: \(state.jars.problem ?? "?")"); return 4 }
+            say("jar \(added.name): \(added.report?.verdict ?? "no report") — \(added.report?.reasons.first ?? added.report?.notes.first ?? added.failure ?? "")")
+            say("selection files: \(state.jars.selection(for: added.id)?.readable.path ?? "none")")
+            state.jars.remove(added.id)
+        }
         say("PASS")
         return 0
     }

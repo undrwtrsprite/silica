@@ -24,6 +24,7 @@ struct BetaVulkanLauncherApp: App {
                 .environmentObject(state)
                 .environmentObject(state.install)
                 .environmentObject(state.runner)
+                .environmentObject(state.jars)
                 .environmentObject(state.updates)
                 .task {
                     if state.settings.checkForUpdates != false { await state.updates.check(quiet: true) }

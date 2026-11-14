@@ -9,6 +9,7 @@ repositories {
 }
 
 dependencies {
+    implementation(project(":agent"))   // JarCheck runs our patches against a candidate jar
     implementation("org.ow2.asm:asm:9.9")
     implementation("org.ow2.asm:asm-commons:9.9")
     implementation("org.ow2.asm:asm-tree:9.9")

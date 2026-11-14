@@ -55,6 +55,8 @@ struct Settings: Codable, Equatable {
     /// nil counts as on. When on, Silica asks GitHub once at start-up whether a newer release exists.
     var checkForUpdates: Bool? = nil
     var fullscreen = false
+    /// Which jar to play: nil is the official Beta 1.7.3 client, otherwise the id of one you added.
+    var jarID: String? = nil
     var width = 1280
     var height = 720
     var stageDir = AppPaths.bundledStage?.path ?? ("~/Documents/beta-vulkan/hooks/build/stage" as NSString).expandingTildeInPath

@@ -44,6 +44,7 @@ struct RootView: View {
                                 switch state.tab {
                                 case .play: PlayView(viewportHeight: geometry.size.height)
                                 case .worlds: WorldsView().padding(32)
+                                case .jars: JarsView().padding(32)
                                 case .settings: SettingsView().padding(32)
                                 case .advanced: AdvancedView().padding(32)
                                 }

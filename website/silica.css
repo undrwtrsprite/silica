@@ -215,8 +215,6 @@ footer p { margin: 0 auto 6px; max-width: 70ch; }
 .doc a, footer a { color: var(--accent); }
 .doc b { color: var(--text); }
 
-.soon-note { margin: 12px 0 0; font-size: 13px; color: var(--muted); }
-.soon-note span { display: inline-block; margin-right: 8px; padding: 2px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 
 /* ---------- demo video ---------- */
 .demo { padding: clamp(70px, 9vw, 120px) var(--gutter); border-top: 1px solid var(--line); text-align: center; }
@@ -227,3 +225,14 @@ footer p { margin: 0 auto 6px; max-width: 70ch; }
 @media (prefers-reduced-motion: reduce) { .demo-frame video { animation: none; } }
 
 .shot video { display: block; width: 100%; height: auto; }
+
+/* ---------- versions strip ---------- */
+.versions { margin: 30px 0 0; padding-top: 22px; border-top: 1px solid var(--line); width: fit-content; max-width: 100%; }
+.versions .eyebrow { margin: 0 0 12px; color: var(--muted); font-size: 11px; }
+.versions ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.versions li { display: flex; flex-direction: column; gap: 3px; padding: 11px 16px; border: 1px dashed rgba(255, 255, 255, 0.18); border-radius: 12px; color: var(--muted); }
+.versions li b { font-size: 14px; font-weight: 650; color: var(--text); }
+.versions li span { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.versions li.now { border: 1px solid var(--accent); background: rgba(195, 226, 155, 0.07); }
+.versions li.now span { color: var(--accent); }
+.versions li:not(.now) b { color: var(--muted); }

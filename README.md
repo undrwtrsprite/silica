@@ -21,6 +21,7 @@
   <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-arm64-0a0d11?style=flat-square&logo=apple&logoColor=white">
   <img alt="Vulkan on MoltenVK" src="https://img.shields.io/badge/Vulkan-MoltenVK-0a0d11?style=flat-square&logoColor=white">
   <img alt="macOS 15+" src="https://img.shields.io/badge/macOS-15%2B-0a0d11?style=flat-square&logo=apple&logoColor=white">
+  <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-c3e29b?style=flat-square&labelColor=0a0d11">
   <img alt="Swift and Java 21" src="https://img.shields.io/badge/SwiftUI%20%2B%20Java%2021-c3e29b?style=flat-square&labelColor=0a0d11">
 </p>
 
@@ -102,6 +103,10 @@ The game build, the preparation steps and the benchmark scripts are described in
 ## Status
 
 Sign-in works against Microsoft's live services. Downloads are not published yet, and the app is ad-hoc signed, not notarized, so macOS will warn on first open. Support for other Beta and Alpha versions is planned; the launcher is meant to run them all.
+
+## License
+
+Silica's source code is released under the [MIT License](LICENSE). That covers Silica's own code only. It does not cover Minecraft, which belongs to Mojang and Microsoft and is never included here, or the Minecraft name and artwork.
 
 ## Not affiliated
 

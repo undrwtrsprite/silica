@@ -110,7 +110,7 @@ Silica is free software under the [GNU General Public License v3.0](LICENSE). Yo
 
 This covers Silica's own code only. It does not cover Minecraft, which belongs to Mojang and Microsoft and is never included here, or the Minecraft name and artwork.
 
-Copyright (C) 2026 Silica contributors.
+Copyright (C) 2026 Silica contributors. Libraries Silica uses keep their own licenses, listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Not affiliated
 

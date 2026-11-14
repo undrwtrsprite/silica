@@ -21,7 +21,7 @@
   <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-arm64-0a0d11?style=flat-square&logo=apple&logoColor=white">
   <img alt="Vulkan on MoltenVK" src="https://img.shields.io/badge/Vulkan-MoltenVK-0a0d11?style=flat-square&logoColor=white">
   <img alt="macOS 15+" src="https://img.shields.io/badge/macOS-15%2B-0a0d11?style=flat-square&logo=apple&logoColor=white">
-  <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-c3e29b?style=flat-square&labelColor=0a0d11">
+  <img alt="GPL-3.0 license" src="https://img.shields.io/badge/license-GPL--3.0-c3e29b?style=flat-square&labelColor=0a0d11">
   <img alt="Swift and Java 21" src="https://img.shields.io/badge/SwiftUI%20%2B%20Java%2021-c3e29b?style=flat-square&labelColor=0a0d11">
 </p>
 
@@ -106,7 +106,11 @@ Sign-in works against Microsoft's live services. Downloads are not published yet
 
 ## License
 
-Silica's source code is released under the [MIT License](LICENSE). That covers Silica's own code only. It does not cover Minecraft, which belongs to Mojang and Microsoft and is never included here, or the Minecraft name and artwork.
+Silica is free software under the [GNU General Public License v3.0](LICENSE). You can use, study, change and share it. If you share it, or something built from it, you must keep the copyright and license notices, say that it comes from Silica and what you changed, and release your version under the same license with its source.
+
+This covers Silica's own code only. It does not cover Minecraft, which belongs to Mojang and Microsoft and is never included here, or the Minecraft name and artwork.
+
+Copyright (C) 2026 Silica contributors.
 
 ## Not affiliated
 

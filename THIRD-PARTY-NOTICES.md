@@ -16,6 +16,15 @@ Silica's own code is under the [GPL-3.0](LICENSE). It uses the software below. E
 
 These come from Maven Central when you build. None of them is stored in this repository.
 
+## Bundled inside the Silica app (not in this repository)
+
+The built `Silica.app` carries these jars for the game's sound, taken from the libraries the game uses on Maven Central. Their license files are not included in the jars, so they have to be confirmed before a release is distributed.
+
+| Project | Used for | License |
+|---|---|---|
+| [paulscode SoundSystem](http://www.paulscode.com) and its LibraryJavaSound, LibraryLWJGLOpenAL and CodecWav parts | The sound API the game calls | Paulscode's own "SoundSystem License", to be confirmed |
+| CodecJOrbis (contains [JOrbis](http://www.jcraft.com/jorbis/) and JOgg by JCraft) | Reading the game's Ogg Vorbis sounds | LGPL, to be confirmed |
+
 ## Downloaded when you run setup
 
 Silica downloads these to your Mac on first run. They are not part of this repository or of the app.
@@ -29,7 +38,6 @@ Silica downloads these to your Mac on first run. They are not part of this repos
 ## Parts of the game Silica works with but does not contain
 
 - **Minecraft** belongs to Mojang and Microsoft. It is never stored in this repository or in the app. Your use of it is under the Minecraft End User License Agreement.
-- **paulscode SoundSystem and JOrbis** come with the game's own files. Silica's sound code replaces the parts that cannot run on an arm64 JVM, and it does not copy those libraries.
 - Silica talks to Microsoft, Xbox Live and Mojang web services for sign-in, skins and joining servers. Their terms apply to that use.
 
 ## Trademarks

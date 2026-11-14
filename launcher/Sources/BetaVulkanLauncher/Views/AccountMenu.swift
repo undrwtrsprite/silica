@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The account control: the signed-in account as a menu (switch, add, sign out) with a plus button for adding another.
+/// The account control: the signed-in account as a menu (switch, add, sign out).
 /// It sits in the top-right corner of every page.
 struct AccountMenu: View {
     @EnvironmentObject private var state: AppState
@@ -18,19 +18,6 @@ struct AccountMenu: View {
         HStack(spacing: 14) {
             if hasAccounts {
                 menu
-                Button { state.signInWithMicrosoft() } label: {
-                    // drawn from two bars: the plus glyph in the symbol font sits a little off its box, so it never looked centred in the circle
-                    ZStack {
-                        Capsule().frame(width: 12, height: 1.8)
-                        Capsule().frame(width: 1.8, height: 12)
-                    }
-                    .frame(width: 28, height: 28)
-                    .overlay(Circle().strokeBorder(Theme.stroke.opacity(2)))
-                }
-                .buttonStyle(.plain)
-                .disabled(busy)
-                .help("Add account")
-                .accessibilityLabel("Add account")
             } else {
                 Button { state.signInWithMicrosoft() } label: {
                     Text(state.signingIn ? "Signing in…" : "Sign in").font(.system(size: 14, weight: .medium))

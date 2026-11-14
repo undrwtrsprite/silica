@@ -2,6 +2,14 @@ import AppKit
 import SwiftUI
 
 enum Theme {
+    static var appIcon: NSImage {
+        if let url = Bundle.main.url(forResource: "Silica", withExtension: "icns"),
+           let image = NSImage(contentsOf: url) {
+            return image
+        }
+        return NSApplication.shared.applicationIconImage
+    }
+
     private static func dyn(_ light: NSColor, _ dark: NSColor) -> Color {
         Color(nsColor: NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light })
     }

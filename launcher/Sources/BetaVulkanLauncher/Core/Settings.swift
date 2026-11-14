@@ -52,6 +52,8 @@ struct Settings: Codable, Equatable {
     var vsync = false
     /// nil counts as on, so settings files from before this option still load
     var showSkins: Bool? = nil
+    /// nil counts as on. When on, Silica asks GitHub once at start-up whether a newer release exists.
+    var checkForUpdates: Bool? = nil
     var fullscreen = false
     var width = 1280
     var height = 720

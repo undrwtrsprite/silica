@@ -19,9 +19,13 @@ struct AccountMenu: View {
             if hasAccounts {
                 menu
                 Button { state.signInWithMicrosoft() } label: {
-                    Image(systemName: "plus").font(.system(size: 13, weight: .semibold))
-                        .frame(width: 28, height: 28)
-                        .overlay(Circle().strokeBorder(Theme.stroke.opacity(2)))
+                    // drawn from two bars: the plus glyph in the symbol font sits a little off its box, so it never looked centred in the circle
+                    ZStack {
+                        Capsule().frame(width: 12, height: 1.8)
+                        Capsule().frame(width: 1.8, height: 12)
+                    }
+                    .frame(width: 28, height: 28)
+                    .overlay(Circle().strokeBorder(Theme.stroke.opacity(2)))
                 }
                 .buttonStyle(.plain)
                 .disabled(busy)

@@ -26,5 +26,11 @@ if [ ! -x .dmgtools/bin/dmgbuild ]; then
 fi
 [ -f dmg/background.tiff ] || .dmgtools/bin/python dmg/make_background.py
 .dmgtools/bin/dmgbuild -s dmg/settings.py -D app="$PWD/$APP" -D dmgdir="$PWD/dmg" "Silica" "$DMG" >/dev/null
+# the updater only installs a disk image whose signature file (Silica-x.y.z.dmg.sig) matches the key built into the app
+if [ -f "${SILICA_SIGNING_KEY:-$HOME/.config/silica/update-signing.key}" ]; then
+  swift sign_update.swift "$DMG"
+else
+  echo "warning: no update signing key, so $DMG.sig was not made and the updater will not offer this release" >&2
+fi
 echo "built $PWD/$DMG ($(du -h "$DMG" | cut -f1))"
 shasum -a 256 "$DMG"

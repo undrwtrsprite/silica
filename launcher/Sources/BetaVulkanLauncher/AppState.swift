@@ -53,6 +53,7 @@ final class AppState: ObservableObject {
     private var renewal: Task<Void, Never>?
 
     let install = InstallManager()
+    let updates = UpdateManager()
     let runner = GameRunner()
 
     init() {

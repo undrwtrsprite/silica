@@ -3,6 +3,8 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var state: AppState
+    @EnvironmentObject private var updates: UpdateManager
+    @EnvironmentObject private var runner: GameRunner
     @Local private var advanced = false
 
     private let sizes: [(String, Int, Int)] = [("1280 × 720", 1280, 720), ("1600 × 900", 1600, 900), ("1920 × 1080", 1920, 1080), ("2560 × 1440", 2560, 1440)]
@@ -69,11 +71,38 @@ struct SettingsView: View {
                 HStack(spacing: 14) {
                     Image(nsImage: NSApplication.shared.applicationIconImage).resizable().frame(width: 52, height: 52)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Silica 0.1").font(.system(size: 14, weight: .semibold))
+                        Text("Silica \(UpdateManager.currentVersionText)").font(.system(size: 14, weight: .semibold))
                         Text("Minecraft Beta 1.7.3 on Apple Silicon with a Vulkan renderer. You bring your own copy of the game; Silica ships none of Mojang's code or assets.").font(.system(size: 12)).foregroundStyle(.secondary)
                     }
                 }
+                HStack(spacing: 12) {
+                    Text(updateLine).font(.system(size: 12.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    if let info = updates.available {
+                        Button("Update to \(info.version)") { Task { await updates.install(info) } }.buttonStyle(PrimaryButtonStyle(large: false)).disabled(runner.isRunning || updates.isBusy)
+                    } else {
+                        Button("Check for updates") { updates.bannerDismissed = false; Task { await updates.check(quiet: false) } }.buttonStyle(SecondaryButtonStyle()).disabled(updates.isBusy)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle("Check for updates when Silica starts", isOn: Binding(get: { state.settings.checkForUpdates != false }, set: { state.settings.checkForUpdates = $0 }))
+                    Text("Silica asks GitHub for the latest release and sends nothing but its version number. Updates are installed only if they carry the project's signature.")
+                        .font(.system(size: 11.5)).foregroundStyle(.secondary)
+                }
             }
+        }
+    }
+
+    private var updateLine: String {
+        switch updates.status {
+        case .idle: return "Updates are checked from GitHub."
+        case .checking: return "Checking…"
+        case .upToDate: return "You have the latest version."
+        case .available(let info): return "Version \(info.version) is available."
+        case .downloading(let p): return "Downloading \(Int((p * 100).rounded()))%…"
+        case .verifying: return "Checking the signature…"
+        case .installing: return "Installing…"
+        case .failed(let message): return message
         }
     }
 

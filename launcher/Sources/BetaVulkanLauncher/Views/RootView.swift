@@ -59,6 +59,11 @@ struct RootView: View {
             .allowsHitTesting(!state.wizardOpen)
             .accessibilityHidden(state.wizardOpen)
 
+            UpdateBanner()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(24)
+                .allowsHitTesting(!state.wizardOpen)
+
             if state.wizardOpen {
                 SetupWizard()
                     .transition(.opacity)
@@ -130,5 +135,48 @@ private struct LauncherNavigation: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// A small card in the bottom corner when a newer version exists. It shows progress while updating and stays out of the way otherwise.
+private struct UpdateBanner: View {
+    @EnvironmentObject private var updates: UpdateManager
+    @EnvironmentObject private var runner: GameRunner
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Group {
+            if let info = updates.available, !updates.bannerDismissed {
+                card(title: "Silica \(info.version) is available", detail: runner.isRunning ? "Close the game to update." : "Installs in a moment and restarts Silica.") {
+                    Button("Later") { updates.bannerDismissed = true }.buttonStyle(SecondaryButtonStyle())
+                    Button("Update") { Task { await updates.install(info) } }.buttonStyle(PrimaryButtonStyle(large: false)).disabled(runner.isRunning)
+                }
+            } else if case .downloading(let p) = updates.status {
+                card(title: "Downloading the update…", detail: "\(Int((p * 100).rounded()))%") { ProgressView(value: p).frame(width: 90) }
+            } else if updates.status == .verifying || updates.status == .installing {
+                card(title: updates.status == .verifying ? "Checking the update…" : "Installing…", detail: "Silica restarts when it is done.") { ProgressView().controlSize(.small) }
+            } else if let message = updates.installError {
+                card(title: "Update did not install", detail: message) {
+                    Button("OK") { updates.clearInstallError() }.buttonStyle(SecondaryButtonStyle())
+                }
+            }
+        }
+        .animation(reduceMotion ? nil : LauncherMotion.change, value: updates.status)
+    }
+
+    private func card<Actions: View>(title: String, detail: String, @ViewBuilder actions: () -> Actions) -> some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 13.5, weight: .semibold))
+                Text(detail).font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            actions()
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .frame(maxWidth: 440, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.stroke.opacity(2)))
+        .shadow(color: .black.opacity(0.25), radius: 18, y: 6)
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
     }
 }

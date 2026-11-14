@@ -48,7 +48,7 @@ a { color: inherit; }
 .masthead nav { display: flex; gap: 6px; padding: 5px; border: 1px solid var(--line); border-radius: 999px; background: rgba(16, 21, 27, 0.7); backdrop-filter: blur(14px); }
 .masthead nav a { text-decoration: none; font-size: 14px; font-weight: 500; color: var(--muted); padding: 7px 14px; border-radius: 999px; transition: color 0.2s, background 0.2s; }
 .masthead nav a:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
-.soon { font-size: 13px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); padding: 8px 14px; border-radius: 999px; }
+.soon { text-decoration: none; transition: color 0.2s, border-color 0.2s; font-size: 13px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); padding: 8px 14px; border-radius: 999px; }
 
 /* ---------- hero ---------- */
 .hero {
@@ -233,3 +233,4 @@ footer p { margin: 0 auto 6px; max-width: 70ch; }
 .versions li { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 600; color: #75808c; }
 .versions li small { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; }
 .versions li.now { background: var(--accent); color: var(--accent-ink); }
+.soon:hover { color: var(--text); border-color: rgba(255, 255, 255, 0.3); }

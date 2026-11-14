@@ -69,7 +69,7 @@ struct SettingsView: View {
 
             Card(title: "About") {
                 HStack(spacing: 14) {
-                    Image(nsImage: Theme.appIcon).resizable().frame(width: 52, height: 52)
+                    Image(nsImage: Theme.appMark).resizable().frame(width: 52, height: 52)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Silica \(UpdateManager.currentVersionText)").font(.system(size: 14, weight: .semibold))
                         Text("Minecraft Beta 1.7.3 on Apple Silicon with a Vulkan renderer. You bring your own copy of the game; Silica ships none of Mojang's code or assets.").font(.system(size: 12)).foregroundStyle(.secondary)

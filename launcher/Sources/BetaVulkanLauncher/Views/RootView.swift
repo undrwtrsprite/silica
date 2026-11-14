@@ -108,7 +108,7 @@ private struct LauncherNavigation: View {
         .overlay(alignment: .leading) {
             // the name sits in the corner beside the window buttons, so the bar itself is only the four pages
             HStack(spacing: 8) {
-                Image(nsImage: Theme.appIcon)
+                Image(nsImage: Theme.appMark)
                     .resizable().frame(width: 28, height: 28).accessibilityHidden(true)
                 Text("Silica").font(.system(size: 17, weight: .semibold))
             }

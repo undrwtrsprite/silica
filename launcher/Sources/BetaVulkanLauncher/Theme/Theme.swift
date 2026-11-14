@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 
 enum Theme {
-    static var appIcon: NSImage {
-        if let url = Bundle.main.url(forResource: "Silica", withExtension: "icns"),
+    static var appMark: NSImage {
+        if let url = Bundle.main.url(forResource: "SilicaMark", withExtension: "png"),
            let image = NSImage(contentsOf: url) {
             return image
         }

@@ -128,6 +128,15 @@ func renderIcon(_ px: Int) -> Data {
     return png(ctx)
 }
 
+/// The colored wafer alone, for in-window branding without the app icon's dark squircle.
+func renderMark(_ px: Int) -> Data {
+    let ctx = newContext(px, px)
+    ctx.scaleBy(x: CGFloat(px) / 1024, y: CGFloat(px) / 1024)
+    ctx.translateBy(x: C.x, y: C.y); ctx.scaleBy(x: 1.45, y: 1.45); ctx.translateBy(x: -C.x, y: -C.y - 12)
+    drawWaferFlat(ctx)
+    return png(ctx)
+}
+
 /// The mark alone in one flat colour on a transparent background: the wafer with its lines and the lit die cut out.
 func renderMono(_ px: Int, _ color: CGColor) -> Data {
     let ctx = newContext(px, px)
@@ -203,6 +212,9 @@ func svgMark() -> String {
 
 let out = CommandLine.arguments[1]
 try? FileManager.default.createDirectory(atPath: out, withIntermediateDirectories: true)
+let mark = URL(fileURLWithPath: out).deletingLastPathComponent().appendingPathComponent("SilicaMark.png")
+try! renderMark(512).write(to: mark)
+print("wrote brand mark to \(mark.path)")
 for (name, px) in [("icon_16x16", 16), ("icon_16x16@2x", 32), ("icon_32x32", 32), ("icon_32x32@2x", 64), ("icon_128x128", 128), ("icon_128x128@2x", 256),
                    ("icon_256x256", 256), ("icon_256x256@2x", 512), ("icon_512x512", 512), ("icon_512x512@2x", 1024)] {
     try! renderIcon(px).write(to: URL(fileURLWithPath: out + "/" + name + ".png"))

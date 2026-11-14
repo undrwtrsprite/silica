@@ -27,7 +27,7 @@ struct LauncherBrand: View {
 
     var body: some View {
         HStack(spacing: 11) {
-            Image(nsImage: Theme.appIcon)
+            Image(nsImage: Theme.appMark)
                 .resizable().frame(width: 42, height: 42).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.system(size: 18, weight: .bold, design: .rounded))

@@ -8,6 +8,7 @@ APP=Silica.app
 rm -rf "$APP" BetaVulkan.app
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp Icon/Silica.icns "$APP/Contents/Resources/Silica.icns"   # made by Icon/make_icon.swift
+cp Icon/SilicaMark.png "$APP/Contents/Resources/SilicaMark.png"   # transparent in-window brand mark
 cp .build/out/Products/Release/BetaVulkanLauncher "$APP/Contents/MacOS/Silica"
 # The game build (our jars, the patch agent, the jar preparation tool: no Mojang code) travels inside the app, so setup needs nothing else from this repository.
 if [ -z "${SKIP_STAGE:-}" ]; then
@@ -33,8 +34,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleExecutable</key><string>Silica</string>
   <key>CFBundleIconFile</key><string>Silica</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1.2</string>
-  <key>CFBundleVersion</key><string>3</string>
+  <key>CFBundleShortVersionString</key><string>0.1.3</string>
+  <key>CFBundleVersion</key><string>4</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>LSApplicationCategoryType</key><string>public.app-category.games</string>

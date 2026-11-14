@@ -214,3 +214,6 @@ footer p { margin: 0 auto 6px; max-width: 70ch; }
 .doc code { font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(255, 255, 255, 0.07); padding: 2px 6px; border-radius: 6px; color: #dfe6ec; }
 .doc a, footer a { color: var(--accent); }
 .doc b { color: var(--text); }
+
+.soon-note { margin: 12px 0 0; font-size: 13px; color: var(--muted); }
+.soon-note span { display: inline-block; margin-right: 8px; padding: 2px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }

@@ -37,6 +37,10 @@ Silica runs Beta 1.7.3 natively on Apple Silicon: an arm64 Java 21 runtime, LWJG
 
 > **This repository contains no Mojang code, jars or assets.** You need to own Minecraft: Java Edition. On first run Silica downloads the game from Mojang's own servers (or uses a copy you already have), checks it against Mojang's checksum, and prepares it on your Mac. Silica's changes are applied to that copy at load time.
 
+## How it's made
+
+Silica is a passion project and it is heavily AI assisted. I decide what gets built and I test it on my own Mac. An AI (Claude) writes a lot of the code, and you can see that in the commit history. It is GPL-3.0, and the benchmark numbers and scripts are in the repo, so you can check that it holds up instead of just taking my word for it.
+
 ## Performance
 
 Same world, camera path and seed on both renderers. Average FPS on an Apple M5, 1080p fullscreen, seed 1337.

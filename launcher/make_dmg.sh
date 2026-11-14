@@ -15,6 +15,7 @@ trap 'rm -rf "$STAGE"' EXIT
 for f in LICENSE THIRD-PARTY-NOTICES.md; do
   [ -f "../$f" ] && cp "../$f" "$APP/Contents/Resources/$f"
 done
+[ -d ../licenses ] && rm -rf "$APP/Contents/Resources/licenses" && cp -R ../licenses "$APP/Contents/Resources/licenses"
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict "$APP"
 

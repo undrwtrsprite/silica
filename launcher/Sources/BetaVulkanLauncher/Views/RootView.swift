@@ -49,11 +49,10 @@ struct RootView: View {
                                 case .advanced: AdvancedView().padding(32)
                                 }
                             }
-                            .id(state.tab)
-                            .transition(reduceMotion ? .identity : LauncherMotion.page)
+                            .modifier(PageFadeIn(enabled: !reduceMotion))
+                            .id(state.tab)   // a new page each time, and the old one is gone at once: nothing half-faded can be left behind when you switch quickly
                             .frame(maxWidth: .infinity, alignment: .topLeading)
                         }
-                        .animation(reduceMotion ? nil : LauncherMotion.change, value: state.tab)
                     }
                 }
             }
@@ -179,5 +178,21 @@ private struct UpdateBanner: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.stroke.opacity(2)))
         .shadow(color: .black.opacity(0.25), radius: 18, y: 6)
         .transition(.opacity.combined(with: .move(edge: .bottom)))
+    }
+}
+
+/// Fades a page in (with a small slide) when it first appears. The page it replaces is removed immediately, so quick tab switches cannot leave pieces of an old page on screen.
+private struct PageFadeIn: ViewModifier {
+    let enabled: Bool
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(enabled && !shown ? 0 : 1)
+            .offset(y: enabled && !shown ? 5 : 0)
+            .onAppear {
+                guard enabled else { return }
+                withAnimation(LauncherMotion.change) { shown = true }
+            }
     }
 }

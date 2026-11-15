@@ -34,9 +34,9 @@
       <p class="lede">Silica is a launcher and an improved build of Beta 1.7.3 with a Vulkan renderer, a better inventory, and real world tools. No Rosetta.</p>
 
       <div class="stats">
-        <div class="stat"><b>289<small>FPS</small></b><span>Vulkan, far distance</span></div>
-        <div class="stat"><b>3.5×</b><span>faster than OpenGL</span></div>
-        <div class="stat"><b>7.4<small>ms</small></b><span>99th percentile frame</span></div>
+        <div class="stat"><b>304<small>FPS</small></b><span>Vulkan, far distance</span></div>
+        <div class="stat"><b>2.7×</b><span>faster than OpenGL, far</span></div>
+        <div class="stat"><b>7.5<small>ms</small></b><span>99th percentile frame</span></div>
         <p class="stats-note">Apple M5 · 1080p fullscreen · render distance 256</p>
       </div>
 
@@ -74,20 +74,20 @@
     </div>
     <div class="fade-left"></div>
     <div class="copy">
-      <h2 id="performance-title">Over three times the frame rate.</h2>
-      <p class="sub">The same world, camera path and seed on both renderers. Vulkan on MoltenVK keeps the Mac busy with the game instead of the driver.</p>
+      <h2 id="performance-title">Up to 2.7 times the frame rate.</h2>
+      <p class="sub">The same world, camera path and seed on both renderers. Vulkan on MoltenVK keeps the Mac busy with the game instead of the driver. At short render distances the two come out about even.</p>
       <div class="bench" data-bench>
         <div>
           <h3>Far · 256 blocks</h3>
-          <div class="row"><span>OpenGL</span><div class="track"><div class="bar gl" style="--v:20.75">83</div></div></div>
-          <div class="row"><span>Vulkan</span><div class="track"><div class="bar vk" style="--v:72.25">289</div></div></div>
+          <div class="row"><span>OpenGL</span><div class="track"><div class="bar gl" style="--v:28.5">114</div></div></div>
+          <div class="row"><span>Vulkan</span><div class="track"><div class="bar vk" style="--v:76">304</div></div></div>
         </div>
         <div>
           <h3>Normal · 128 blocks</h3>
-          <div class="row"><span>OpenGL</span><div class="track"><div class="bar gl" style="--v:40">160</div></div></div>
-          <div class="row"><span>Vulkan</span><div class="track"><div class="bar vk" style="--v:93.5">374</div></div></div>
+          <div class="row"><span>OpenGL</span><div class="track"><div class="bar gl" style="--v:47.5">190</div></div></div>
+          <div class="row"><span>Vulkan</span><div class="track"><div class="bar vk" style="--v:98.25">393</div></div></div>
         </div>
-        <p class="method">Average FPS. Apple M5, 1080p fullscreen, fixed camera path and seed 1337, 10 s warm-up, 20 s measured, run on Nov 12, 2026.</p>
+        <p class="method">Average FPS. Apple M5, 1080p fullscreen, fixed camera path and seed 1337, 20 s warm-up, 60 s measured, run on Nov 15, 2026. OpenGL at far distance varies from run to run, so the ratio there is about 2.3 to 3 times.</p>
       </div>
     </div>
   </section>

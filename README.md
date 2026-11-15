@@ -63,6 +63,9 @@ On the far setting that is about 3.5× the frame rate, with a 99th percentile fr
     <td align="center"><sub>Worlds: resume, back up, import and export</sub></td>
     <td align="center"><sub>Settings</sub></td>
   </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/assets/shot-jars.webp" alt="Jars page: the patched game and a modded jar that passed Silica's checks" width="50%"><br><sub>Jars: basic, experimental mod support. Add a modded jar and Silica checks that it fits before you play</sub></td>
+  </tr>
 </table>
 
 - **Microsoft sign-in** with several accounts, kept in the macOS Keychain. Silica checks the purchase before it starts the game.

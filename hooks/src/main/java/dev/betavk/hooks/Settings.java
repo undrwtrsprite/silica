@@ -36,6 +36,11 @@ public final class Settings {
                 try {
                     switch (kv[0]) {
                         case "fov" -> Opts.fov = Math.max(30.0F, Math.min(110.0F, Float.parseFloat(kv[1])));
+                        case "renderChunks" -> {
+                            int rc = Integer.parseInt(kv[1]);
+                            Opts.renderChunks = rc <= 0 ? 0 : Math.max(2, Math.min(32, rc));
+                            if (Opts.renderChunks >= 2) Opts.syncLegacyRenderDistance(gs, Opts.renderChunks);
+                        }
                         case "showFps" -> Opts.showFps = Boolean.parseBoolean(kv[1]);
                         case "maxFps" -> Opts.maxFps = Math.max(0, Integer.parseInt(kv[1]));
                         case "masterVolume" -> Opts.master = Math.max(0.0F, Math.min(1.0F, Float.parseFloat(kv[1])));
@@ -69,10 +74,11 @@ public final class Settings {
         if (f == null) return;
         try {
             List<String> lines = f.isFile() ? Files.readAllLines(f.toPath(), StandardCharsets.UTF_8) : new java.util.ArrayList<>();
-            lines.removeIf(l -> l.startsWith("fov:") || l.startsWith("showFps:") || l.startsWith("maxFps:") || l.startsWith("masterVolume:") || l.startsWith("ambientVolume:")
+            lines.removeIf(l -> l.startsWith("fov:") || l.startsWith("renderChunks:") || l.startsWith("showFps:") || l.startsWith("maxFps:") || l.startsWith("masterVolume:") || l.startsWith("ambientVolume:")
                     || l.startsWith("continuousMusic:") || l.startsWith("toggleSneak:") || l.startsWith("soundCaptions:")
                     || l.startsWith("autosaveMinutes:") || l.startsWith("worldBackups:") || l.startsWith("lastWorld:") || l.startsWith("worldSort:"));
             lines.add("fov:" + Opts.fov);
+            if (Opts.renderChunks >= 2) lines.add("renderChunks:" + Opts.renderChunks);
             lines.add("showFps:" + Opts.showFps);
             lines.add("maxFps:" + Opts.maxFps);
             lines.add("masterVolume:" + Opts.master);

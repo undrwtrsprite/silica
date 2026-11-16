@@ -111,7 +111,7 @@ The game build, the preparation steps and the benchmark scripts are described in
 
 ## Status
 
-Sign-in works against Microsoft's live services. [Silica 0.1.8 is available on the website](https://silicalauncher.xyz) and [GitHub Releases](https://github.com/undrwtrsprite/silica/releases/latest). Basic, experimental mod support is in: add a modded Beta 1.7.3 jar and Silica checks that its improvements fit before you play. Support for other Beta and Alpha versions is planned; the launcher is meant to run them all. The app is ad-hoc signed, not notarized, so macOS will warn on first open.
+Sign-in works against Microsoft's live services. [Silica 0.1.9 is available on the website](https://silicalauncher.xyz) and [GitHub Releases](https://github.com/undrwtrsprite/silica/releases/latest). Basic, experimental mod support is in: add a modded Beta 1.7.3 jar and Silica checks that its improvements fit before you play. Support for other Beta and Alpha versions is planned; the launcher is meant to run them all. The app is ad-hoc signed, not notarized, so macOS will warn on first open.
 
 ## License
 

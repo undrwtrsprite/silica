@@ -64,7 +64,10 @@ final class Bench {
     }
 
     private static void init(Minecraft mc) {
-        mc.gameSettings.renderDistance = DISTANCE;
+        int chunks = Integer.getInteger("betavk.bench.chunks", 0);
+        Opts.renderChunks = chunks >= 2 ? Math.min(32, chunks) : 0;
+        mc.gameSettings.renderDistance = Opts.renderChunks >= 2 ? 0 : DISTANCE;
+        if (Opts.renderChunks >= 2) Opts.syncLegacyRenderDistance(mc.gameSettings, Opts.renderChunks);
         mc.gameSettings.limitFramerate = 0;   // "Performance: Max": no sleeping
         Opts.maxFps = Integer.getInteger("betavk.bench.maxfps", 0);   // uncapped unless asked
         mc.gameSettings.difficulty = 0;       // peaceful: no mob spawns

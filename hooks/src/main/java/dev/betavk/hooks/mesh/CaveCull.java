@@ -114,8 +114,16 @@ public final class CaveCull {
 
     /** atEnd of RenderGlobal.loadRenderers. */
     public static void onLoadRenderers(RenderGlobal rg) {
+        if (rg.allRenderLists == null || rg.allRenderLists.length < 9) {
+            net.minecraft.src.RenderList[] prev = rg.allRenderLists;
+            rg.allRenderLists = new net.minecraft.src.RenderList[9];
+            int copied = prev == null ? 0 : Math.min(prev.length, 9);
+            if (copied > 0) System.arraycopy(prev, 0, rg.allRenderLists, 0, copied);
+            for (int i = copied; i < 9; i++) rg.allRenderLists[i] = new net.minecraft.src.RenderList();
+        }
         if (rg.worldRenderers == null) return;
         int n = rg.worldRenderers.length;
+        if (rg.glRenderLists instanceof java.util.ArrayList<?> list) list.ensureCapacity(n);
         if (visMasks.length != n) visMasks = new long[n];
         Arrays.fill(visMasks, ALL_VISIBLE);
         lastVisibleCount = 0;
@@ -167,16 +175,16 @@ public final class CaveCull {
         return true;
     }
 
-    private static boolean inFrustum(WorldRenderer w, int idx, ICamera cam, Frustrum fr) {
+    private static boolean inFrustum(WorldRenderer w, int idx, ICamera cam, Frustrum fr, double baseX, double baseY, double baseZ) {
         int st = frustumStamp[idx];
         if (st == frameId) return true;
         if (st == -frameId) return false;
         boolean inside;
         if (fr != null) {
             float[][] frPlanes = fr.clippingHelper.frustum;
-            double x0 = w.posX - 6.0 - fr.xPosition;
-            double y0 = w.posY - 6.0 - fr.yPosition;
-            double z0 = w.posZ - 6.0 - fr.zPosition;
+            double x0 = w.posX + baseX;
+            double y0 = w.posY + baseY;
+            double z0 = w.posZ + baseZ;
             double x1 = x0 + w.sizeWidth + 12.0;
             double y1 = y0 + w.sizeHeight + 12.0;
             double z1 = z0 + w.sizeDepth + 12.0;
@@ -245,6 +253,9 @@ public final class CaveCull {
         }
 
         Frustrum fr = (cam instanceof Frustrum) ? (Frustrum) cam : null;
+        double baseX = fr != null ? -6.0 - fr.xPosition : 0.0;
+        double baseY = fr != null ? -6.0 - fr.yPosition : 0.0;
+        double baseZ = fr != null ? -6.0 - fr.zPosition : 0.0;
         float eyeOff = ent.yOffset - 1.62F;
         double camX = ent.prevPosX + (ent.posX - ent.prevPosX) * pt;
         double camY = ent.prevPosY + (ent.posY - ent.prevPosY) * pt - eyeOff;
@@ -282,7 +293,7 @@ public final class CaveCull {
                 for (int gx = 0; gx < W; gx++) {
                     int idx = (gz * T + edgeY) * W + gx;
                     WorldRenderer w = wrs[idx];
-                    if (inFrustum(w, idx, cam, fr)) {
+                    if (inFrustum(w, idx, cam, fr, baseX, baseY, baseZ)) {
                         seed(wrs, idx, inBit);
                         if ((cellState[idx] & 0x40) == 0 && tail < bfsQueue.length) {
                             cellState[idx] |= 0x40;
@@ -331,7 +342,7 @@ public final class CaveCull {
                 int nIdx = (Math.floorMod(nz, D) * T + ny) * W + Math.floorMod(nx, W);
                 WorldRenderer nw = wrs[nIdx];
                 if (nw.posX != (nx << 4) || nw.posY != (ny << 4) || nw.posZ != (nz << 4)) continue;
-                if (!inFrustum(nw, nIdx, cam, fr)) continue;
+                if (!inFrustum(nw, nIdx, cam, fr, baseX, baseY, baseZ)) continue;
                 int oppBit = 1 << (dir ^ 1);
                 if (visStamp[nIdx] != frameId || (cellState[nIdx] & oppBit) == 0) {
                     seed(wrs, nIdx, oppBit);

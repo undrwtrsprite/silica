@@ -53,7 +53,21 @@ public final class MainLoop {
         return f;
     }
 
-    /** replaceBody of Minecraft.func_28001_B: the paid-account check talked to a login server that no longer exists. */
+    /** afterFieldSet of RenderGlobal.renderChunksDeep inside loadRenderers: expand chunk grid for custom chunk distances. */
+    public static void applyLoadRenderersSize(net.minecraft.src.RenderGlobal rg) {
+        if (Opts.renderChunks >= 2) {
+            int diam = Opts.renderChunks * 2 + 1;
+            rg.renderChunksWide = diam;
+            rg.renderChunksDeep = diam;
+        }
+    }
+
+    /** afterFieldSet of EntityRenderer.farPlaneDistance inside setupCameraTransform: match far clip & fog to the chunk slider. */
+    public static void applyFarPlane(net.minecraft.src.EntityRenderer er) {
+        er.farPlaneDistance = Opts.effectiveFarPlane(er.mc.gameSettings);
+    }
+
+    /** afterFieldSet / replaceBody of Minecraft.func_28001_B: the paid-account check talked to a login server that no longer exists. */
     public static void paidCheck(Minecraft mc) {
         Minecraft.hasPaidCheckTime = 0L;
     }

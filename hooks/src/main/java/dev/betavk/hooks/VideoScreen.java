@@ -18,7 +18,21 @@ public final class VideoScreen {
 
     private static final EnumOptions[] VANILLA = {EnumOptions.GRAPHICS, EnumOptions.RENDER_DISTANCE, EnumOptions.AMBIENT_OCCLUSION, EnumOptions.FRAMERATE_LIMIT,
             EnumOptions.ANAGLYPH, EnumOptions.VIEW_BOBBING, EnumOptions.GUI_SCALE, EnumOptions.ADVANCED_OPENGL};
-    private static final int FOV = 301, FPS_CAP = 302, SHOW_FPS = 304, FULLSCREEN = 305;
+    private static final int FOV = 301, FPS_CAP = 302, RENDER_DIST = 303, SHOW_FPS = 304, FULLSCREEN = 305;
+    private static final int MIN_CHUNKS = 2, MAX_CHUNKS = 32;
+    private static int appliedChunks = -1;
+
+    private static String renderLabel(GameSettings opts) {
+        return "Render Distance: " + Opts.effectiveChunks(opts) + " chunks";
+    }
+
+    private static void applyRenderDistance(GuiVideoSettings gs) {
+        int cur = Opts.effectiveChunks(gs.guiGameSettings);
+        if (cur == appliedChunks) return;
+        appliedChunks = cur;
+        Settings.save(gs.guiGameSettings);
+        if (gs.mc.theWorld != null && gs.mc.renderGlobal != null) gs.mc.renderGlobal.loadRenderers();
+    }
 
     private static String fovLabel() {
         return "FOV: " + (int) Opts.fov + (Opts.fov == 70.0F ? " (default)" : "");
@@ -42,9 +56,21 @@ public final class VideoScreen {
         GameSettings opts = gs.guiGameSettings;
         StringTranslate tr = StringTranslate.getInstance();
         gs.field_22107_a = tr.translateKey("options.videoTitle");
+        appliedChunks = Opts.effectiveChunks(opts);
         int n = 0;
         for (EnumOptions o : VANILLA) {
-            gs.controlList.add(new GuiSmallButton(o.returnEnumOrdinal(), gs.width / 2 - 155 + n % 2 * 160, gs.height / 6 + 24 * (n >> 1), o, opts.getKeyBinding(o)));
+            if (o == EnumOptions.RENDER_DISTANCE) {
+                int chunks = Opts.effectiveChunks(opts);
+                float pos = (float) (chunks - MIN_CHUNKS) / (float) (MAX_CHUNKS - MIN_CHUNKS);
+                gs.controlList.add(new SliderButton(RENDER_DIST, slotX(gs, n), slotY(gs, n), pos,
+                        v -> {
+                            int c = MIN_CHUNKS + Math.round(v * (MAX_CHUNKS - MIN_CHUNKS));
+                            Opts.renderChunks = c;
+                            Opts.syncLegacyRenderDistance(opts, c);
+                        }, () -> renderLabel(opts), () -> applyRenderDistance(gs)));
+            } else {
+                gs.controlList.add(new GuiSmallButton(o.returnEnumOrdinal(), slotX(gs, n), slotY(gs, n), o, opts.getKeyBinding(o)));
+            }
             n++;
         }
         int x0 = gs.width / 2 - 155;
@@ -95,6 +121,7 @@ public final class VideoScreen {
 
     /** addMethod GuiVideoSettings.onGuiClosed: slider changes are saved when the screen closes. */
     public static void closed(GuiVideoSettings gs) {
+        applyRenderDistance(gs);
         gs.guiGameSettings.saveOptions();
     }
 }

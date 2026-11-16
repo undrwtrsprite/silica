@@ -12,12 +12,18 @@ public final class SliderButton extends GuiButton {
     private boolean dragging;
     private final Consumer<Float> apply;
     private final Supplier<String> label;
+    private final Runnable onRelease;
 
     public SliderButton(int id, int x, int y, float value, Consumer<Float> apply, Supplier<String> label) {
+        this(id, x, y, value, apply, label, null);
+    }
+
+    public SliderButton(int id, int x, int y, float value, Consumer<Float> apply, Supplier<String> label, Runnable onRelease) {
         super(id, x, y, 150, 20, label.get());
         this.value = value;
         this.apply = apply;
         this.label = label;
+        this.onRelease = onRelease;
     }
 
     @Override public int getHoverState(boolean over) {
@@ -46,6 +52,9 @@ public final class SliderButton extends GuiButton {
     }
 
     @Override public void mouseReleased(int mx, int my) {
-        dragging = false;
+        if (dragging) {
+            dragging = false;
+            if (onRelease != null) onRelease.run();
+        }
     }
 }

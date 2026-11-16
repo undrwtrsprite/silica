@@ -267,19 +267,21 @@ public final class VulkanRenderer implements Renderer {
         m[0] = m[5] = m[10] = m[15] = 1;
     }
 
-    /** out = a * b (column-major). */
+    /** out = a * b (column-major). Writes directly into out when out aliases neither input. */
     private static final float[] T16 = new float[16];
     private static final float[] MUL_TMP = new float[16];
 
     private static void mul(float[] a, float[] b, float[] out) {
-        float[] r = MUL_TMP;
-        for (int c = 0; c < 4; c++)
-            for (int rr = 0; rr < 4; rr++) {
-                float s = 0;
-                for (int k = 0; k < 4; k++) s += a[k * 4 + rr] * b[c * 4 + k];
-                r[c * 4 + rr] = s;
-            }
-        System.arraycopy(r, 0, out, 0, 16);
+        float[] r = (out == a || out == b) ? MUL_TMP : out;
+        for (int c = 0; c < 4; c++) {
+            int c4 = c * 4;
+            float b0 = b[c4], b1 = b[c4 + 1], b2 = b[c4 + 2], b3 = b[c4 + 3];
+            r[c4] = a[0] * b0 + a[4] * b1 + a[8] * b2 + a[12] * b3;
+            r[c4 + 1] = a[1] * b0 + a[5] * b1 + a[9] * b2 + a[13] * b3;
+            r[c4 + 2] = a[2] * b0 + a[6] * b1 + a[10] * b2 + a[14] * b3;
+            r[c4 + 3] = a[3] * b0 + a[7] * b1 + a[11] * b2 + a[15] * b3;
+        }
+        if (r != out) System.arraycopy(r, 0, out, 0, 16);
     }
 
     private float[] cur() {
@@ -333,12 +335,12 @@ public final class VulkanRenderer implements Renderer {
             recording.ops.add(() -> glTranslatef(x, y, z));
             return;
         }
-        float[] t = T16;
-        ident(t);
-        t[12] = x;
-        t[13] = y;
-        t[14] = z;
-        postMul(t);
+        float[] m = cur();
+        m[12] += m[0] * x + m[4] * y + m[8] * z;
+        m[13] += m[1] * x + m[5] * y + m[9] * z;
+        m[14] += m[2] * x + m[6] * y + m[10] * z;
+        m[15] += m[3] * x + m[7] * y + m[11] * z;
+        paramsDirty = true;
     }
     @Override public void glScalef(float x, float y, float z) {
         if (recording != null) {
@@ -352,12 +354,11 @@ public final class VulkanRenderer implements Renderer {
             recording.ops.add(() -> glScalef(x, y, z));
             return;
         }
-        float[] t = T16;
-        ident(t);
-        t[0] = x;
-        t[5] = y;
-        t[10] = z;
-        postMul(t);
+        float[] m = cur();
+        m[0] *= x; m[1] *= x; m[2] *= x; m[3] *= x;
+        m[4] *= y; m[5] *= y; m[6] *= y; m[7] *= y;
+        m[8] *= z; m[9] *= z; m[10] *= z; m[11] *= z;
+        paramsDirty = true;
     }
     @Override public void glScaled(double x, double y, double z) { glScalef((float) x, (float) y, (float) z); }
     @Override public void glRotatef(float angle, float x, float y, float z) {
@@ -382,7 +383,8 @@ public final class VulkanRenderer implements Renderer {
     }
     @Override public void glOrtho(double l, double r, double b, double t, double n, double f) {
         if (rec(() -> glOrtho(l, r, b, t, n, f))) return;
-        float[] m = new float[16];
+        float[] m = T16;
+        java.util.Arrays.fill(m, 0);
         m[0] = (float) (2 / (r - l));
         m[5] = (float) (2 / (t - b));
         m[10] = (float) (-2 / (f - n));
@@ -394,7 +396,8 @@ public final class VulkanRenderer implements Renderer {
     }
     @Override public void glFrustum(double l, double r, double b, double t, double n, double f) {
         if (rec(() -> glFrustum(l, r, b, t, n, f))) return;
-        float[] m = new float[16];
+        float[] m = T16;
+        java.util.Arrays.fill(m, 0);
         m[0] = (float) (2 * n / (r - l));
         m[5] = (float) (2 * n / (t - b));
         m[8] = (float) ((r + l) / (r - l));
@@ -410,9 +413,9 @@ public final class VulkanRenderer implements Renderer {
         out.put(m, 0, 16);
     }
     @Override public void glGetFloatv(int pname, float[] out) {
-        FloatBuffer fb = FloatBuffer.allocate(16);
-        glGetFloatv(pname, fb);
-        System.arraycopy(fb.array(), 0, out, 0, 16);
+        float[] m = pname == MODELVIEW_MATRIX ? stacks[0][sp[0]] : pname == PROJECTION_MATRIX ? stacks[1][sp[1]] : null;
+        if (m == null) throw new UnsupportedOperationException("glGetFloatv " + pname);
+        System.arraycopy(m, 0, out, 0, 16);
     }
 
     // ============================== simple state ==============================================
@@ -486,36 +489,78 @@ public final class VulkanRenderer implements Renderer {
         }
         paramsDirty = true;
     }
-    @Override public void glFogfv(int pname, FloatBuffer v) { float a = v.get(v.position()), b = v.get(v.position() + 1), c = v.get(v.position() + 2), d = v.get(v.position() + 3); glFogfv(pname, new float[]{a, b, c, d}); }
+    @Override public void glFogfv(int pname, FloatBuffer v) {
+        int p = v.position();
+        if (recording == null) {
+            if (pname == 0xB66) {
+                fogColor[0] = v.get(p); fogColor[1] = v.get(p + 1); fogColor[2] = v.get(p + 2); fogColor[3] = v.get(p + 3);
+            }
+            paramsDirty = true;
+            return;
+        }
+        glFogfv(pname, new float[]{v.get(p), v.get(p + 1), v.get(p + 2), v.get(p + 3)});
+    }
     @Override public void glFogfv(int pname, float[] v) {
-        float[] c = v.clone();
-        if (rec(() -> glFogfv(pname, c))) return;
-        if (pname == 0xB66) System.arraycopy(c, 0, fogColor, 0, 4);
+        if (recording != null) {
+            float[] c = v.clone();
+            recording.pureEligible = false;
+            recording.ops.add(() -> glFogfv(pname, c));
+            return;
+        }
+        if (pname == 0xB66) System.arraycopy(v, 0, fogColor, 0, 4);
         paramsDirty = true;
     }
-    @Override public void glLightfv(int light, int pname, FloatBuffer v) { glLightfv(light, pname, new float[]{v.get(v.position()), v.get(v.position() + 1), v.get(v.position() + 2), v.get(v.position() + 3)}); }
+    @Override public void glLightfv(int light, int pname, FloatBuffer v) {
+        int p = v.position();
+        if (recording == null) {
+            setLight(light, pname, v.get(p), v.get(p + 1), v.get(p + 2), v.get(p + 3));
+            return;
+        }
+        glLightfv(light, pname, new float[]{v.get(p), v.get(p + 1), v.get(p + 2), v.get(p + 3)});
+    }
     @Override public void glLightfv(int light, int pname, float[] v) {
-        float[] c = v.clone();
-        if (rec(() -> glLightfv(light, pname, c))) return;
+        if (recording != null) {
+            float[] c = v.clone();
+            recording.pureEligible = false;
+            recording.ops.add(() -> glLightfv(light, pname, c));
+            return;
+        }
+        setLight(light, pname, v[0], v[1], v[2], v[3]);
+    }
+    private void setLight(int light, int pname, float v0, float v1, float v2, float v3) {
         int i = light - LIGHT0;
         if (i < 0 || i > 1) return;
         if (pname == 0x1203) {   // POSITION: transform the direction into eye space by the current modelview rotation
             float[] m = stacks[0][sp[0]];
-            float x = m[0] * c[0] + m[4] * c[1] + m[8] * c[2], y = m[1] * c[0] + m[5] * c[1] + m[9] * c[2], z = m[2] * c[0] + m[6] * c[1] + m[10] * c[2];
+            float x = m[0] * v0 + m[4] * v1 + m[8] * v2, y = m[1] * v0 + m[5] * v1 + m[9] * v2, z = m[2] * v0 + m[6] * v1 + m[10] * v2;
             double len = Math.sqrt(x * x + y * y + z * z);
             lightDir[i][0] = (float) (x / len);
             lightDir[i][1] = (float) (y / len);
             lightDir[i][2] = (float) (z / len);
         } else if (pname == 0x1201) {
-            System.arraycopy(c, 0, lightDiff[i], 0, 4);
+            lightDiff[i][0] = v0; lightDiff[i][1] = v1; lightDiff[i][2] = v2; lightDiff[i][3] = v3;
         }
         paramsDirty = true;
     }
-    @Override public void glLightModelfv(int pname, FloatBuffer v) { glLightModelfv(pname, new float[]{v.get(v.position()), v.get(v.position() + 1), v.get(v.position() + 2), v.get(v.position() + 3)}); }
+    @Override public void glLightModelfv(int pname, FloatBuffer v) {
+        int p = v.position();
+        if (recording == null) {
+            if (pname == 0xB53) {
+                ambient[0] = v.get(p); ambient[1] = v.get(p + 1); ambient[2] = v.get(p + 2); ambient[3] = v.get(p + 3);
+            }
+            paramsDirty = true;
+            return;
+        }
+        glLightModelfv(pname, new float[]{v.get(p), v.get(p + 1), v.get(p + 2), v.get(p + 3)});
+    }
     @Override public void glLightModelfv(int pname, float[] v) {
-        float[] c = v.clone();
-        if (rec(() -> glLightModelfv(pname, c))) return;
-        if (pname == 0xB53) System.arraycopy(c, 0, ambient, 0, 4);
+        if (recording != null) {
+            float[] c = v.clone();
+            recording.pureEligible = false;
+            recording.ops.add(() -> glLightModelfv(pname, c));
+            return;
+        }
+        if (pname == 0xB53) System.arraycopy(v, 0, ambient, 0, 4);
         paramsDirty = true;
     }
     @Override public void glShadeModel(int m) { }
@@ -785,14 +830,22 @@ public final class VulkanRenderer implements Renderer {
         if (!INDIRECT || !core.multiDrawIndirect) {
             boolean savedAlpha = alphaTest;
             boolean anyCutout = false;
+            int prevFlags = -1, prevArena = -1;
+            VkCommandBuffer cb = core.drawCmd[core.slot];
             for (int i = ids.position(), lim = ids.limit(); i < lim; i++) {
                 int id = ids.get(i);
                 DisplayList l = (id >= 0 && id < listArr.length) ? listArr[id] : null;
                 if (l == null) continue;
                 if (l.pureQuad) {
                     if (l.noAlpha) {
-                        if (alphaTest) { alphaTest = false; paramsDirty = true; }
-                        drawQuadRange(listBufs.get(l.arenaIdx).buffer, l.firstVertex, l.indexCount, l.arrayFlags);
+                        if (alphaTest) { alphaTest = false; paramsDirty = true; prevFlags = -1; }
+                        if (l.arrayFlags != prevFlags || l.arenaIdx != prevArena) {
+                            if (!prepareDraw(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, true, l.arrayFlags, listBufs.get(l.arenaIdx).buffer)) continue;
+                            cb = core.drawCmd[core.slot];
+                            prevFlags = l.arrayFlags;
+                            prevArena = l.arenaIdx;
+                        }
+                        vkCmdDrawIndexed(cb, l.indexCount, 1, 0, l.firstVertex, 0);
                         if (l.cutArenaIdx >= 0) anyCutout = true;
                     } else {
                         anyCutout = true;
@@ -801,19 +854,32 @@ public final class VulkanRenderer implements Renderer {
                     if (alphaTest != savedAlpha) { alphaTest = savedAlpha; paramsDirty = true; }
                     for (Runnable op : l.ops) op.run();
                     savedAlpha = alphaTest;
+                    prevFlags = -1;
                 }
             }
             if (alphaTest != savedAlpha) { alphaTest = savedAlpha; paramsDirty = true; }
             if (anyCutout) {
+                prevFlags = -1;
+                prevArena = -1;
                 for (int i = ids.position(), lim = ids.limit(); i < lim; i++) {
                     int id = ids.get(i);
                     DisplayList l = (id >= 0 && id < listArr.length) ? listArr[id] : null;
                     if (l == null || !l.pureQuad) continue;
+                    int ai, fv, ic, af;
                     if (!l.noAlpha) {
-                        drawQuadRange(listBufs.get(l.arenaIdx).buffer, l.firstVertex, l.indexCount, l.arrayFlags);
+                        ai = l.arenaIdx; fv = l.firstVertex; ic = l.indexCount; af = l.arrayFlags;
                     } else if (l.cutArenaIdx >= 0) {
-                        drawQuadRange(listBufs.get(l.cutArenaIdx).buffer, l.cutFirstVertex, l.cutIndexCount, l.cutArrayFlags);
+                        ai = l.cutArenaIdx; fv = l.cutFirstVertex; ic = l.cutIndexCount; af = l.cutArrayFlags;
+                    } else {
+                        continue;
                     }
+                    if (af != prevFlags || ai != prevArena) {
+                        if (!prepareDraw(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, true, af, listBufs.get(ai).buffer)) continue;
+                        cb = core.drawCmd[core.slot];
+                        prevFlags = af;
+                        prevArena = ai;
+                    }
+                    vkCmdDrawIndexed(cb, ic, 1, 0, fv, 0);
                 }
             }
             return;
@@ -1049,6 +1115,8 @@ public final class VulkanRenderer implements Renderer {
     }
 
     private final LongBuffer tmpLong1 = MemoryUtil.memAllocLong(1);
+    private final LongBuffer tmpLong2 = MemoryUtil.memAllocLong(2);
+    private final IntBuffer tmpInt1 = MemoryUtil.memAllocInt(1);
     private static final LongBuffer ZERO_OFFSET = MemoryUtil.memCallocLong(1);
 
     private LongBuffer stackLong1(long v) {
@@ -1071,28 +1139,28 @@ public final class VulkanRenderer implements Renderer {
         if (t == null || t.image == 0) t = whiteTex;
         long texSet = textureSet(t);
         boolean bindDesc = !BIND_CACHE || off != boundParamOff || texSet != boundTexSet;
-        if (viewportDirty || bindDesc || vbuf != boundVB) {
+        if (viewportDirty) {
             try (MemoryStack st = stackPush()) {
-                if (viewportDirty) {
-                    int w = vw > 0 ? vw : core.width, h = vh > 0 ? vh : core.height;
-                    // negative height flips Y so GL's bottom-left origin and winding carry over unchanged
-                    vkCmdSetViewport(cb, 0, VkViewport.calloc(1, st).x(vx).y(core.height - vy).width(w).height(-h).minDepth(0).maxDepth(1));
-                    VkRect2D.Buffer sc = VkRect2D.calloc(1, st);
-                    sc.offset().set(Math.max(0, vx), Math.max(0, core.height - (vy + h)));
-                    sc.extent().set(Math.max(1, w), Math.max(1, h));
-                    vkCmdSetScissor(cb, 0, sc);
-                    viewportDirty = false;
-                }
-                if (bindDesc) {
-                    vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, st.longs(paramsSet[slot], texSet), st.ints(off));
-                    boundParamOff = off;
-                    boundTexSet = texSet;
-                }
-                if (vbuf != boundVB) {
-                    vkCmdBindVertexBuffers(cb, 0, st.longs(vbuf), st.longs(0));
-                    boundVB = vbuf;
-                }
+                int w = vw > 0 ? vw : core.width, h = vh > 0 ? vh : core.height;
+                // negative height flips Y so GL's bottom-left origin and winding carry over unchanged
+                vkCmdSetViewport(cb, 0, VkViewport.calloc(1, st).x(vx).y(core.height - vy).width(w).height(-h).minDepth(0).maxDepth(1));
+                VkRect2D.Buffer sc = VkRect2D.calloc(1, st);
+                sc.offset().set(Math.max(0, vx), Math.max(0, core.height - (vy + h)));
+                sc.extent().set(Math.max(1, w), Math.max(1, h));
+                vkCmdSetScissor(cb, 0, sc);
+                viewportDirty = false;
             }
+        }
+        if (bindDesc) {
+            tmpLong2.put(0, paramsSet[slot]).put(1, texSet);
+            tmpInt1.put(0, off);
+            vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, tmpLong2, tmpInt1);
+            boundParamOff = off;
+            boundTexSet = texSet;
+        }
+        if (vbuf != boundVB) {
+            vkCmdBindVertexBuffers(cb, 0, stackLong1(vbuf), ZERO_OFFSET);
+            boundVB = vbuf;
         }
         if (polyOffset) vkCmdSetDepthBias(cb, -polyUnits, 0f, -polyFactor);   // reversed depth: 'further away' is a smaller value
         if (quads && !indexBound) {
@@ -1143,10 +1211,11 @@ public final class VulkanRenderer implements Renderer {
         }
         long off = uboOff[slot];
         uboOff[slot] += (PARAMS_SIZE + 255) / 256 * 256;
-        FloatBuffer f = MemoryUtil.memFloatBuffer(uboRing[slot].ptr + off, PARAMS_SIZE / 4);
-        float[] mvp = mvpTmp;
-        mul(stacks[1][sp[1]], stacks[0][sp[0]], mvp);
+        long ptr = uboRing[slot].ptr + off;
+        float[] mv = stacks[0][sp[0]];
         float[] pm = stacks[1][sp[1]];
+        float[] mvp = mvpTmp;
+        mul(pm, mv, mvp);
         boolean persp = pm[11] == -1f && pm[15] == 0f;
         if (persp) {
             // Reversed Z, finite far: depth = n (f - w) / ((f - n) w), 1 at the near plane and 0 at the far plane, so float depth precision stays even
@@ -1159,23 +1228,45 @@ public final class VulkanRenderer implements Renderer {
             mvp[10] = b * mvp[11];
             mvp[14] = a + b * mvp[15];
         }
-        f.put(mvp).put(stacks[0][sp[0]]);
-        f.put(color).put(normal[0]).put(normal[1]).put(normal[2]).put(persp ? 1f : 0f);   // normal.w: this draw uses a perspective projection (reversed-Z depth built on the CPU)
-        f.put(fogColor);
+        for (int i = 0; i < 16; i++) MemoryUtil.memPutFloat(ptr + (i << 2), mvp[i]);
+        for (int i = 0; i < 16; i++) MemoryUtil.memPutFloat(ptr + ((16 + i) << 2), mv[i]);
+        MemoryUtil.memPutFloat(ptr + 128, color[0]);
+        MemoryUtil.memPutFloat(ptr + 132, color[1]);
+        MemoryUtil.memPutFloat(ptr + 136, color[2]);
+        MemoryUtil.memPutFloat(ptr + 140, color[3]);
+        MemoryUtil.memPutFloat(ptr + 144, normal[0]);
+        MemoryUtil.memPutFloat(ptr + 148, normal[1]);
+        MemoryUtil.memPutFloat(ptr + 152, normal[2]);
+        MemoryUtil.memPutFloat(ptr + 156, persp ? 1f : 0f);
+        MemoryUtil.memPutFloat(ptr + 160, fogColor[0]);
+        MemoryUtil.memPutFloat(ptr + 164, fogColor[1]);
+        MemoryUtil.memPutFloat(ptr + 168, fogColor[2]);
+        MemoryUtil.memPutFloat(ptr + 172, fogColor[3]);
         int fm = !fog ? 0 : fogMode == 0x2601 ? 1 : fogMode == 0x800 ? 2 : 3;
-        f.put(fogStart).put(fogEnd).put(fogDensity).put(fm);
-        f.put(alphaOp).put(alphaRef).put(alphaTest ? 1f : 0f).put(fogRadial ? 1f : 0f);
+        MemoryUtil.memPutFloat(ptr + 176, fogStart);
+        MemoryUtil.memPutFloat(ptr + 180, fogEnd);
+        MemoryUtil.memPutFloat(ptr + 184, fogDensity);
+        MemoryUtil.memPutFloat(ptr + 188, fm);
+        MemoryUtil.memPutFloat(ptr + 192, alphaOp);
+        MemoryUtil.memPutFloat(ptr + 196, alphaRef);
+        MemoryUtil.memPutFloat(ptr + 200, alphaTest ? 1f : 0f);
+        MemoryUtil.memPutFloat(ptr + 204, fogRadial ? 1f : 0f);
         String dbg = DBG;
         if (dbg.equals("nonormals")) arrayFlags &= ~4;
         if (dbg.equals("nocolors")) arrayFlags &= ~2;
         boolean hasTex = tex2d && (arrayFlags & 1) != 0;
         boolean light = lighting && !dbg.equals("nolight");
-        f.put(hasTex ? 1f : 0f).put((arrayFlags & 2) != 0 ? 1f : 0f).put(light ? 1f : 0f).put((arrayFlags & 4) != 0 ? 1f : 0f);
-        f.put(lightDir[0]);
-        f.put(light0 ? lightDiff[0] : ZERO4);
-        f.put(lightDir[1]);
-        f.put(light1 ? lightDiff[1] : ZERO4);
-        f.put(ambient);
+        MemoryUtil.memPutFloat(ptr + 208, hasTex ? 1f : 0f);
+        MemoryUtil.memPutFloat(ptr + 212, (arrayFlags & 2) != 0 ? 1f : 0f);
+        MemoryUtil.memPutFloat(ptr + 216, light ? 1f : 0f);
+        MemoryUtil.memPutFloat(ptr + 220, (arrayFlags & 4) != 0 ? 1f : 0f);
+        float[] ld0 = lightDir[0], ld1 = lightDir[1];
+        float[] df0 = light0 ? lightDiff[0] : ZERO4, df1 = light1 ? lightDiff[1] : ZERO4;
+        MemoryUtil.memPutFloat(ptr + 224, ld0[0]); MemoryUtil.memPutFloat(ptr + 228, ld0[1]); MemoryUtil.memPutFloat(ptr + 232, ld0[2]); MemoryUtil.memPutFloat(ptr + 236, ld0[3]);
+        MemoryUtil.memPutFloat(ptr + 240, df0[0]); MemoryUtil.memPutFloat(ptr + 244, df0[1]); MemoryUtil.memPutFloat(ptr + 248, df0[2]); MemoryUtil.memPutFloat(ptr + 252, df0[3]);
+        MemoryUtil.memPutFloat(ptr + 256, ld1[0]); MemoryUtil.memPutFloat(ptr + 260, ld1[1]); MemoryUtil.memPutFloat(ptr + 264, ld1[2]); MemoryUtil.memPutFloat(ptr + 268, ld1[3]);
+        MemoryUtil.memPutFloat(ptr + 272, df1[0]); MemoryUtil.memPutFloat(ptr + 276, df1[1]); MemoryUtil.memPutFloat(ptr + 280, df1[2]); MemoryUtil.memPutFloat(ptr + 284, df1[3]);
+        MemoryUtil.memPutFloat(ptr + 288, ambient[0]); MemoryUtil.memPutFloat(ptr + 292, ambient[1]); MemoryUtil.memPutFloat(ptr + 296, ambient[2]); MemoryUtil.memPutFloat(ptr + 300, ambient[3]);
         paramsDirty = false;
         lastParamFlags = arrayFlags;
         lastParamOff = off;

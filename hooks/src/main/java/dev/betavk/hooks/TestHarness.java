@@ -167,8 +167,20 @@ final class TestHarness {
         if (frame == 50) {
             var vs = (net.minecraft.src.GuiVideoSettings) mc.currentScreen;
             net.minecraft.src.GuiButton show = null;
-            for (Object o : vs.controlList) if (o instanceof net.minecraft.src.GuiButton b && b.id == 304) show = b;
-            check("Video Settings has Show FPS and no FOV slider", show != null && vs.controlList.stream().noneMatch(o -> o instanceof SliderButton sb && sb.id == 301));
+            SliderButton rdSlider = null;
+            for (Object o : vs.controlList) {
+                if (o instanceof net.minecraft.src.GuiButton b && b.id == 304) show = b;
+                if (o instanceof SliderButton sb && sb.id == 303) rdSlider = sb;
+            }
+            check("Video Settings has Show FPS, chunk Render Distance slider, and no FOV slider", show != null && rdSlider != null && vs.controlList.stream().noneMatch(o -> o instanceof SliderButton sb && sb.id == 301));
+            if (rdSlider != null) {
+                rdSlider.mousePressed(mc, rdSlider.xPosition + rdSlider.width - 4, rdSlider.yPosition + 5);
+                rdSlider.mouseReleased(0, 0);
+                check("Render Distance slider max sets 32 chunks: " + rdSlider.displayString, Opts.renderChunks == 32 && rdSlider.displayString.equals("Render Distance: 32 chunks"));
+                rdSlider.mousePressed(mc, rdSlider.xPosition + 4 + Math.round((18.0F / 30.0F) * (rdSlider.width - 8)), rdSlider.yPosition + 5);
+                rdSlider.mouseReleased(0, 0);
+                check("Render Distance slider drags to 20 chunks: " + Opts.renderChunks, Opts.renderChunks == 20);
+            }
             boolean fpsBefore = Opts.showFps;
             vs.actionPerformed(show);
             check("Show FPS toggles", Opts.showFps != fpsBefore);
@@ -189,10 +201,11 @@ final class TestHarness {
             mc.displayGuiScreen(null);
             try {
                 String txt = java.nio.file.Files.readString(mc.gameSettings.optionsFile.toPath());
-                check("options.txt has fov:70.0", txt.contains("fov:70.0"));
+                check("options.txt has fov:70.0 and renderChunks:20", txt.contains("fov:70.0") && txt.contains("renderChunks:20"));
+                Opts.renderChunks = 0;
                 Opts.continuousMusic = false;
                 Settings.load(gs);
-                check("Continuous Music persists and reloads", txt.contains("continuousMusic:true") && Opts.continuousMusic);
+                check("Continuous Music and renderChunks persist and reload", txt.contains("continuousMusic:true") && Opts.continuousMusic && Opts.renderChunks == 20);
                 check("options.txt has showFps, maxFps, masterVolume, autosaveMinutes:1 and worldBackups:3", txt.contains("showFps:") && txt.contains("maxFps:") && txt.contains("masterVolume:0.2") && txt.contains("autosaveMinutes:1") && txt.contains("worldBackups:3"));
             } catch (Exception e) {
                 check("options.txt readable", false);

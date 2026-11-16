@@ -53,7 +53,7 @@ public final class GenPool {
     private static boolean started;
     private static int tickCounter;
     private static final List<int[]> OFFSETS = new ArrayList<>();
-    private static final int MAX_RADIUS = 22;
+    private static final int MAX_RADIUS = 35;
     private static final int SQUARE = 12;
     public static final AtomicInteger hits = new AtomicInteger(), waited = new AtomicInteger(), cancelled = new AtomicInteger(), misses = new AtomicInteger();
 
@@ -214,7 +214,9 @@ public final class GenPool {
         World w = mc.theWorld;
         if (w == null || w != world || main == null || mc.thePlayer == null) return;
         start();
-        int radius = Math.min(MAX_RADIUS, 3 + switch (mc.gameSettings.renderDistance) { case 0 -> 17; case 1 -> 9; case 2 -> 5; default -> 3; });   // 3 chunks beyond what the game loads
+        int chunks = dev.betavk.hooks.Opts.renderChunks >= 2 ? Math.min(32, dev.betavk.hooks.Opts.renderChunks)
+                : switch (mc.gameSettings.renderDistance) { case 0 -> 17; case 1 -> 9; case 2 -> 5; default -> 3; };
+        int radius = Math.min(MAX_RADIUS, 3 + chunks);   // 3 chunks beyond what the game loads
         int cx = (int) Math.floor(mc.thePlayer.posX) >> 4, cz = (int) Math.floor(mc.thePlayer.posZ) >> 4;
         if (jobs.size() < 160) {
             int added = 0;

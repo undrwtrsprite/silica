@@ -68,7 +68,89 @@ public final class AsyncMesh {
         return MeshPool.farBudget();
     }
 
-    /** redirectCallNth of WorldRenderer.updateRenderer in the far-section selection of RenderGlobal.updateRenderers. */
+    private static final int MAX_FAR_BUDGET = 48;
+    private static final WorldRenderer[] bestWr = new WorldRenderer[MAX_FAR_BUDGET];
+    private static final int[] bestSlot = new int[MAX_FAR_BUDGET];
+    private static final double[] bestKey = new double[MAX_FAR_BUDGET];
+    private static final ArrayList<WorldRenderer> nearWr = new ArrayList<>();
+
+    /** replaceBody of RenderGlobal.updateRenderers: single-pass O(n) selection & in-place compaction without per-frame RenderSorter/ArrayList/Arrays.sort churn. */
+    @SuppressWarnings("unchecked")
+    public static boolean updateRenderers(RenderGlobal rg, EntityLiving viewer, boolean limit) {
+        frameStart(rg, viewer, limit);
+        List<WorldRenderer> dirty = rg.worldRenderersToUpdate;
+        int n = dirty.size();
+        if (n == 0) return true;
+        int budget = Math.max(2, Math.min(MAX_FAR_BUDGET, farBudget(rg)));
+        int bestCount = 0;
+        nearWr.clear();
+        double vx = viewer.posX, vy = viewer.posY, vz = viewer.posZ;
+        for (int i = 0; i < n; i++) {
+            WorldRenderer w = dirty.get(i);
+            if (w == null) continue;
+            if (limit) {
+                if (w.isInFrustum) {
+                    nearWr.add(w);
+                    dirty.set(i, null);
+                }
+                continue;
+            }
+            double dx = w.posXPlus - vx, dy = w.posYPlus - vy, dz = w.posZPlus - vz;
+            float d2 = (float) (dx * dx + dy * dy + dz * dz);
+            if (d2 <= 256.0F) {
+                nearWr.add(w);
+                dirty.set(i, null);
+                continue;
+            }
+            double key = (w.isInFrustum ? 0.0 : 1e18) + d2;
+            if (bestCount == budget && key >= bestKey[budget - 1]) continue;
+            int pos = bestCount < budget ? bestCount++ : budget - 1;
+            while (pos > 0 && key < bestKey[pos - 1]) {
+                bestWr[pos] = bestWr[pos - 1];
+                bestSlot[pos] = bestSlot[pos - 1];
+                bestKey[pos] = bestKey[pos - 1];
+                pos--;
+            }
+            bestWr[pos] = w;
+            bestSlot[pos] = i;
+            bestKey[pos] = key;
+        }
+        int nearN = nearWr.size();
+        if (nearN > 1) {
+            nearWr.sort((a, b) -> {
+                if (a.isInFrustum != b.isInFrustum) return a.isInFrustum ? -1 : 1;
+                int c = Float.compare(a.distanceToEntitySquared(viewer), b.distanceToEntitySquared(viewer));
+                return c != 0 ? c : Integer.compare(a.chunkIndex, b.chunkIndex);
+            });
+        }
+        for (int i = 0; i < nearN; i++) {
+            WorldRenderer w = nearWr.get(i);
+            w.updateRenderer();
+            w.needsUpdate = false;
+        }
+        nearWr.clear();
+        for (int k = 0; k < bestCount; k++) {
+            WorldRenderer w = bestWr[k];
+            if (!w.isInFrustum && k > 0) break;
+            dirty.set(bestSlot[k], null);
+            updateFar(w);
+            w.needsUpdate = false;
+        }
+        for (int k = 0; k < bestCount; k++) bestWr[k] = null;
+        int total = dirty.size();
+        int write = 0;
+        for (int i = 0; i < total; i++) {
+            WorldRenderer w = dirty.get(i);
+            if (w != null) {
+                if (write != i) dirty.set(write, w);
+                write++;
+            }
+        }
+        for (int i = total - 1; i >= write; i--) dirty.remove(i);
+        return write == 0;
+    }
+
+    /** redirectCallNth / helper for submitting a far section to MeshPool workers. */
     public static void updateFar(WorldRenderer w) {
         if (!MeshPool.canMesh(w.worldObj)) {
             w.updateRenderer();

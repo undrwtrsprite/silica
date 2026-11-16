@@ -17,6 +17,7 @@ public final class OptionsScreens {
     }
 
     private static final int FOV = 301, AUDIO = 310, WORLD = 311;
+    private static final int[] RENDER_STEPS = {2, 4, 8, 12, 16, 20, 24, 32};
 
     private static String fovLabel() {
         return "FOV: " + (int) Opts.fov + (Opts.fov == 70.0F ? " (default)" : "");
@@ -99,6 +100,9 @@ public final class OptionsScreens {
 
     /** atStartReturnIfNotNull of GameSettings.getKeyBinding: the labels of the options we changed. */
     public static String label(GameSettings gs, EnumOptions o) {
+        if (o == EnumOptions.RENDER_DISTANCE) {
+            return "Render Distance: " + Opts.effectiveChunks(gs) + " chunks";
+        }
         if (o == EnumOptions.GUI_SCALE) {
             int s = gs.guiScale;
             return "GUI Scale: " + (s <= 0 ? "Auto" : s + "x");
@@ -109,8 +113,22 @@ public final class OptionsScreens {
         return null;
     }
 
-    /** atStartCancelable of GameSettings.setOptionValue: the GUI scale goes through Auto and 1x to 4x. */
+    /** atStartCancelable of GameSettings.setOptionValue: GUI scale and cycling chunk distance (F key). */
     public static boolean setOption(GameSettings gs, EnumOptions o, int dir) {
+        if (o == EnumOptions.RENDER_DISTANCE) {
+            int cur = Opts.effectiveChunks(gs);
+            int idx = 0, bestDiff = Integer.MAX_VALUE;
+            for (int i = 0; i < RENDER_STEPS.length; i++) {
+                int diff = Math.abs(RENDER_STEPS[i] - cur);
+                if (diff < bestDiff) { bestDiff = diff; idx = i; }
+            }
+            int next = RENDER_STEPS[Math.floorMod(idx + dir, RENDER_STEPS.length)];
+            Opts.renderChunks = next;
+            Opts.syncLegacyRenderDistance(gs, next);
+            if (gs.mc != null && gs.mc.renderGlobal != null) gs.mc.renderGlobal.renderDistance = -1;
+            gs.saveOptions();
+            return true;
+        }
         if (o != EnumOptions.GUI_SCALE) return false;
         gs.guiScale = Math.floorMod(gs.guiScale + dir, 5);
         gs.saveOptions();

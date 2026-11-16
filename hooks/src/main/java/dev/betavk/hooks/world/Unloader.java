@@ -33,7 +33,7 @@ public final class Unloader {
         ChunkProvider cp = Populate.active;
         if (cp == null || mc.theWorld == null || mc.thePlayer == null || !Populate.isFor(cp, mc.theWorld)) return;
         long t0 = System.nanoTime();
-        int view = (256 >> mc.gameSettings.renderDistance) / 16 + 1;
+        int view = dev.betavk.hooks.Opts.effectiveChunks(mc.gameSettings) + 1;
         int radius = view + MARGIN;
         int pcx = (int) Math.floor(mc.thePlayer.posX) >> 4, pcz = (int) Math.floor(mc.thePlayer.posZ) >> 4;
         passes++;

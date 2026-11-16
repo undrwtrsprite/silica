@@ -27,9 +27,10 @@ public final class PatchSet implements dev.betavk.agent.PatchSet {
                 .redirectCall("runTick", "()V", "dev/betavk/platform/Mouse", "getEventDWheel", "()I", true, loop, "wheel");
         r.on(SRC + "MouseHelper").replaceBody("ungrabMouseCursor", "()V", loop, "ungrab");
 
-        // field of view, zoom, hand
+        // field of view, zoom, hand, render distance
         r.on(SRC + "EntityRenderer")
                 .onReturn("getFOVModifier", "(F)F", zoom, "fov")
+                .afterFieldSet("setupCameraTransform", "(FI)V", SRC + "EntityRenderer", "farPlaneDistance", loop, "applyFarPlane")
                 .atStart("updateCameraAndRender", "(F)V", zoom, "update")
                 .replaceFloat("updateCameraAndRender", "(F)V", 8.0F, 1, zoom, "turnScale")
                 .atStart("func_4135_b", "(FI)V", zoom, "hand");
@@ -46,11 +47,10 @@ public final class PatchSet implements dev.betavk.agent.PatchSet {
                 .replaceBody("addVertex", "(DDD)V", tess, "addVertex")
                 .replaceBody("setNormal", "(FFF)V", tess, "setNormal");
         r.on(SRC + "RenderGlobal")
+                .afterFieldSet("loadRenderers", "()V", SRC + "RenderGlobal", "renderChunksDeep", loop, "applyLoadRenderersSize")
                 .atEnd("loadRenderers", "()V", "dev/betavk/hooks/mesh/CaveCull", "onLoadRenderers")
                 .replaceBody("clipRenderersByFrustrum", "(L" + SRC + "ICamera;F)V", "dev/betavk/hooks/mesh/CaveCull", "clipAndCull")
-                .atStart("updateRenderers", "(L" + SRC + "EntityLiving;Z)Z", am, "frameStart")
-                .replaceInt("updateRenderers", "(L" + SRC + "EntityLiving;Z)Z", 2, 1, am, "farBudget")
-                .redirectCallNth("updateRenderers", "(L" + SRC + "EntityLiving;Z)Z", SRC + "WorldRenderer", "updateRenderer", "()V", false, 2, am, "updateFar");
+                .replaceBody("updateRenderers", "(L" + SRC + "EntityLiving;Z)Z", am, "updateRenderers");
         r.on(SRC + "ClippingHelper")
                 .replaceBody("isBoxInFrustum", "(DDDDDD)Z", "dev/betavk/hooks/mesh/CaveCull", "fastBoxInFrustum");
         r.on(SRC + "WorldRenderer")

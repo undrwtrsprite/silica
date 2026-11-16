@@ -13,7 +13,10 @@ import net.minecraft.src.WorldRenderer;
  * (biome lookups reuse scratch arrays) and its own "chunk lit" flag.
  */
 public final class MeshWorker extends Thread {
-    public final Tessellator tessellator = new CapturingTessellator();
+    public final CapturingTessellator primaryTess = new CapturingTessellator();
+    public final CapturingTessellator cutoutTess = new CapturingTessellator();
+    public final CaveCull.VisGraph visGraph = new CaveCull.VisGraph();
+    public Tessellator tessellator = primaryTess;
     public final Block[] blocks = new Block[Block.blocksList.length];
     public boolean lit;
     private World cmWorld;

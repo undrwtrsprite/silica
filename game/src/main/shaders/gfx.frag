@@ -1,4 +1,6 @@
 #version 450
+layout(constant_id = 0) const bool SPEC_ALPHA = true;
+
 layout(location = 0) in vec2 vUV;
 layout(location = 1) in vec4 vColor;
 layout(location = 2) in float vFogDist;
@@ -26,7 +28,7 @@ void main() {
     vec4 c = vColor;
     if (u.flags.x > 0.5) c *= texture(tex, vUV);
 
-    if (u.alpha.z > 0.5) {
+    if (SPEC_ALPHA && u.alpha.z > 0.5) {
         int op = int(u.alpha.x + 0.5);
         float a = c.a, r = u.alpha.y;
         bool pass = true;

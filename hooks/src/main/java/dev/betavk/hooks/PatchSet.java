@@ -46,10 +46,14 @@ public final class PatchSet implements dev.betavk.agent.PatchSet {
                 .replaceBody("addVertex", "(DDD)V", tess, "addVertex")
                 .replaceBody("setNormal", "(FFF)V", tess, "setNormal");
         r.on(SRC + "RenderGlobal")
+                .atEnd("loadRenderers", "()V", "dev/betavk/hooks/mesh/CaveCull", "onLoadRenderers")
+                .atEnd("clipRenderersByFrustrum", "(L" + SRC + "ICamera;F)V", "dev/betavk/hooks/mesh/CaveCull", "cull")
                 .atStart("updateRenderers", "(L" + SRC + "EntityLiving;Z)Z", am, "frameStart")
                 .replaceInt("updateRenderers", "(L" + SRC + "EntityLiving;Z)Z", 2, 1, am, "farBudget")
                 .redirectCallNth("updateRenderers", "(L" + SRC + "EntityLiving;Z)Z", SRC + "WorldRenderer", "updateRenderer", "()V", false, 2, am, "updateFar");
-        r.on(SRC + "WorldRenderer").atStart("setDontDraw", "()V", am, "retarget");
+        r.on(SRC + "WorldRenderer")
+                .atStart("setDontDraw", "()V", am, "retarget")
+                .atEnd("updateRenderer", "()V", "dev/betavk/hooks/mesh/CaveCull", "onSyncRebuild");
         r.on(SRC + "ChunkCache")
                 .atStartCancelable("getBlockTileEntity", "(III)L" + SRC + "TileEntity;", mh, "noTileEntities")
                 .atStartReturnIfNotNull("getWorldChunkManager", "()L" + SRC + "WorldChunkManager;", mh, "chunkManager");

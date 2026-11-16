@@ -8,6 +8,7 @@ import dev.betavk.render.Backends;
 import dev.betavk.render.Gfx;
 import net.minecraft.client.Minecraft;
 import net.minecraft.src.MouseHelper;
+import net.minecraft.src.Tessellator;
 
 import java.io.File;
 
@@ -30,6 +31,9 @@ public final class MainLoop {
         if (!backendSet) {
             backendSet = true;
             Gfx.set(Backends.create());
+            if (Backends.vulkan() && !"false".equalsIgnoreCase(System.getProperty("betavk.keepQuads", "true"))) {
+                Tessellator.convertQuadsToTriangles = false;
+            }
         }
         mc.displayWidth = Display.getWidth();
         mc.displayHeight = Display.getHeight();

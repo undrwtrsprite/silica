@@ -35,11 +35,15 @@ public final class VulkanRenderer implements Renderer {
     private static final int GL_QUADS = 7, COLOR_BUFFER_BIT = 0x4000, DEPTH_BUFFER_BIT = 0x100;
 
     private static final String DBG = System.getProperty("betavk.dbg", "");
+    private static final boolean BIND_CACHE = !"false".equalsIgnoreCase(System.getProperty("betavk.bindCache", "true"));
+    private static final boolean BAKE_CHUNKS = !"false".equalsIgnoreCase(System.getProperty("betavk.bakeChunks", "true"));
+    private static final boolean DEFER_MIPGEN = !"false".equalsIgnoreCase(System.getProperty("betavk.deferMipgen", "true"));
+    private static final boolean INDIRECT = Boolean.getBoolean("betavk.indirect");
     private int dumped;
     private static final float[] ZERO4 = new float[4];
     private final float[] mvpTmp = new float[16];
     private static final int VERTEX = 32, PARAMS_SIZE = 304;
-    private static final long UBO_RING = 8L << 20, VERTEX_RING = 24L << 20, STAGING_RING = 16L << 20, LIST_ARENA = 256L << 20;
+    private static final long UBO_RING = 8L << 20, VERTEX_RING = 24L << 20, STAGING_RING = 16L << 20, INDIRECT_RING = 1L << 20, LIST_ARENA = 256L << 20;
     private static final int MAX_QUADS = 1 << 18;
 
     public static void install() {
@@ -53,7 +57,7 @@ public final class VulkanRenderer implements Renderer {
     private final VkCore core = new VkCore();
     private long setLayoutParams, setLayoutTex, pipelineLayout, descPool, pipelineCache, vertModule, fragModule;
     private final long[] paramsSet = new long[VkCore.FRAMES];
-    private final Buf[] uboRing = new Buf[VkCore.FRAMES], vertexRing = new Buf[VkCore.FRAMES], stagingRing = new Buf[VkCore.FRAMES];
+    private final Buf[] uboRing = new Buf[VkCore.FRAMES], vertexRing = new Buf[VkCore.FRAMES], stagingRing = new Buf[VkCore.FRAMES], indirectRing = new Buf[VkCore.FRAMES];
     private final long[] ringStamp = newStamps();
 
     private static long[] newStamps() {
@@ -61,7 +65,7 @@ public final class VulkanRenderer implements Renderer {
         java.util.Arrays.fill(a, -1L);
         return a;
     }
-    private final long[] uboOff = new long[VkCore.FRAMES], vertexOff = new long[VkCore.FRAMES], stagingOff = new long[VkCore.FRAMES];
+    private final long[] uboOff = new long[VkCore.FRAMES], vertexOff = new long[VkCore.FRAMES], stagingOff = new long[VkCore.FRAMES], indirectOff = new long[VkCore.FRAMES];
     private Buf quadIndexBuf;
     // Chunk meshes live in sub-allocated vertex buffers. One 256 MB buffer was not enough for far render distance (draws were dropped,
     // which looks like holes in the terrain), so further buffers are added on demand up to MAX_LIST_ARENAS.
@@ -97,11 +101,14 @@ public final class VulkanRenderer implements Renderer {
     private boolean vertexArray, texArray, colorArray, normalArray;
     private long vertexAddr;
     private int boundTex;
+    private Tex curTex;
     private final Map<Integer, Tex> textures = new HashMap<>();
     private int nextTex = 1, nextList = 1;
 
     // per-command-buffer caches
-    private long boundPipeline, boundVB;
+    private long boundPipeline, boundVB, boundTexSet;
+    private long lastPipeKey = -1, lastPipe;
+    private int boundParamOff = -1;
     private boolean indexBound, viewportDirty = true, paramsDirty = true;
     private int lastParamFlags = -1;
     private long lastParamOff;
@@ -110,19 +117,32 @@ public final class VulkanRenderer implements Renderer {
     private static final class DisplayList {
         final List<Runnable> ops = new ArrayList<>();
         final List<long[]> blocks = new ArrayList<>();   // arena {offset, bytes}
+        int arenaIdx = -1, firstVertex, indexCount, arrayFlags;
+        int cutArenaIdx = -1, cutFirstVertex, cutIndexCount, cutArrayFlags;
+        boolean pureQuad, noAlpha;
+        boolean pureEligible, recDrawn, recAlphaDisabled, recHasSolid, recHasCutout;
+        int recDepth, recVertCount, cutVertCount;
+        float recSx = 1f, recSy = 1f, recSz = 1f, recTx, recTy, recTz;
+        long recBoff, cutBoff;
     }
 
-    private final Map<Integer, DisplayList> lists = new HashMap<>();
+    private DisplayList[] listArr = new DisplayList[8192];
     private DisplayList recording;
     private int recordingId;
+    private final int[] indCount = new int[MAX_LIST_ARENAS];
+    private final int[][] indData = new int[MAX_LIST_ARENAS][];
 
     // ---- textures --------------------------------------------------------------------------
     private static final class Tex {
         long image, memory, view;
         int w, h, mips;
         int minF = 0x2702, magF = 0x2601, wrapS = 0x2901, wrapT = 0x2901;
+        int lastSmpKey = -1;
+        long lastSet;
+        boolean mipsDirty;
         final Map<Integer, Long> sets = new HashMap<>();
     }
+    private final List<Tex> pendingMips = new ArrayList<>();
 
     public VulkanRenderer() {
         core.init(Display.handle());
@@ -169,6 +189,7 @@ public final class VulkanRenderer implements Renderer {
                 uboRing[i] = core.createBuffer(UBO_RING, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
                 vertexRing[i] = core.createBuffer(VERTEX_RING, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
                 stagingRing[i] = core.createBuffer(STAGING_RING, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+                if (INDIRECT) indirectRing[i] = core.createBuffer(INDIRECT_RING, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
                 check(vkAllocateDescriptorSets(core.device, VkDescriptorSetAllocateInfo.calloc(st).sType$Default().descriptorPool(descPool).pSetLayouts(st.longs(setLayoutParams)), p), "alloc params set");
                 paramsSet[i] = p.get(0);
                 VkDescriptorBufferInfo.Buffer bi = VkDescriptorBufferInfo.calloc(1, st).buffer(uboRing[i].buffer).offset(0).range(PARAMS_SIZE);
@@ -271,20 +292,45 @@ public final class VulkanRenderer implements Renderer {
 
     private boolean rec(Runnable op) {
         if (recording == null) return false;
+        recording.pureEligible = false;
         recording.ops.add(op);
         return true;
     }
 
-    @Override public void glMatrixMode(int p0) { if (recording != null) { recording.ops.add(() -> glMatrixMode(p0)); return; } matrixMode = p0 == MODELVIEW ? 0 : p0 == PROJECTION ? 1 : 2; }
-    @Override public void glLoadIdentity() { if (recording != null) { recording.ops.add(this::glLoadIdentity); return; } ident(cur()); paramsDirty = true; }
+    @Override public void glMatrixMode(int p0) { if (rec(() -> glMatrixMode(p0))) return; matrixMode = p0 == MODELVIEW ? 0 : p0 == PROJECTION ? 1 : 2; }
+    @Override public void glLoadIdentity() { if (rec(this::glLoadIdentity)) return; ident(cur()); paramsDirty = true; }
     @Override public void glPushMatrix() {
-        if (recording != null) { recording.ops.add(this::glPushMatrix); return; }
+        if (recording != null) {
+            if (recording.pureEligible && recording.recDepth == 0 && !recording.recDrawn) recording.recDepth = 1;
+            else recording.pureEligible = false;
+            recording.ops.add(this::glPushMatrix);
+            return;
+        }
         System.arraycopy(stacks[matrixMode][sp[matrixMode]], 0, stacks[matrixMode][sp[matrixMode] + 1], 0, 16);
         sp[matrixMode]++;
     }
-    @Override public void glPopMatrix() { if (recording != null) { recording.ops.add(this::glPopMatrix); return; } sp[matrixMode]--; paramsDirty = true; }
+    @Override public void glPopMatrix() {
+        if (recording != null) {
+            if (recording.pureEligible && recording.recDepth == 1 && recording.recDrawn && !recording.recAlphaDisabled) recording.recDepth = 0;
+            else recording.pureEligible = false;
+            recording.ops.add(this::glPopMatrix);
+            return;
+        }
+        sp[matrixMode]--;
+        paramsDirty = true;
+    }
     @Override public void glTranslatef(float x, float y, float z) {
-        if (recording != null) { recording.ops.add(() -> glTranslatef(x, y, z)); return; }
+        if (recording != null) {
+            if (recording.pureEligible && recording.recDepth == 1 && !recording.recDrawn) {
+                recording.recTx += recording.recSx * x;
+                recording.recTy += recording.recSy * y;
+                recording.recTz += recording.recSz * z;
+            } else {
+                recording.pureEligible = false;
+            }
+            recording.ops.add(() -> glTranslatef(x, y, z));
+            return;
+        }
         float[] t = T16;
         ident(t);
         t[12] = x;
@@ -293,7 +339,17 @@ public final class VulkanRenderer implements Renderer {
         postMul(t);
     }
     @Override public void glScalef(float x, float y, float z) {
-        if (recording != null) { recording.ops.add(() -> glScalef(x, y, z)); return; }
+        if (recording != null) {
+            if (recording.pureEligible && recording.recDepth == 1 && !recording.recDrawn && x > 0f && y > 0f && z > 0f) {
+                recording.recSx *= x;
+                recording.recSy *= y;
+                recording.recSz *= z;
+            } else {
+                recording.pureEligible = false;
+            }
+            recording.ops.add(() -> glScalef(x, y, z));
+            return;
+        }
         float[] t = T16;
         ident(t);
         t[0] = x;
@@ -303,7 +359,7 @@ public final class VulkanRenderer implements Renderer {
     }
     @Override public void glScaled(double x, double y, double z) { glScalef((float) x, (float) y, (float) z); }
     @Override public void glRotatef(float angle, float x, float y, float z) {
-        if (recording != null) { recording.ops.add(() -> glRotatef(angle, x, y, z)); return; }
+        if (rec(() -> glRotatef(angle, x, y, z))) return;
         double len = Math.sqrt(x * x + y * y + z * z);
         if (len == 0) return;
         float ax = (float) (x / len), ay = (float) (y / len), az = (float) (z / len);
@@ -323,7 +379,7 @@ public final class VulkanRenderer implements Renderer {
         postMul(t);
     }
     @Override public void glOrtho(double l, double r, double b, double t, double n, double f) {
-        if (recording != null) { recording.ops.add(() -> glOrtho(l, r, b, t, n, f)); return; }
+        if (rec(() -> glOrtho(l, r, b, t, n, f))) return;
         float[] m = new float[16];
         m[0] = (float) (2 / (r - l));
         m[5] = (float) (2 / (t - b));
@@ -335,7 +391,7 @@ public final class VulkanRenderer implements Renderer {
         postMul(m);
     }
     @Override public void glFrustum(double l, double r, double b, double t, double n, double f) {
-        if (recording != null) { recording.ops.add(() -> glFrustum(l, r, b, t, n, f)); return; }
+        if (rec(() -> glFrustum(l, r, b, t, n, f))) return;
         float[] m = new float[16];
         m[0] = (float) (2 * n / (r - l));
         m[5] = (float) (2 * n / (t - b));
@@ -359,11 +415,33 @@ public final class VulkanRenderer implements Renderer {
 
     // ============================== simple state ==============================================
 
-    @Override public void glColor4f(float r, float g, float b, float a) { if (recording != null) { recording.ops.add(() -> glColor4f(r, g, b, a)); return; } color[0] = r; color[1] = g; color[2] = b; color[3] = a; paramsDirty = true; }
+    @Override public void glColor4f(float r, float g, float b, float a) { if (rec(() -> glColor4f(r, g, b, a))) return; color[0] = r; color[1] = g; color[2] = b; color[3] = a; paramsDirty = true; }
     @Override public void glColor3f(float r, float g, float b) { glColor4f(r, g, b, 1f); }
-    @Override public void glNormal3f(float x, float y, float z) { if (recording != null) { recording.ops.add(() -> glNormal3f(x, y, z)); return; } normal[0] = x; normal[1] = y; normal[2] = z; paramsDirty = true; }
-    @Override public void glEnable(int cap) { if (recording != null) { recording.ops.add(() -> glEnable(cap)); return; } setCap(cap, true); }
-    @Override public void glDisable(int cap) { if (recording != null) { recording.ops.add(() -> glDisable(cap)); return; } setCap(cap, false); }
+    @Override public void glNormal3f(float x, float y, float z) { if (rec(() -> glNormal3f(x, y, z))) return; normal[0] = x; normal[1] = y; normal[2] = z; paramsDirty = true; }
+    @Override public void glEnable(int cap) {
+        if (recording != null) {
+            if (cap == ALPHA_TEST && recording.pureEligible && recording.recDepth == 1 && recording.recAlphaDisabled && recording.recHasSolid) {
+                recording.recAlphaDisabled = false;
+            } else {
+                recording.pureEligible = false;
+            }
+            recording.ops.add(() -> glEnable(cap));
+            return;
+        }
+        setCap(cap, true);
+    }
+    @Override public void glDisable(int cap) {
+        if (recording != null) {
+            if (cap == ALPHA_TEST && recording.pureEligible && recording.recDepth == 1 && !recording.recDrawn && !recording.recHasSolid) {
+                recording.recAlphaDisabled = true;
+            } else {
+                recording.pureEligible = false;
+            }
+            recording.ops.add(() -> glDisable(cap));
+            return;
+        }
+        setCap(cap, false);
+    }
 
     private void setCap(int cap, boolean on) {
         switch (cap) {
@@ -382,21 +460,21 @@ public final class VulkanRenderer implements Renderer {
         paramsDirty = true;
     }
 
-    @Override public void glBlendFunc(int s, int d) { if (recording != null) { recording.ops.add(() -> glBlendFunc(s, d)); return; } blendSrc = s; blendDst = d; }
+    @Override public void glBlendFunc(int s, int d) { if (rec(() -> glBlendFunc(s, d))) return; blendSrc = s; blendDst = d; }
     /** The depth buffer is reversed (1 at the near plane): LESS <-> GREATER, LESS_OR_EQUAL <-> GREATER_OR_EQUAL; the rest are symmetric. */
     private static int reverseCompare(int op) {
         return op == 1 ? 4 : op == 4 ? 1 : op == 3 ? 6 : op == 6 ? 3 : op;
     }
 
-    @Override public void glDepthFunc(int f) { if (recording != null) { recording.ops.add(() -> glDepthFunc(f)); return; } depthOp = f - 0x200; }
-    @Override public void glDepthMask(boolean m) { if (recording != null) { recording.ops.add(() -> glDepthMask(m)); return; } depthWrite = m; }
-    @Override public void glAlphaFunc(int f, float ref) { if (recording != null) { recording.ops.add(() -> glAlphaFunc(f, ref)); return; } alphaOp = f - 0x200; alphaRef = ref; paramsDirty = true; }
-    @Override public void glColorMask(boolean r, boolean g, boolean b, boolean a) { if (recording != null) { recording.ops.add(() -> glColorMask(r, g, b, a)); return; } colorMask = (r ? 1 : 0) | (g ? 2 : 0) | (b ? 4 : 0) | (a ? 8 : 0); }
-    @Override public void glCullFace(int m) { if (recording != null) { recording.ops.add(() -> glCullFace(m)); return; } cullMode = m; }
-    @Override public void glPolygonOffset(float f, float u) { if (recording != null) { recording.ops.add(() -> glPolygonOffset(f, u)); return; } polyFactor = f; polyUnits = u; }
-    @Override public void glFogi(int pname, int v) { if (recording != null) { recording.ops.add(() -> glFogi(pname, v)); return; } if (pname == 0xB65) fogMode = v; else if (pname == 0x855A) fogRadial = v == 0x855B; paramsDirty = true; }
+    @Override public void glDepthFunc(int f) { if (rec(() -> glDepthFunc(f))) return; depthOp = f - 0x200; }
+    @Override public void glDepthMask(boolean m) { if (rec(() -> glDepthMask(m))) return; depthWrite = m; }
+    @Override public void glAlphaFunc(int f, float ref) { if (rec(() -> glAlphaFunc(f, ref))) return; alphaOp = f - 0x200; alphaRef = ref; paramsDirty = true; }
+    @Override public void glColorMask(boolean r, boolean g, boolean b, boolean a) { if (rec(() -> glColorMask(r, g, b, a))) return; colorMask = (r ? 1 : 0) | (g ? 2 : 0) | (b ? 4 : 0) | (a ? 8 : 0); }
+    @Override public void glCullFace(int m) { if (rec(() -> glCullFace(m))) return; cullMode = m; }
+    @Override public void glPolygonOffset(float f, float u) { if (rec(() -> glPolygonOffset(f, u))) return; polyFactor = f; polyUnits = u; }
+    @Override public void glFogi(int pname, int v) { if (rec(() -> glFogi(pname, v))) return; if (pname == 0xB65) fogMode = v; else if (pname == 0x855A) fogRadial = v == 0x855B; paramsDirty = true; }
     @Override public void glFogf(int pname, float v) {
-        if (recording != null) { recording.ops.add(() -> glFogf(pname, v)); return; }
+        if (rec(() -> glFogf(pname, v))) return;
         switch (pname) {
             case 0xB62 -> fogDensity = v;
             case 0xB63 -> fogStart = v;
@@ -409,14 +487,14 @@ public final class VulkanRenderer implements Renderer {
     @Override public void glFogfv(int pname, FloatBuffer v) { float a = v.get(v.position()), b = v.get(v.position() + 1), c = v.get(v.position() + 2), d = v.get(v.position() + 3); glFogfv(pname, new float[]{a, b, c, d}); }
     @Override public void glFogfv(int pname, float[] v) {
         float[] c = v.clone();
-        if (recording != null) { recording.ops.add(() -> glFogfv(pname, c)); return; }
+        if (rec(() -> glFogfv(pname, c))) return;
         if (pname == 0xB66) System.arraycopy(c, 0, fogColor, 0, 4);
         paramsDirty = true;
     }
     @Override public void glLightfv(int light, int pname, FloatBuffer v) { glLightfv(light, pname, new float[]{v.get(v.position()), v.get(v.position() + 1), v.get(v.position() + 2), v.get(v.position() + 3)}); }
     @Override public void glLightfv(int light, int pname, float[] v) {
         float[] c = v.clone();
-        if (recording != null) { recording.ops.add(() -> glLightfv(light, pname, c)); return; }
+        if (rec(() -> glLightfv(light, pname, c))) return;
         int i = light - LIGHT0;
         if (i < 0 || i > 1) return;
         if (pname == 0x1203) {   // POSITION: transform the direction into eye space by the current modelview rotation
@@ -434,7 +512,7 @@ public final class VulkanRenderer implements Renderer {
     @Override public void glLightModelfv(int pname, FloatBuffer v) { glLightModelfv(pname, new float[]{v.get(v.position()), v.get(v.position() + 1), v.get(v.position() + 2), v.get(v.position() + 3)}); }
     @Override public void glLightModelfv(int pname, float[] v) {
         float[] c = v.clone();
-        if (recording != null) { recording.ops.add(() -> glLightModelfv(pname, c)); return; }
+        if (rec(() -> glLightModelfv(pname, c))) return;
         if (pname == 0xB53) System.arraycopy(c, 0, ambient, 0, 4);
         paramsDirty = true;
     }
@@ -525,9 +603,13 @@ public final class VulkanRenderer implements Renderer {
 
     private final long[] queryPool = new long[VkCore.FRAMES];
     private final int[] queryUsed = new int[VkCore.FRAMES];
-    private final boolean[] queryNeedsReset = {true, true};
+    private final boolean[] queryNeedsReset = new boolean[VkCore.FRAMES];
     @SuppressWarnings("unchecked")
-    private final List<Q>[] issued = new List[]{new ArrayList<Q>(), new ArrayList<Q>()};
+    private final List<Q>[] issued = new List[VkCore.FRAMES];
+    {
+        java.util.Arrays.fill(queryNeedsReset, true);
+        for (int i = 0; i < VkCore.FRAMES; i++) issued[i] = new ArrayList<>();
+    }
     private final Map<Integer, Q> queries = new HashMap<>();
     private int nextQuery = 1;
     private Q currentQuery;
@@ -611,17 +693,56 @@ public final class VulkanRenderer implements Renderer {
 
     // ============================== display lists =============================================
 
+    private void ensureListCap(int id) {
+        if (id >= listArr.length) listArr = java.util.Arrays.copyOf(listArr, Math.max(id + 1, listArr.length * 2));
+    }
+
     @Override public int glGenLists(int n) { int base = nextList; nextList += n; return base; }
-    @Override public void glNewList(int id, int mode) { recording = new DisplayList(); recordingId = id; }
+    @Override public void glNewList(int id, int mode) {
+        recording = new DisplayList();
+        recording.pureEligible = BAKE_CHUNKS && matrixMode == 0;
+        recordingId = id;
+    }
+    private void bakeVerts(int arenaIdx, long boff, int vertCount, float sx, float sy, float sz, float tx, float ty, float tz) {
+        long base = listBufs.get(arenaIdx).ptr + boff;
+        for (int i = 0; i < vertCount; i++) {
+            long p = base + (long) i * VERTEX;
+            MemoryUtil.memPutFloat(p, MemoryUtil.memGetFloat(p) * sx + tx);
+            MemoryUtil.memPutFloat(p + 4, MemoryUtil.memGetFloat(p + 4) * sy + ty);
+            MemoryUtil.memPutFloat(p + 8, MemoryUtil.memGetFloat(p + 8) * sz + tz);
+        }
+    }
+
     @Override public void glEndList() {
-        DisplayList old = lists.put(recordingId, recording);
+        if (recording.pureEligible && recording.recDepth == 0 && recording.recDrawn && recording.arenaIdx >= 0) {
+            float sx = recording.recSx, sy = recording.recSy, sz = recording.recSz;
+            float tx = recording.recTx, ty = recording.recTy, tz = recording.recTz;
+            if (sx != 1f || sy != 1f || sz != 1f || tx != 0f || ty != 0f || tz != 0f) {
+                bakeVerts(recording.arenaIdx, recording.recBoff, recording.recVertCount, sx, sy, sz, tx, ty, tz);
+                if (recording.recHasCutout) {
+                    bakeVerts(recording.cutArenaIdx, recording.cutBoff, recording.cutVertCount, sx, sy, sz, tx, ty, tz);
+                }
+            }
+            recording.noAlpha = recording.recHasSolid;
+            recording.pureQuad = true;
+            recording.ops.clear();
+        } else {
+            recording.pureQuad = recording.ops.size() == 1 && recording.arenaIdx >= 0;
+        }
+        ensureListCap(recordingId);
+        DisplayList old = listArr[recordingId];
+        listArr[recordingId] = recording;
         if (old != null) freeList(old);
         recording = null;
     }
     @Override public void glDeleteLists(int base, int range) {
         for (int i = 0; i < range; i++) {
-            DisplayList l = lists.remove(base + i);
-            if (l != null) freeList(l);
+            int id = base + i;
+            if (id >= 0 && id < listArr.length) {
+                DisplayList l = listArr[id];
+                listArr[id] = null;
+                if (l != null) freeList(l);
+            }
         }
     }
     private void addListArena() {
@@ -635,11 +756,147 @@ public final class VulkanRenderer implements Renderer {
         deferred(() -> { for (long[] b : blocks) listArenas.get((int) b[2]).release(b[0], b[1]); });
     }
     @Override public void glCallList(int id) {
-        if (recording != null) { recording.ops.add(() -> glCallList(id)); return; }
-        DisplayList l = lists.get(id);
-        if (l != null) for (Runnable op : l.ops) op.run();
+        if (rec(() -> glCallList(id))) return;
+        DisplayList l = (id >= 0 && id < listArr.length) ? listArr[id] : null;
+        if (l == null) return;
+        if (l.pureQuad) {
+            if (l.noAlpha) {
+                boolean saved = alphaTest;
+                if (saved) { alphaTest = false; paramsDirty = true; }
+                drawQuadRange(listBufs.get(l.arenaIdx).buffer, l.firstVertex, l.indexCount, l.arrayFlags);
+                if (saved) { alphaTest = true; paramsDirty = true; }
+                if (l.cutArenaIdx >= 0) {
+                    drawQuadRange(listBufs.get(l.cutArenaIdx).buffer, l.cutFirstVertex, l.cutIndexCount, l.cutArrayFlags);
+                }
+            } else {
+                drawQuadRange(listBufs.get(l.arenaIdx).buffer, l.firstVertex, l.indexCount, l.arrayFlags);
+            }
+        } else {
+            for (Runnable op : l.ops) op.run();
+        }
     }
-    @Override public void glCallLists(IntBuffer ids) { for (int i = ids.position(); i < ids.limit(); i++) glCallList(ids.get(i)); }
+    @Override public void glCallLists(IntBuffer ids) {
+        if (recording != null) {
+            for (int i = ids.position(), lim = ids.limit(); i < lim; i++) glCallList(ids.get(i));
+            return;
+        }
+        if (!INDIRECT || !core.multiDrawIndirect) {
+            boolean savedAlpha = alphaTest;
+            boolean anyCutout = false;
+            for (int i = ids.position(), lim = ids.limit(); i < lim; i++) {
+                int id = ids.get(i);
+                DisplayList l = (id >= 0 && id < listArr.length) ? listArr[id] : null;
+                if (l == null) continue;
+                if (l.pureQuad) {
+                    if (l.noAlpha) {
+                        if (alphaTest) { alphaTest = false; paramsDirty = true; }
+                        drawQuadRange(listBufs.get(l.arenaIdx).buffer, l.firstVertex, l.indexCount, l.arrayFlags);
+                        if (l.cutArenaIdx >= 0) anyCutout = true;
+                    } else {
+                        anyCutout = true;
+                    }
+                } else {
+                    if (alphaTest != savedAlpha) { alphaTest = savedAlpha; paramsDirty = true; }
+                    for (Runnable op : l.ops) op.run();
+                    savedAlpha = alphaTest;
+                }
+            }
+            if (alphaTest != savedAlpha) { alphaTest = savedAlpha; paramsDirty = true; }
+            if (anyCutout) {
+                for (int i = ids.position(), lim = ids.limit(); i < lim; i++) {
+                    int id = ids.get(i);
+                    DisplayList l = (id >= 0 && id < listArr.length) ? listArr[id] : null;
+                    if (l == null || !l.pureQuad) continue;
+                    if (!l.noAlpha) {
+                        drawQuadRange(listBufs.get(l.arenaIdx).buffer, l.firstVertex, l.indexCount, l.arrayFlags);
+                    } else if (l.cutArenaIdx >= 0) {
+                        drawQuadRange(listBufs.get(l.cutArenaIdx).buffer, l.cutFirstVertex, l.cutIndexCount, l.cutArrayFlags);
+                    }
+                }
+            }
+            return;
+        }
+        int commonFlags = -1;
+        for (int i = ids.position(), lim = ids.limit(); i < lim; i++) {
+            int id = ids.get(i);
+            DisplayList l = (id >= 0 && id < listArr.length) ? listArr[id] : null;
+            if (l == null) continue;
+            if (!l.pureQuad || l.noAlpha || (commonFlags >= 0 && l.arrayFlags != commonFlags)) {
+                flushIndirect(commonFlags);
+                commonFlags = -1;
+                if (l.pureQuad && !l.noAlpha) {
+                    commonFlags = l.arrayFlags;
+                    appendIndirect(l);
+                } else {
+                    glCallList(id);
+                }
+            } else {
+                commonFlags = l.arrayFlags;
+                appendIndirect(l);
+            }
+        }
+        flushIndirect(commonFlags);
+    }
+
+    private void appendIndirect(DisplayList l) {
+        int ai = l.arenaIdx;
+        int n = indCount[ai];
+        int[] buf = indData[ai];
+        if (buf == null) buf = indData[ai] = new int[4096 * 2];
+        else if (n * 2 + 2 > buf.length) buf = indData[ai] = java.util.Arrays.copyOf(buf, buf.length * 2);
+        buf[n * 2] = l.firstVertex;
+        buf[n * 2 + 1] = l.indexCount;
+        indCount[ai] = n + 1;
+    }
+
+    private void flushIndirect(int arrayFlags) {
+        if (arrayFlags < 0) return;
+        boolean prepared = false;
+        for (int ai = 0, nArenas = listArenas.size(); ai < nArenas; ai++) {
+            int count = indCount[ai];
+            if (count <= 0) continue;
+            indCount[ai] = 0;
+            int[] data = indData[ai];
+            long vbuf = listBufs.get(ai).buffer;
+            if (!prepared) {
+                if (!prepareDraw(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, true, arrayFlags, vbuf)) return;
+                prepared = true;
+            } else if (vbuf != boundVB) {
+                vkCmdBindVertexBuffers(core.drawCmd[core.slot], 0, stackLong1(vbuf), ZERO_OFFSET);
+                boundVB = vbuf;
+            }
+            VkCommandBuffer cb = core.drawCmd[core.slot];
+            if (count == 1) {
+                vkCmdDrawIndexed(cb, data[1], 1, 0, data[0], 0);
+                continue;
+            }
+            int slot = core.slot;
+            int maxCmds = Math.max(1, core.maxDrawIndirectCount);
+            int done = 0;
+            while (done < count) {
+                int batch = Math.min(count - done, maxCmds);
+                long bytes = (long) batch * 20;
+                if (indirectOff[slot] + bytes > INDIRECT_RING) {
+                    for (int k = done; k < done + batch; k++) vkCmdDrawIndexed(cb, data[k * 2 + 1], 1, 0, data[k * 2], 0);
+                    done += batch;
+                    continue;
+                }
+                long off = indirectOff[slot];
+                indirectOff[slot] += bytes;
+                long ptr = indirectRing[slot].ptr + off;
+                for (int k = 0; k < batch; k++) {
+                    long p = ptr + (long) k * 20;
+                    MemoryUtil.memPutInt(p, data[(done + k) * 2 + 1]);   // indexCount
+                    MemoryUtil.memPutInt(p + 4, 1);                      // instanceCount
+                    MemoryUtil.memPutInt(p + 8, 0);                      // firstIndex
+                    MemoryUtil.memPutInt(p + 12, data[(done + k) * 2]);  // vertexOffset
+                    MemoryUtil.memPutInt(p + 16, 0);                     // firstInstance
+                }
+                vkCmdDrawIndexedIndirect(cb, indirectRing[slot].buffer, off, batch, 20);
+                done += batch;
+            }
+        }
+    }
     @Override public void glCallLists(ByteBuffer ids) { for (int i = ids.position(); i < ids.limit(); i++) glCallList(ids.get(i) & 0xFF); }
     @Override public void glCallLists(ShortBuffer ids) { for (int i = ids.position(); i < ids.limit(); i++) glCallList(ids.get(i) & 0xFFFF); }
     @Override public void glCallLists(int n, ByteBuffer ids) { throw new UnsupportedOperationException("glCallLists(int, ByteBuffer)"); }
@@ -682,6 +939,44 @@ public final class VulkanRenderer implements Renderer {
             final Buf lb = listBufs.get(ai);
             MemoryUtil.memCopy(src, lb.ptr + boff, bytes);
             recording.blocks.add(new long[]{boff, bytes, ai});
+            if (mode == GL_QUADS && count <= MAX_QUADS * 4 && recording.pureEligible && recording.recDepth == 1 && !normalArray) {
+                if (recording.recAlphaDisabled && !recording.recHasSolid) {
+                    recording.arenaIdx = ai;
+                    recording.firstVertex = (int) (boff / VERTEX);
+                    recording.indexCount = count / 4 * 6;
+                    recording.arrayFlags = flags;
+                    recording.recHasSolid = true;
+                    recording.recDrawn = true;
+                    recording.recBoff = boff;
+                    recording.recVertCount = count;
+                } else if (!recording.recAlphaDisabled && !recording.recDrawn) {
+                    recording.arenaIdx = ai;
+                    recording.firstVertex = (int) (boff / VERTEX);
+                    recording.indexCount = count / 4 * 6;
+                    recording.arrayFlags = flags;
+                    recording.recDrawn = true;
+                    recording.recBoff = boff;
+                    recording.recVertCount = count;
+                } else if (!recording.recAlphaDisabled && recording.recHasSolid && !recording.recHasCutout) {
+                    recording.cutArenaIdx = ai;
+                    recording.cutFirstVertex = (int) (boff / VERTEX);
+                    recording.cutIndexCount = count / 4 * 6;
+                    recording.cutArrayFlags = flags;
+                    recording.recHasCutout = true;
+                    recording.cutBoff = boff;
+                    recording.cutVertCount = count;
+                } else {
+                    recording.pureEligible = false;
+                }
+            } else if (mode == GL_QUADS && count <= MAX_QUADS * 4 && recording.arenaIdx < 0) {
+                recording.arenaIdx = ai;
+                recording.firstVertex = (int) (boff / VERTEX);
+                recording.indexCount = count / 4 * 6;
+                recording.arrayFlags = flags;
+                recording.pureEligible = false;
+            } else {
+                recording.pureEligible = false;
+            }
             recording.ops.add(() -> drawBuffer(lb.buffer, boff, mode, count, flags));
             return;
         }
@@ -699,15 +994,18 @@ public final class VulkanRenderer implements Renderer {
 
     private void resetRings(int slot) {
         ringStamp[slot] = core.frameCounter;
-        uboOff[slot] = vertexOff[slot] = stagingOff[slot] = 0;
+        uboOff[slot] = vertexOff[slot] = stagingOff[slot] = indirectOff[slot] = 0;
     }
 
     private boolean beginDraw() {
         boolean was = core.frameActive;
+        if (!was) flushPendingMips();
         if (!core.ensureFrame(clearColor, clearDepth)) return false;
         if (!was) {
             boundPipeline = 0;
             boundVB = 0;
+            boundTexSet = 0;
+            boundParamOff = -1;
             indexBound = false;
             viewportDirty = true;
             paramsDirty = true;
@@ -717,9 +1015,65 @@ public final class VulkanRenderer implements Renderer {
         return true;
     }
 
-    private void drawBuffer(long vbuf, long byteOffset, int mode, int count, int arrayFlags) {
-        if (!beginDraw()) return;
+    private final LongBuffer tmpLong1 = MemoryUtil.memAllocLong(1);
+    private static final LongBuffer ZERO_OFFSET = MemoryUtil.memCallocLong(1);
+
+    private LongBuffer stackLong1(long v) {
+        tmpLong1.put(0, v);
+        return tmpLong1;
+    }
+
+    private boolean prepareDraw(int topo, boolean quads, int arrayFlags, long vbuf) {
+        if (!beginDraw()) return false;
         VkCommandBuffer cb = core.drawCmd[core.slot];
+        long pipe = pipeline(topo);
+        if (pipe != boundPipeline) {
+            vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
+            boundPipeline = pipe;
+        }
+        int slot = core.slot;
+        int off = paramsOffset(slot, arrayFlags);
+        Tex t = tex2d ? curTex : null;
+        if (t == null || t.image == 0) t = whiteTex;
+        long texSet = textureSet(t);
+        boolean bindDesc = !BIND_CACHE || off != boundParamOff || texSet != boundTexSet;
+        if (viewportDirty || bindDesc || vbuf != boundVB) {
+            try (MemoryStack st = stackPush()) {
+                if (viewportDirty) {
+                    int w = vw > 0 ? vw : core.width, h = vh > 0 ? vh : core.height;
+                    // negative height flips Y so GL's bottom-left origin and winding carry over unchanged
+                    vkCmdSetViewport(cb, 0, VkViewport.calloc(1, st).x(vx).y(core.height - vy).width(w).height(-h).minDepth(0).maxDepth(1));
+                    VkRect2D.Buffer sc = VkRect2D.calloc(1, st);
+                    sc.offset().set(Math.max(0, vx), Math.max(0, core.height - (vy + h)));
+                    sc.extent().set(Math.max(1, w), Math.max(1, h));
+                    vkCmdSetScissor(cb, 0, sc);
+                    viewportDirty = false;
+                }
+                if (bindDesc) {
+                    vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, st.longs(paramsSet[slot], texSet), st.ints(off));
+                    boundParamOff = off;
+                    boundTexSet = texSet;
+                }
+                if (vbuf != boundVB) {
+                    vkCmdBindVertexBuffers(cb, 0, st.longs(vbuf), st.longs(0));
+                    boundVB = vbuf;
+                }
+            }
+        }
+        if (polyOffset) vkCmdSetDepthBias(cb, -polyUnits, 0f, -polyFactor);   // reversed depth: 'further away' is a smaller value
+        if (quads && !indexBound) {
+            vkCmdBindIndexBuffer(cb, quadIndexBuf.buffer, 0, VK_INDEX_TYPE_UINT32);
+            indexBound = true;
+        }
+        return true;
+    }
+
+    private void drawQuadRange(long vbuf, int firstVertex, int indexCount, int arrayFlags) {
+        if (!prepareDraw(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, true, arrayFlags, vbuf)) return;
+        vkCmdDrawIndexed(core.drawCmd[core.slot], indexCount, 1, 0, firstVertex, 0);
+    }
+
+    private void drawBuffer(long vbuf, long byteOffset, int mode, int count, int arrayFlags) {
         int topo;
         boolean quads = false;
         switch (mode) {
@@ -731,48 +1085,19 @@ public final class VulkanRenderer implements Renderer {
             case 3 -> topo = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
             default -> { return; }
         }
-        long pipe = pipeline(topo);
-        if (pipe != boundPipeline) {
-            vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
-            boundPipeline = pipe;
-        }
-        try (MemoryStack st = stackPush()) {
-            if (viewportDirty) {
-                int w = vw > 0 ? vw : core.width, h = vh > 0 ? vh : core.height;
-                // negative height flips Y so GL's bottom-left origin and winding carry over unchanged
-                vkCmdSetViewport(cb, 0, VkViewport.calloc(1, st).x(vx).y(core.height - vy).width(w).height(-h).minDepth(0).maxDepth(1));
-                VkRect2D.Buffer sc = VkRect2D.calloc(1, st);
-                sc.offset().set(Math.max(0, vx), Math.max(0, core.height - (vy + h)));
-                sc.extent().set(Math.max(1, w), Math.max(1, h));
-                vkCmdSetScissor(cb, 0, sc);
-                viewportDirty = false;
+        if (!prepareDraw(topo, quads, arrayFlags, vbuf)) return;
+        VkCommandBuffer cb = core.drawCmd[core.slot];
+        int firstVertex = (int) (byteOffset / VERTEX);
+        if (quads) {
+            int done = 0;
+            while (done < count) {
+                int n = Math.min(count - done, MAX_QUADS * 4) / 4 * 4;
+                if (n == 0) break;
+                vkCmdDrawIndexed(cb, n / 4 * 6, 1, 0, firstVertex + done, 0);
+                done += n;
             }
-            if (polyOffset) vkCmdSetDepthBias(cb, -polyUnits, 0f, -polyFactor);   // reversed depth: 'further away' is a smaller value
-            int slot = core.slot;
-            int off = paramsOffset(slot, arrayFlags);
-            Tex t = tex2d ? textures.get(boundTex) : null;
-            if (t == null || t.image == 0) t = whiteTex;
-            vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, st.longs(paramsSet[slot], textureSet(t)), st.ints(off));
-            if (vbuf != boundVB) {
-                vkCmdBindVertexBuffers(cb, 0, st.longs(vbuf), st.longs(0));
-                boundVB = vbuf;
-            }
-            int firstVertex = (int) (byteOffset / VERTEX);
-            if (quads) {
-                if (!indexBound) {
-                    vkCmdBindIndexBuffer(cb, quadIndexBuf.buffer, 0, VK_INDEX_TYPE_UINT32);
-                    indexBound = true;
-                }
-                int done = 0;
-                while (done < count) {
-                    int n = Math.min(count - done, MAX_QUADS * 4) / 4 * 4;
-                    if (n == 0) break;
-                    vkCmdDrawIndexed(cb, n / 4 * 6, 1, 0, firstVertex + done, 0);
-                    done += n;
-                }
-            } else {
-                vkCmdDraw(cb, count, 1, firstVertex, 0);
-            }
+        } else {
+            vkCmdDraw(cb, count, 1, firstVertex, 0);
         }
     }
 
@@ -824,13 +1149,16 @@ public final class VulkanRenderer implements Renderer {
     }
 
     private long pipeline(int topo) {
+        boolean useAlpha = alphaTest && !DBG.equals("noalpha");
         long key = topo | (blend ? 1L << 4 : 0) | ((long) blendSrc << 5) | ((long) blendDst << 17) | (depthTest ? 1L << 29 : 0)
                 | ((long) (depthOp & 7) << 30) | (depthWrite ? 1L << 33 : 0) | (cull ? 1L << 34 : 0) | ((cullMode == 0x404 ? 1L : 0) << 35)
-                | ((long) colorMask << 36) | (polyOffset ? 1L << 40 : 0);
+                | ((long) colorMask << 36) | (polyOffset ? 1L << 40 : 0) | (useAlpha ? 1L << 41 : 0);
+        if (key == lastPipeKey) return lastPipe;
         Long cached = pipelines.get(key);
-        if (cached != null) return cached;
-        long p = createPipeline(topo);
-        pipelines.put(key, p);
+        long p = cached != null ? cached : createPipeline(topo, useAlpha);
+        if (cached == null) pipelines.put(key, p);
+        lastPipeKey = key;
+        lastPipe = p;
         return p;
     }
 
@@ -850,11 +1178,13 @@ public final class VulkanRenderer implements Renderer {
         };
     }
 
-    private long createPipeline(int topo) {
+    private long createPipeline(int topo, boolean useAlpha) {
         try (MemoryStack st = stackPush()) {
+            VkSpecializationMapEntry.Buffer specMap = VkSpecializationMapEntry.calloc(1, st).constantID(0).offset(0).size(4);
+            VkSpecializationInfo spec = VkSpecializationInfo.calloc(st).pMapEntries(specMap).pData(st.bytes((byte) (useAlpha ? 1 : 0), (byte) 0, (byte) 0, (byte) 0));
             VkPipelineShaderStageCreateInfo.Buffer stages = VkPipelineShaderStageCreateInfo.calloc(2, st);
             stages.get(0).sType$Default().stage(VK_SHADER_STAGE_VERTEX_BIT).module(vertModule).pName(st.UTF8("main"));
-            stages.get(1).sType$Default().stage(VK_SHADER_STAGE_FRAGMENT_BIT).module(fragModule).pName(st.UTF8("main"));
+            stages.get(1).sType$Default().stage(VK_SHADER_STAGE_FRAGMENT_BIT).module(fragModule).pName(st.UTF8("main")).pSpecializationInfo(spec);
             VkVertexInputBindingDescription.Buffer vb = VkVertexInputBindingDescription.calloc(1, st).binding(0).stride(VERTEX).inputRate(VK_VERTEX_INPUT_RATE_VERTEX);
             VkVertexInputAttributeDescription.Buffer va = VkVertexInputAttributeDescription.calloc(4, st);
             va.get(0).location(0).binding(0).format(VK_FORMAT_R32G32B32_SFLOAT).offset(0);
@@ -912,28 +1242,42 @@ public final class VulkanRenderer implements Renderer {
     @Override public void glGenTextures(IntBuffer a) { for (int i = a.position(); i < a.limit(); i++) a.put(i, nextTex++); }
     @Override public void glDeleteTextures(int id) {
         Tex t = textures.remove(id);
+        if (id == boundTex) curTex = null;
         if (t == null || t.image == 0) return;
         destroyTex(t);
     }
     @Override public void glDeleteTextures(int[] a) { for (int id : a) glDeleteTextures(id); }
     @Override public void glDeleteTextures(IntBuffer a) { for (int i = a.position(); i < a.limit(); i++) glDeleteTextures(a.get(i)); }
-    @Override public void glBindTexture(int target, int id) { if (recording != null) { recording.ops.add(() -> glBindTexture(target, id)); return; } boundTex = id; textures.computeIfAbsent(id, k -> new Tex()); }
+    @Override public void glBindTexture(int target, int id) {
+        if (rec(() -> glBindTexture(target, id))) return;
+        if (id == boundTex && curTex != null) return;
+        boundTex = id;
+        curTex = textures.computeIfAbsent(id, k -> new Tex());
+    }
 
     @Override public void glTexParameteri(int target, int pname, int v) {
-        Tex t = textures.computeIfAbsent(boundTex, k -> new Tex());
+        Tex t = (curTex != null && boundTex != 0) ? curTex : textures.computeIfAbsent(boundTex, k -> new Tex());
         switch (pname) {
             case 0x2801 -> t.minF = v;
             case 0x2800 -> t.magF = v;
             case 0x2802 -> t.wrapS = v;
             case 0x2803 -> t.wrapT = v;
-            default -> { }
+            default -> { return; }
         }
+        t.lastSmpKey = -1;
+        t.lastSet = 0;
     }
 
     private void destroyTex(Tex t) {
+        if (t.mipsDirty) {
+            t.mipsDirty = false;
+            pendingMips.remove(t);
+        }
         long image = t.image, memory = t.memory, view = t.view;
         List<Long> sets = new ArrayList<>(t.sets.values());
         t.image = 0;
+        t.lastSmpKey = -1;
+        t.lastSet = 0;
         t.sets.clear();
         deferred(() -> {
             for (long s : sets) vkFreeDescriptorSets(core.device, descPool, s);
@@ -964,14 +1308,18 @@ public final class VulkanRenderer implements Renderer {
         }
     }
 
-    private long sampler(Tex t) {
+    private int samplerKey(Tex t) {
         boolean mip = t.minF >= 0x2700;
         boolean minLinear = t.minF == 0x2601 || t.minF == 0x2701 || t.minF == 0x2703;
         boolean mipLinear = t.minF == 0x2702 || t.minF == 0x2703;
-        int key = (mip ? 1 : 0) | (minLinear ? 2 : 0) | (mipLinear ? 4 : 0) | (t.magF == 0x2601 ? 8 : 0)
+        return (mip ? 1 : 0) | (minLinear ? 2 : 0) | (mipLinear ? 4 : 0) | (t.magF == 0x2601 ? 8 : 0)
                 | ((t.wrapS == 0x2901 ? 1 : 0) << 4) | ((t.wrapT == 0x2901 ? 1 : 0) << 5);
+    }
+
+    private long sampler(Tex t, int key) {
         Long s = samplers.get(key);
         if (s != null) return s;
+        boolean mip = (key & 1) != 0, minLinear = (key & 2) != 0, mipLinear = (key & 4) != 0;
         try (MemoryStack st = stackPush()) {
             LongBuffer p = st.mallocLong(1);
             boolean aniso = mip && minLinear;
@@ -988,19 +1336,25 @@ public final class VulkanRenderer implements Renderer {
     }
 
     private long textureSet(Tex t) {
-        long smp = sampler(t);
+        int skey = samplerKey(t);
+        if (t.lastSet != 0 && t.lastSmpKey == skey) return t.lastSet;
+        long smp = sampler(t, skey);
         int key = (int) (smp ^ (smp >>> 32));
         Long set = t.sets.get(key);
-        if (set != null) return set;
-        try (MemoryStack st = stackPush()) {
-            LongBuffer p = st.mallocLong(1);
-            check(vkAllocateDescriptorSets(core.device, VkDescriptorSetAllocateInfo.calloc(st).sType$Default().descriptorPool(descPool).pSetLayouts(st.longs(setLayoutTex)), p), "alloc texture set");
-            VkDescriptorImageInfo.Buffer ii = VkDescriptorImageInfo.calloc(1, st).sampler(smp).imageView(t.view).imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-            vkUpdateDescriptorSets(core.device, VkWriteDescriptorSet.calloc(1, st).sType$Default().dstSet(p.get(0)).dstBinding(0)
-                    .descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER).descriptorCount(1).pImageInfo(ii), null);
-            t.sets.put(key, p.get(0));
-            return p.get(0);
+        if (set == null) {
+            try (MemoryStack st = stackPush()) {
+                LongBuffer p = st.mallocLong(1);
+                check(vkAllocateDescriptorSets(core.device, VkDescriptorSetAllocateInfo.calloc(st).sType$Default().descriptorPool(descPool).pSetLayouts(st.longs(setLayoutTex)), p), "alloc texture set");
+                VkDescriptorImageInfo.Buffer ii = VkDescriptorImageInfo.calloc(1, st).sampler(smp).imageView(t.view).imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                vkUpdateDescriptorSets(core.device, VkWriteDescriptorSet.calloc(1, st).sType$Default().dstSet(p.get(0)).dstBinding(0)
+                        .descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER).descriptorCount(1).pImageInfo(ii), null);
+                set = p.get(0);
+                t.sets.put(key, set);
+            }
         }
+        t.lastSmpKey = skey;
+        t.lastSet = set;
+        return set;
     }
 
     private static ByteBuffer rgba(Buffer data, int w, int h) {
@@ -1027,6 +1381,11 @@ public final class VulkanRenderer implements Renderer {
     private void texImage(int level, int w, int h, Buffer data) {
         if (level != 0) return;   // mip levels are generated on the GPU
         Tex t = textures.computeIfAbsent(boundTex, k -> new Tex());
+        curTex = t;
+        if (t.mipsDirty) {
+            t.mipsDirty = false;
+            pendingMips.remove(t);
+        }
         if (t.image != 0 && (t.w != w || t.h != h)) destroyTex(t);
         if (t.image == 0) createImage(t, w, h);
         ByteBuffer px = rgba(data, w, h);
@@ -1046,7 +1405,7 @@ public final class VulkanRenderer implements Renderer {
         if (immediate) {
             Buf staging = core.createBuffer(bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
             MemoryUtil.memCopy(MemoryUtil.memAddress(px), staging.ptr, bytes);
-            core.immediate(cb -> recordUpload(cb, t, x, y, w, h, staging.buffer, 0, true));
+            core.immediate(cb -> recordUpload(cb, t, x, y, w, h, staging.buffer, 0, true, true));
             core.destroyBuffer(staging);
         } else {
             int slot = core.slot;
@@ -1059,7 +1418,18 @@ public final class VulkanRenderer implements Renderer {
             long off = stagingOff[slot];
             stagingOff[slot] += (bytes + 255) / 256 * 256;
             MemoryUtil.memCopy(MemoryUtil.memAddress(px), stagingRing[slot].ptr + off, bytes);
-            recordUpload(core.uploadCommands(), t, x, y, w, h, stagingRing[slot].buffer, off, false);
+            VkCommandBuffer cb = core.uploadCommands();
+            if (!DEFER_MIPGEN) {
+                recordUpload(cb, t, x, y, w, h, stagingRing[slot].buffer, off, false, true);
+            } else {
+                if (!t.mipsDirty) {
+                    barrier(cb, t.image, t.mips, 0, t.mips, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+                    t.mipsDirty = true;
+                    pendingMips.add(t);
+                }
+                copyToLevel0(cb, t, x, y, w, h, stagingRing[slot].buffer, off);
+            }
         }
         MemoryUtil.memFree(px);
     }
@@ -1073,18 +1443,19 @@ public final class VulkanRenderer implements Renderer {
         }
     }
 
-    private void recordUpload(VkCommandBuffer cb, Tex t, int x, int y, int w, int h, long srcBuf, long srcOff, boolean first) {
-        // a full (re)creation replaces everything, so the old contents need not be preserved
-        int oldLayout = first ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        int fragment = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        barrier(cb, t.image, t.mips, 0, t.mips, oldLayout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0, VK_ACCESS_TRANSFER_WRITE_BIT,
-                first ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : fragment, VK_PIPELINE_STAGE_TRANSFER_BIT);
+    private void copyToLevel0(VkCommandBuffer cb, Tex t, int x, int y, int w, int h, long srcBuf, long srcOff) {
         try (MemoryStack st = stackPush()) {
             VkBufferImageCopy.Buffer region = VkBufferImageCopy.calloc(1, st).bufferOffset(srcOff);
             region.imageSubresource().aspectMask(VK_IMAGE_ASPECT_COLOR_BIT).mipLevel(0).layerCount(1);
             region.imageOffset().set(x, y, 0);
             region.imageExtent().set(w, h, 1);
             vkCmdCopyBufferToImage(cb, srcBuf, t.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, region);
+        }
+    }
+
+    /** Generate mip levels from level 0 (all levels currently TRANSFER_DST_OPTIMAL) and transition back to SHADER_READ_ONLY_OPTIMAL. */
+    private void finishUploadMips(VkCommandBuffer cb, Tex t) {
+        try (MemoryStack st = stackPush()) {
             int mw = t.w, mh = t.h;
             for (int i = 1; i < t.mips; i++) {
                 barrier(cb, t.image, t.mips, i - 1, 1, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -1100,11 +1471,33 @@ public final class VulkanRenderer implements Renderer {
                 mh = nh;
             }
         }
+        int fragment = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         // levels 0..mips-2 are TRANSFER_SRC, the last is TRANSFER_DST
         if (t.mips > 1) barrier(cb, t.image, t.mips, 0, t.mips - 1, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, fragment);
         barrier(cb, t.image, t.mips, t.mips - 1, 1, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, fragment);
+    }
+
+    private void flushPendingMips() {
+        if (pendingMips.isEmpty()) return;
+        VkCommandBuffer cb = core.uploadCommands();
+        for (int i = 0; i < pendingMips.size(); i++) {
+            Tex t = pendingMips.get(i);
+            if (!t.mipsDirty || t.image == 0) continue;
+            t.mipsDirty = false;
+            finishUploadMips(cb, t);
+        }
+        pendingMips.clear();
+    }
+
+    private void recordUpload(VkCommandBuffer cb, Tex t, int x, int y, int w, int h, long srcBuf, long srcOff, boolean first, boolean genMips) {
+        // a full (re)creation replaces everything, so the old contents need not be preserved
+        int oldLayout = first ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier(cb, t.image, t.mips, 0, t.mips, oldLayout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0, VK_ACCESS_TRANSFER_WRITE_BIT,
+                first ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+        copyToLevel0(cb, t, x, y, w, h, srcBuf, srcOff);
+        if (genMips) finishUploadMips(cb, t);
     }
 
     @Override public void glTexImage2D(int t, int l, int f, int w, int h, int b, int fmt, int type, ByteBuffer d) { texImage(l, w, h, d); }
@@ -1143,6 +1536,7 @@ public final class VulkanRenderer implements Renderer {
     // ============================== present / readback =========================================
 
     private void present() {
+        flushPendingMips();
         core.present();
         for (int i = dying.size() - 1; i >= 0; i--) {
             Object[] d = dying.get(i);
@@ -1155,13 +1549,15 @@ public final class VulkanRenderer implements Renderer {
 
     /** Frame grab for the screenshot hook: RGB, tightly packed, bottom row first (GL's convention). */
     private void readRgb(int w, int h, ByteBuffer out) {
+        flushPendingMips();
         if (!beginDraw()) return;
         Buf rb = core.createBuffer((long) core.width * core.height * 4, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
         VkCommandBuffer cb = core.drawCmd[core.slot];
         vkCmdEndRenderPass(cb);
         core.passEnded = true;
-        long img = core.images[core.imageIndex];
-        barrier(cb, img, 1, 0, 1, org.lwjgl.vulkan.KHRSwapchain.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        long img = core.colorImageForReadback();
+        int origLayout = core.colorLayoutForReadback();
+        barrier(cb, img, 1, 0, 1, origLayout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                 VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
         try (MemoryStack st = stackPush()) {
             VkBufferImageCopy.Buffer region = VkBufferImageCopy.calloc(1, st);
@@ -1169,7 +1565,7 @@ public final class VulkanRenderer implements Renderer {
             region.imageExtent().set(core.width, core.height, 1);
             vkCmdCopyImageToBuffer(cb, img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, rb.buffer, region);
         }
-        barrier(cb, img, 1, 0, 1, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, org.lwjgl.vulkan.KHRSwapchain.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ACCESS_TRANSFER_READ_BIT, 0,
+        barrier(cb, img, 1, 0, 1, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, origLayout, VK_ACCESS_TRANSFER_READ_BIT, 0,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
         core.submit();
         vkWaitForFences(core.device, core.fence[core.slot], true, Long.MAX_VALUE);

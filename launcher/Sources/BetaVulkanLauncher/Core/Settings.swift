@@ -83,7 +83,7 @@ struct Settings: Codable, Equatable {
               var s = try? JSONDecoder().decode(Settings.self, from: data) else { return Settings() }
         if s.stageDir.hasSuffix("game/build/stage") { s.stageDir = Settings().stageDir }   // the old in-tree build folder
         // inside the app bundle the shipped build wins; a folder that no longer has a build falls back to it as well
-        if let bundled = AppPaths.bundledStage, !FileManager.default.fileExists(atPath: URL(fileURLWithPath: s.stageDir).appendingPathComponent("launch.json").path) || s.stageDir.contains("/hooks/build/stage") {
+        if let bundled = AppPaths.bundledStage, !FileManager.default.fileExists(atPath: URL(fileURLWithPath: s.stageDir).appendingPathComponent("launch.json").path) || s.stageDir.contains("/hooks/build/stage") || s.stageDir.contains(".app/Contents/Resources/stage") {
             s.stageDir = bundled.path
         }
         return s

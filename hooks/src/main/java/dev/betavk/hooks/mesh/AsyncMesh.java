@@ -22,6 +22,8 @@ import java.util.WeakHashMap;
  * so changes show immediately. A late result for a section that has meanwhile been retargeted or disposed is dropped (the generation counter).
  */
 public final class AsyncMesh {
+    private static final boolean SPLIT_ALPHA = !"false".equalsIgnoreCase(System.getProperty("betavk.splitAlpha", "true"));
+
     private AsyncMesh() {
     }
 
@@ -88,6 +90,7 @@ public final class AsyncMesh {
     /** atStart of WorldRenderer.setDontDraw: the renderer is retargeted or disposed. */
     public static void retarget(WorldRenderer w) {
         state(w).generation++;
+        CaveCull.reset(w);
     }
 
     private static void submit(WorldRenderer w, State st) {
@@ -133,42 +136,117 @@ public final class AsyncMesh {
         MeshResult res = new MeshResult(w, generation);
         int x0 = w.posX, y0 = w.posY, z0 = w.posZ, x1 = w.posX + w.sizeWidth, y1 = w.posY + w.sizeHeight, z1 = w.posZ + w.sizeDepth;
         RenderBlocks rb = new RenderBlocks(cache);
-        Tessellator t = worker.tessellator;
-        CapturingTessellator cap = (CapturingTessellator) t;
-        for (int pass = 0; pass < 2; pass++) {
-            boolean skipped = false, rendered = false, started = false;
-            for (int y = y0; y < y1; y++) {
-                for (int z = z0; z < z1; z++) {
-                    for (int x = x0; x < x1; x++) {
-                        int id = cache.getBlockId(x, y, z);
-                        if (id <= 0) continue;
-                        if (!started) {
-                            started = true;
-                            t.startDrawingQuads();
-                            t.setTranslationD(-w.posX, -w.posY, -w.posZ);
+        CapturingTessellator primaryCap = worker.primaryTess;
+        CapturingTessellator cutoutCap = worker.cutoutTess;
+        CaveCull.VisGraph vg = worker.visGraph;
+        if (CaveCull.ENABLED) vg.reset();
+        worker.tessellator = primaryCap;
+        try {
+            for (int pass = 0; pass < 2; pass++) {
+                boolean skipped = false, rendered = false, started = false, cutoutStarted = false;
+                for (int y = y0; y < y1; y++) {
+                    for (int z = z0; z < z1; z++) {
+                        for (int x = x0; x < x1; x++) {
+                            int id = cache.getBlockId(x, y, z);
+                            if (id <= 0) continue;
+                            if (pass == 0) {
+                                if (CaveCull.ENABLED && Block.opaqueCubeLookup[id]) vg.markOpaque(x - x0, y - y0, z - z0);
+                                if (Block.isBlockContainer[id]) res.tileEntityPositions.add(new int[]{x, y, z});
+                            }
+                            Block b = worker.blocks[id];
+                            int p = b.getRenderBlockPass();
+                            if (p != pass) {
+                                skipped = true;
+                                continue;
+                            }
+                            boolean splitCutout = SPLIT_ALPHA && pass == 0 && !b.isOpaqueCube();
+                            CapturingTessellator cap = splitCutout ? cutoutCap : primaryCap;
+                            worker.tessellator = cap;
+                            if (splitCutout) {
+                                if (!cutoutStarted) {
+                                    cutoutStarted = true;
+                                    cap.startDrawingQuads();
+                                    cap.setTranslationD(-w.posX, -w.posY, -w.posZ);
+                                }
+                            } else if (!started) {
+                                started = true;
+                                cap.startDrawingQuads();
+                                cap.setTranslationD(-w.posX, -w.posY, -w.posZ);
+                            }
+                            boolean guardGrass = SPLIT_ALPHA && pass == 0 && RenderBlocks.fancyGrass && id == Block.grass.blockID;
+                            if (guardGrass && cap.rawBufferIndex + 512 >= cap.bufferSize - 32) {
+                                cap.draw();
+                                cap.isDrawing = true;
+                            }
+                            int prevIdx = cap.rawBufferIndex;
+                            rendered |= rb.renderBlockByRenderType(b, x, y, z);
+                            if (guardGrass && cap.rawBufferIndex > prevIdx) {
+                                cutoutStarted |= moveGrassOverlay(cap, prevIdx, cutoutCap, cutoutStarted, w.posX, w.posY, w.posZ);
+                            }
                         }
-                        if (pass == 0 && Block.isBlockContainer[id]) res.tileEntityPositions.add(new int[]{x, y, z});
-                        Block b = worker.blocks[id];
-                        int p = b.getRenderBlockPass();
-                        if (p != pass) skipped = true;
-                        else rendered |= rb.renderBlockByRenderType(b, x, y, z);
                     }
                 }
+                if (started) {
+                    primaryCap.draw();
+                    res.draws[pass].addAll(primaryCap.captured);
+                    primaryCap.captured.clear();
+                    primaryCap.setTranslationD(0.0D, 0.0D, 0.0D);
+                }
+                if (cutoutStarted) {
+                    cutoutCap.draw();
+                    res.cutoutDraws.addAll(cutoutCap.captured);
+                    cutoutCap.captured.clear();
+                    cutoutCap.setTranslationD(0.0D, 0.0D, 0.0D);
+                }
+                if (!started && !cutoutStarted) rendered = false;
+                res.started[pass] = started || cutoutStarted;
+                res.rendered[pass] = rendered;
+                if (!skipped) break;
             }
-            if (started) {
-                t.draw();
-                res.draws[pass].addAll(cap.captured);
-                cap.captured.clear();
-                t.setTranslationD(0.0D, 0.0D, 0.0D);
-            } else {
-                rendered = false;
-            }
-            res.started[pass] = started;
-            res.rendered[pass] = rendered;
-            if (!skipped) break;
+        } finally {
+            worker.tessellator = primaryCap;
         }
         res.lit = worker.lit;
+        res.visMask = CaveCull.ENABLED ? vg.computeVisMask() : CaveCull.ALL_VISIBLE;
         return res;
+    }
+
+    /** Split fancy grass side overlay quads (terrain.png tile 38) from opaque grass blocks into the alpha-tested cutout buffer. */
+    private static boolean moveGrassOverlay(CapturingTessellator src, int prevIdx, CapturingTessellator dst, boolean dstStarted, int wx, int wy, int wz) {
+        int[] raw = src.rawBuffer;
+        int stride = Tessellator.convertQuadsToTriangles ? 48 : 32;
+        int vertsPerQuad = Tessellator.convertQuadsToTriangles ? 6 : 4;
+        int write = prevIdx;
+        for (int q = prevIdx; q < src.rawBufferIndex; q += stride) {
+            float u = (Float.intBitsToFloat(raw[q + 3]) + Float.intBitsToFloat(raw[q + 19])) * 0.5F;
+            float v = (Float.intBitsToFloat(raw[q + 4]) + Float.intBitsToFloat(raw[q + 20])) * 0.5F;
+            int tile = ((int) (v * 16.0F) << 4) | (int) (u * 16.0F);
+            if (tile == 38) {
+                if (!dstStarted) {
+                    dstStarted = true;
+                    dst.startDrawingQuads();
+                    dst.setTranslationD(-wx, -wy, -wz);
+                }
+                dst.hasTexture |= src.hasTexture;
+                dst.hasColor |= src.hasColor;
+                dst.hasNormals |= src.hasNormals;
+                if (dst.rawBufferIndex + stride >= dst.bufferSize - 32) {
+                    dst.draw();
+                    dst.isDrawing = true;
+                }
+                System.arraycopy(raw, q, dst.rawBuffer, dst.rawBufferIndex, stride);
+                dst.rawBufferIndex += stride;
+                dst.vertexCount += vertsPerQuad;
+                dst.addedVertices += 4;
+                src.vertexCount -= vertsPerQuad;
+                src.addedVertices -= 4;
+            } else {
+                if (write != q) System.arraycopy(raw, q, raw, write, stride);
+                write += stride;
+            }
+        }
+        src.rawBufferIndex = write;
+        return dstStarted;
     }
 
     // ---- game thread: result to display lists ------------------------------------------------------
@@ -188,7 +266,18 @@ public final class AsyncMesh {
                 Gfx.glTranslatef((float) (-w.sizeDepth) / 2.0F, (float) (-w.sizeHeight) / 2.0F, (float) (-w.sizeDepth) / 2.0F);
                 Gfx.glScalef(s, s, s);
                 Gfx.glTranslatef((float) w.sizeDepth / 2.0F, (float) w.sizeHeight / 2.0F, (float) w.sizeDepth / 2.0F);
-                for (Draw d : r.draws[pass]) TessHooks.emit(d);
+                if (pass == 0 && SPLIT_ALPHA) {
+                    if (!r.draws[0].isEmpty()) {
+                        Gfx.glDisable(Gfx.GL_ALPHA_TEST);
+                        for (Draw d : r.draws[0]) TessHooks.emit(d);
+                        Gfx.glEnable(Gfx.GL_ALPHA_TEST);
+                    }
+                    if (!r.cutoutDraws.isEmpty()) {
+                        for (Draw d : r.cutoutDraws) TessHooks.emit(d);
+                    }
+                } else {
+                    for (Draw d : r.draws[pass]) TessHooks.emit(d);
+                }
                 Gfx.glPopMatrix();
                 Gfx.glEndList();
             }
@@ -205,5 +294,6 @@ public final class AsyncMesh {
         w.tileEntities.removeAll(old);
         w.isChunkLit = r.lit;
         w.isInitialized = true;
+        CaveCull.set(w, r.visMask);
     }
 }

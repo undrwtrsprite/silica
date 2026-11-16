@@ -37,6 +37,7 @@ public final class Display {
     private static int savedX, savedY, savedW, savedH;
     private static boolean resized;
     private static boolean active = true;
+    private static volatile int monitorRefreshHz = 60;
     private static GLFWErrorCallback errorCallback;
 
     private Display() {
@@ -95,6 +96,7 @@ public final class Display {
         }
         if (openGlContext) glfwSwapInterval(vsync() ? 1 : 0);
         refreshSizes();
+        updateRefreshRate();
     }
 
     private static boolean vsync() {
@@ -145,7 +147,9 @@ public final class Display {
         glfwSetFramebufferSizeCallback(window, (win, fw, fh) -> {
             resized = true;
             refreshSizes();
+            updateRefreshRate();
         });
+        glfwSetWindowPosCallback(window, (win, x, y) -> updateRefreshRate());
         glfwSetWindowFocusCallback(window, (win, focused) -> {
             active = focused;
             if (!focused) {
@@ -154,7 +158,47 @@ public final class Display {
             }
         });
         refreshSizes();
+        updateRefreshRate();
         resized = false;
+    }
+
+    /** Refresh rate (Hz) of the monitor that currently holds the window (cached, updated on move/resize/fullscreen). */
+    public static int getRefreshRate() {
+        return monitorRefreshHz;
+    }
+
+    private static void updateRefreshRate() {
+        if (window == NULL) return;
+        long best = glfwGetWindowMonitor(window);
+        if (best == NULL) {
+            org.lwjgl.PointerBuffer mons = glfwGetMonitors();
+            if (mons != null && mons.remaining() > 0) {
+                try (MemoryStack st = MemoryStack.stackPush()) {
+                    IntBuffer wx = st.mallocInt(1), wy = st.mallocInt(1), ww = st.mallocInt(1), wh = st.mallocInt(1);
+                    IntBuffer mx = st.mallocInt(1), my = st.mallocInt(1);
+                    glfwGetWindowPos(window, wx, wy);
+                    glfwGetWindowSize(window, ww, wh);
+                    int x0 = wx.get(0), y0 = wy.get(0), x1 = x0 + ww.get(0), y1 = y0 + wh.get(0);
+                    long maxArea = -1L;
+                    for (int i = 0; i < mons.remaining(); i++) {
+                        long m = mons.get(i);
+                        GLFWVidMode vm = glfwGetVideoMode(m);
+                        if (vm == null) continue;
+                        glfwGetMonitorPos(m, mx, my);
+                        int ox = Math.max(0, Math.min(x1, mx.get(0) + vm.width()) - Math.max(x0, mx.get(0)));
+                        int oy = Math.max(0, Math.min(y1, my.get(0) + vm.height()) - Math.max(y0, my.get(0)));
+                        long area = (long) ox * oy;
+                        if (area > maxArea) {
+                            maxArea = area;
+                            best = m;
+                        }
+                    }
+                }
+            }
+            if (best == NULL) best = glfwGetPrimaryMonitor();
+        }
+        GLFWVidMode vm = best != NULL ? glfwGetVideoMode(best) : null;
+        if (vm != null && vm.refreshRate() > 0) monitorRefreshHz = vm.refreshRate();
     }
 
     private static void refreshSizes() {

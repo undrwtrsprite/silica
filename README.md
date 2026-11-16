@@ -43,15 +43,15 @@ Silica is a passion project and it is heavily AI assisted. I decide what gets bu
 
 ## Performance
 
-Same world, camera path and seed on both renderers. Average FPS on an Apple M5, 1080p fullscreen, seed 1337, 20 s warm-up and 60 s measured (16 Nov 2026).
+Same world, camera path and seed on both renderers. Average FPS on an Apple M5, 1080p fullscreen, seed 1337, 5 s warm-up and 10 s measured while cool (16 Nov 2026).
 
 | Render distance | OpenGL | Vulkan |
 |---|---:|---:|
-| Far · 256 blocks | 122 | **351** |
-| Normal · 128 blocks | 167 | **546** |
-| Short · 64 blocks | 314 | **1224** |
+| Far · 256 blocks | 121 | **827** |
+| Normal · 128 blocks | 247 | **1152** |
+| Short · 64 blocks | 482 | **1759** |
 
-That is about 2.9× the frame rate on far (2.85 ms average frame time against 8.19 ms on OpenGL), 3.3× on normal, and 3.9× on short (99th percentile frame 4.21 ms against 9.65 ms). The title screen is up in about 1.5 s, against about 3.2 s for the original game under Rosetta.
+On the far setting that is about 6.8× the frame rate, with a 99th percentile frame of 3.5 ms (14.8 ms on OpenGL). Normal is about 4.7× (2.1 ms 99th percentile) and short is about 3.6× (1.6 ms 99th percentile). Longer multi-minute runs settle lower as the chip warms up. The title screen is up in about 1.5 s, against about 3.2 s for the original game under Rosetta.
 
 ## The launcher
 

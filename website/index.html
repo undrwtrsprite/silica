@@ -34,10 +34,10 @@
       <p class="lede">Silica is a launcher and an improved build of Beta 1.7.3 with a Vulkan renderer, a better inventory, and real world tools. No Rosetta.</p>
 
       <div class="stats">
-        <div class="stat"><b>1007<small>FPS</small></b><span>Vulkan, far distance</span></div>
-        <div class="stat"><b>8.3×</b><span>faster than OpenGL, far</span></div>
-        <div class="stat"><b>2.9<small>ms</small></b><span>99th percentile frame</span></div>
-        <p class="stats-note">Apple M5 · 1080p fullscreen · render distance 256</p>
+        <div class="stat"><b>996<small>FPS</small></b><span>Vulkan, far distance</span></div>
+        <div class="stat"><b>8.2×</b><span>faster than OpenGL, far</span></div>
+        <div class="stat"><b>3.0<small>ms</small></b><span>99th percentile frame</span></div>
+        <p class="stats-note">Apple M5 · 1080p fullscreen · 441 FPS at 32 chunks</p>
       </div>
 
       <div class="cta">
@@ -74,20 +74,24 @@
     </div>
     <div class="fade-left"></div>
     <div class="copy">
-      <h2 id="performance-title">Up to 8.3 times the frame rate.</h2>
-      <p class="sub">The same world, camera path and seed on both renderers. Vulkan on MoltenVK keeps the Mac busy with the game instead of the driver. At short render distance Vulkan reaches 2553 FPS against 482 on OpenGL.</p>
+      <h2 id="performance-title">Up to 8.2 times the frame rate.</h2>
+      <p class="sub">The same world, camera path and seed on both renderers. Vulkan on MoltenVK keeps the Mac busy with the game instead of the driver. At short distance Vulkan reaches 2495 FPS against 482 on OpenGL — and still runs at 441 FPS at 32 chunks.</p>
       <div class="bench" data-bench>
         <div>
           <h3>Far · 256 blocks</h3>
           <div class="row"><span>OpenGL</span><div class="track"><div class="bar gl" style="--v:7.56"></div><span class="bar-val" style="--v:7.56">121</span></div></div>
-          <div class="row"><span>Vulkan</span><div class="track"><div class="bar vk" style="--v:62.94">1007</div></div></div>
+          <div class="row"><span>Vulkan</span><div class="track"><div class="bar vk" style="--v:62.25">996</div></div></div>
         </div>
         <div>
           <h3>Normal · 128 blocks</h3>
           <div class="row"><span>OpenGL</span><div class="track"><div class="bar gl" style="--v:15.44"></div><span class="bar-val" style="--v:15.44">247</span></div></div>
-          <div class="row"><span>Vulkan</span><div class="track"><div class="bar vk" style="--v:98.13">1570</div></div></div>
+          <div class="row"><span>Vulkan</span><div class="track"><div class="bar vk" style="--v:98.88">1582</div></div></div>
         </div>
-        <p class="method">Average FPS. Apple M5, 1080p fullscreen, fixed camera path and seed 1337, 5 s warm-up, 10 s measured while cool, run on Nov 16, 2026. Longer multi-minute runs settle lower as the chip warms up.</p>
+        <div>
+          <h3>Extreme · 32 chunks (512 blocks)</h3>
+          <div class="row"><span>Vulkan</span><div class="track"><div class="bar vk" style="--v:27.56">441</div></div></div>
+        </div>
+        <p class="method">Average FPS. Apple M5, 1080p fullscreen, fixed camera path and seed 1337 (5 s warm-up, 10 s measured for far/normal/short; 3 s/4 s at 32 chunks), run on Nov 16, 2026.</p>
       </div>
     </div>
   </section>
@@ -108,7 +112,8 @@
       <h2 id="features-title">The Beta you remember, with the rough edges sanded off.</h2>
       <ul>
         <li><b>Fast starts.</b> The title screen is up in about 1.5 seconds on an Apple M5, against about 3.2 seconds for the original game running under Rosetta, timed from launching to the title screen being drawn.</li>
-        <li><b>Faster chunk generation.</b> Terrain is generated ahead of you on background threads, so on a long flight the game thread builds roughly a third to a half fewer chunks. The terrain is identical to the original’s.</li>
+        <li><b>2–32 chunk render distance slider.</b> Modern chunk-by-chunk Video Settings slider from 2 to 32 chunks (plus <code>F</code> key presets), scaling fog, far clip, chunk prefetching, and batching cleanly far beyond vanilla Beta’s 4-step cap.</li>
+        <li><b>Faster chunk generation &amp; updates.</b> Terrain is generated ahead of you on background threads and dirty chunk lists are filtered in a single zero-allocation pass, keeping frame pacing steady even at high chunk distances.</li>
         <li><b>Inventory.</b> Sort chests, drag to spread stacks, number keys to swap, shift-click to craft in bulk.</li>
         <li><b>Worlds.</b> Resume your last world, set an autosave interval, back up, import and export saves.</li>
         <li><b>Controls and sound.</b> Toggle sneak, a zoom key, volume sliders, and directional sound captions.</li>

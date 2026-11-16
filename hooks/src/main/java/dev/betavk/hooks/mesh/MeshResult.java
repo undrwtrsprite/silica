@@ -16,6 +16,7 @@ public final class MeshResult {
     public final boolean[] rendered = new boolean[2];   // something was drawn: the pass must be rendered
     public final List<int[]> tileEntityPositions = new ArrayList<>();
     public boolean lit;
+    public boolean pass1Alpha;
     public long visMask = CaveCull.ALL_VISIBLE;
     public Throwable failure;
     public long meshNanos;

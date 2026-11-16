@@ -12,7 +12,6 @@ import java.util.Set;
 public final class IntKeyMap<V> extends AbstractMap<Integer, V> {
     private int[] keys = new int[64];
     private Object[] vals = new Object[64];
-    private boolean[] used = new boolean[64];
     private int size, mask = 63, shift = 32 - 6;
 
     private int slot(int key) {
@@ -20,38 +19,39 @@ public final class IntKeyMap<V> extends AbstractMap<Integer, V> {
     }
 
     @SuppressWarnings("unchecked")
-    @Override public V get(Object k) {
-        int key = (Integer) k, i = slot(key);
-        while (used[i]) {
-            if (keys[i] == key) return (V) vals[i];
+    public V getInt(int key) {
+        int i = slot(key);
+        Object v;
+        while ((v = vals[i]) != null) {
+            if (keys[i] == key) return (V) v;
             i = (i + 1) & mask;
         }
         return null;
     }
 
+    @SuppressWarnings("unchecked")
+    @Override public V get(Object k) {
+        return getInt((Integer) k);
+    }
+
     @Override public boolean containsKey(Object k) {
-        int key = (Integer) k, i = slot(key);
-        while (used[i]) {
-            if (keys[i] == key) return true;
-            i = (i + 1) & mask;
-        }
-        return false;
+        return getInt((Integer) k) != null;
     }
 
     @SuppressWarnings("unchecked")
     @Override public V put(Integer k, V value) {
+        if (value == null) return remove(k);
         int key = k;
         if ((size + 1) * 2 > keys.length) grow();
         int i = slot(key);
-        while (used[i]) {
+        Object v;
+        while ((v = vals[i]) != null) {
             if (keys[i] == key) {
-                V old = (V) vals[i];
                 vals[i] = value;
-                return old;
+                return (V) v;
             }
             i = (i + 1) & mask;
         }
-        used[i] = true;
         keys[i] = key;
         vals[i] = value;
         size++;
@@ -61,22 +61,23 @@ public final class IntKeyMap<V> extends AbstractMap<Integer, V> {
     @SuppressWarnings("unchecked")
     @Override public V remove(Object k) {
         int key = (Integer) k, i = slot(key);
-        while (used[i]) {
+        Object v;
+        while ((v = vals[i]) != null) {
             if (keys[i] == key) {
-                V old = (V) vals[i];
+                V old = (V) v;
                 int j = i;   // backward-shift deletion keeps probe sequences intact without tombstones
                 while (true) {
                     j = (j + 1) & mask;
-                    if (!used[j]) break;
+                    Object jv = vals[j];
+                    if (jv == null) break;
                     int home = slot(keys[j]);
                     boolean movable = i <= j ? (home <= i || home > j) : (home <= i && home > j);
                     if (movable) {
                         keys[i] = keys[j];
-                        vals[i] = vals[j];
+                        vals[i] = jv;
                         i = j;
                     }
                 }
-                used[i] = false;
                 vals[i] = null;
                 size--;
                 return old;
@@ -92,7 +93,7 @@ public final class IntKeyMap<V> extends AbstractMap<Integer, V> {
 
     @Override public Set<Entry<Integer, V>> entrySet() {
         java.util.LinkedHashMap<Integer, V> copy = new java.util.LinkedHashMap<>();
-        for (int i = 0; i < keys.length; i++) if (used[i]) copy.put(keys[i], cast(vals[i]));
+        for (int i = 0; i < keys.length; i++) if (vals[i] != null) copy.put(keys[i], cast(vals[i]));
         return copy.entrySet();   // a snapshot: the game never iterates this map
     }
 
@@ -104,14 +105,12 @@ public final class IntKeyMap<V> extends AbstractMap<Integer, V> {
     private void grow() {
         int[] ok = keys;
         Object[] ov = vals;
-        boolean[] ou = used;
         int n = ok.length * 2;
         keys = new int[n];
         vals = new Object[n];
-        used = new boolean[n];
         mask = n - 1;
         shift--;
         size = 0;
-        for (int i = 0; i < ok.length; i++) if (ou[i]) put(ok[i], cast(ov[i]));
+        for (int i = 0; i < ok.length; i++) if (ov[i] != null) put(ok[i], cast(ov[i]));
     }
 }

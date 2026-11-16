@@ -47,11 +47,11 @@ Same world, camera path and seed on both renderers. Average FPS on an Apple M5, 
 
 | Render distance | OpenGL | Vulkan |
 |---|---:|---:|
-| Far · 256 blocks | 121 | **827** |
-| Normal · 128 blocks | 247 | **1152** |
-| Short · 64 blocks | 482 | **1759** |
+| Far · 256 blocks | 121 | **1007** |
+| Normal · 128 blocks | 247 | **1570** |
+| Short · 64 blocks | 482 | **2553** |
 
-On the far setting that is about 6.8× the frame rate, with a 99th percentile frame of 3.5 ms (14.8 ms on OpenGL). Normal is about 4.7× (2.1 ms 99th percentile) and short is about 3.6× (1.6 ms 99th percentile). Longer multi-minute runs settle lower as the chip warms up. The title screen is up in about 1.5 s, against about 3.2 s for the original game under Rosetta.
+On the far setting that is about 8.3× the frame rate, with a 99th percentile frame of 2.9 ms (14.8 ms on OpenGL). Normal is about 6.4× (1.6 ms 99th percentile) and short is about 5.3× (1.3 ms 99th percentile). Longer multi-minute runs settle lower as the chip warms up. The title screen is up in about 1.5 s, against about 3.2 s for the original game under Rosetta.
 
 ## The launcher
 
@@ -111,7 +111,7 @@ The game build, the preparation steps and the benchmark scripts are described in
 
 ## Status
 
-Sign-in works against Microsoft's live services. [Silica 0.1.7 is available on the website](https://silicalauncher.xyz) and [GitHub Releases](https://github.com/undrwtrsprite/silica/releases/latest). Basic, experimental mod support is in: add a modded Beta 1.7.3 jar and Silica checks that its improvements fit before you play. Support for other Beta and Alpha versions is planned; the launcher is meant to run them all. The app is ad-hoc signed, not notarized, so macOS will warn on first open.
+Sign-in works against Microsoft's live services. [Silica 0.1.8 is available on the website](https://silicalauncher.xyz) and [GitHub Releases](https://github.com/undrwtrsprite/silica/releases/latest). Basic, experimental mod support is in: add a modded Beta 1.7.3 jar and Silica checks that its improvements fit before you play. Support for other Beta and Alpha versions is planned; the launcher is meant to run them all. The app is ad-hoc signed, not notarized, so macOS will warn on first open.
 
 ## License
 

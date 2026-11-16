@@ -39,6 +39,8 @@ public final class VulkanRenderer implements Renderer {
     private static final boolean BAKE_CHUNKS = !"false".equalsIgnoreCase(System.getProperty("betavk.bakeChunks", "true"));
     private static final boolean DEFER_MIPGEN = !"false".equalsIgnoreCase(System.getProperty("betavk.deferMipgen", "true"));
     private static final boolean INDIRECT = Boolean.getBoolean("betavk.indirect");
+    private static final boolean SPEC_ALL = !"false".equalsIgnoreCase(System.getProperty("betavk.specAll", "true"));
+    private static final boolean SKIP_INIT_CLEAR = !"false".equalsIgnoreCase(System.getProperty("betavk.skipInitClear", "true"));
     private int dumped;
     private static final float[] ZERO4 = new float[4];
     private final float[] mvpTmp = new float[16];
@@ -816,36 +818,67 @@ public final class VulkanRenderer implements Renderer {
             }
             return;
         }
+        boolean savedAlpha = alphaTest;
+        boolean anyCutout = false;
         int commonFlags = -1;
         for (int i = ids.position(), lim = ids.limit(); i < lim; i++) {
             int id = ids.get(i);
             DisplayList l = (id >= 0 && id < listArr.length) ? listArr[id] : null;
             if (l == null) continue;
-            if (!l.pureQuad || l.noAlpha || (commonFlags >= 0 && l.arrayFlags != commonFlags)) {
+            if (l.pureQuad && l.noAlpha) {
+                if (alphaTest) {
+                    flushIndirect(commonFlags);
+                    commonFlags = -1;
+                    alphaTest = false;
+                    paramsDirty = true;
+                }
+                if (commonFlags >= 0 && l.arrayFlags != commonFlags) {
+                    flushIndirect(commonFlags);
+                }
+                commonFlags = l.arrayFlags;
+                appendIndirect(l.arenaIdx, l.firstVertex, l.indexCount);
+                if (l.cutArenaIdx >= 0) anyCutout = true;
+            } else if (l.pureQuad) {
+                anyCutout = true;
+            } else {
                 flushIndirect(commonFlags);
                 commonFlags = -1;
-                if (l.pureQuad && !l.noAlpha) {
-                    commonFlags = l.arrayFlags;
-                    appendIndirect(l);
-                } else {
-                    glCallList(id);
-                }
-            } else {
-                commonFlags = l.arrayFlags;
-                appendIndirect(l);
+                if (alphaTest != savedAlpha) { alphaTest = savedAlpha; paramsDirty = true; }
+                for (Runnable op : l.ops) op.run();
+                savedAlpha = alphaTest;
             }
         }
         flushIndirect(commonFlags);
+        if (alphaTest != savedAlpha) { alphaTest = savedAlpha; paramsDirty = true; }
+        if (anyCutout) {
+            commonFlags = -1;
+            for (int i = ids.position(), lim = ids.limit(); i < lim; i++) {
+                int id = ids.get(i);
+                DisplayList l = (id >= 0 && id < listArr.length) ? listArr[id] : null;
+                if (l == null || !l.pureQuad) continue;
+                int ai, fv, ic, af;
+                if (!l.noAlpha) {
+                    ai = l.arenaIdx; fv = l.firstVertex; ic = l.indexCount; af = l.arrayFlags;
+                } else if (l.cutArenaIdx >= 0) {
+                    ai = l.cutArenaIdx; fv = l.cutFirstVertex; ic = l.cutIndexCount; af = l.cutArrayFlags;
+                } else {
+                    continue;
+                }
+                if (commonFlags >= 0 && af != commonFlags) flushIndirect(commonFlags);
+                commonFlags = af;
+                appendIndirect(ai, fv, ic);
+            }
+            flushIndirect(commonFlags);
+        }
     }
 
-    private void appendIndirect(DisplayList l) {
-        int ai = l.arenaIdx;
+    private void appendIndirect(int ai, int firstVertex, int indexCount) {
         int n = indCount[ai];
         int[] buf = indData[ai];
         if (buf == null) buf = indData[ai] = new int[4096 * 2];
         else if (n * 2 + 2 > buf.length) buf = indData[ai] = java.util.Arrays.copyOf(buf, buf.length * 2);
-        buf[n * 2] = l.firstVertex;
-        buf[n * 2 + 1] = l.indexCount;
+        buf[n * 2] = firstVertex;
+        buf[n * 2 + 1] = indexCount;
         indCount[ai] = n + 1;
     }
 
@@ -1026,7 +1059,8 @@ public final class VulkanRenderer implements Renderer {
     private boolean prepareDraw(int topo, boolean quads, int arrayFlags, long vbuf) {
         if (!beginDraw()) return false;
         VkCommandBuffer cb = core.drawCmd[core.slot];
-        long pipe = pipeline(topo);
+        boolean hasTex = tex2d && (arrayFlags & 1) != 0;
+        long pipe = pipeline(topo, hasTex);
         if (pipe != boundPipeline) {
             vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
             boundPipeline = pipe;
@@ -1148,14 +1182,23 @@ public final class VulkanRenderer implements Renderer {
         return (int) off;
     }
 
-    private long pipeline(int topo) {
+    private long pipeline(int topo, boolean hasTex) {
         boolean useAlpha = alphaTest && !DBG.equals("noalpha");
+        boolean useLight = lighting && !DBG.equals("nolight");
+        int fm = !fog ? 0 : fogMode == 0x2601 ? 1 : fogMode == 0x800 ? 2 : 3;
+        int sAlphaOp = (SPEC_ALL && useAlpha) ? (alphaOp & 7) : -1;
+        int sFog = SPEC_ALL ? fm : -1;
+        int sTex = SPEC_ALL ? (hasTex ? 1 : 0) : -1;
+        int sLight = SPEC_ALL ? (useLight ? 1 : 0) : -1;
+        int sRadial = SPEC_ALL ? (fogRadial ? 1 : 0) : -1;
         long key = topo | (blend ? 1L << 4 : 0) | ((long) blendSrc << 5) | ((long) blendDst << 17) | (depthTest ? 1L << 29 : 0)
                 | ((long) (depthOp & 7) << 30) | (depthWrite ? 1L << 33 : 0) | (cull ? 1L << 34 : 0) | ((cullMode == 0x404 ? 1L : 0) << 35)
-                | ((long) colorMask << 36) | (polyOffset ? 1L << 40 : 0) | (useAlpha ? 1L << 41 : 0);
+                | ((long) colorMask << 36) | (polyOffset ? 1L << 40 : 0) | (useAlpha ? 1L << 41 : 0)
+                | ((long) (sAlphaOp + 1) << 42) | ((long) (sFog + 1) << 46) | ((long) (sTex + 1) << 49)
+                | ((long) (sLight + 1) << 51) | ((long) (sRadial + 1) << 53);
         if (key == lastPipeKey) return lastPipe;
         Long cached = pipelines.get(key);
-        long p = cached != null ? cached : createPipeline(topo, useAlpha);
+        long p = cached != null ? cached : createPipeline(topo, useAlpha, sAlphaOp, sFog, sTex, sLight, sRadial);
         if (cached == null) pipelines.put(key, p);
         lastPipeKey = key;
         lastPipe = p;
@@ -1178,12 +1221,21 @@ public final class VulkanRenderer implements Renderer {
         };
     }
 
-    private long createPipeline(int topo, boolean useAlpha) {
+    private long createPipeline(int topo, boolean useAlpha, int sAlphaOp, int sFog, int sTex, int sLight, int sRadial) {
         try (MemoryStack st = stackPush()) {
-            VkSpecializationMapEntry.Buffer specMap = VkSpecializationMapEntry.calloc(1, st).constantID(0).offset(0).size(4);
-            VkSpecializationInfo spec = VkSpecializationInfo.calloc(st).pMapEntries(specMap).pData(st.bytes((byte) (useAlpha ? 1 : 0), (byte) 0, (byte) 0, (byte) 0));
+            VkSpecializationMapEntry.Buffer specMap = VkSpecializationMapEntry.calloc(6, st);
+            specMap.get(0).constantID(0).offset(0).size(4);
+            specMap.get(1).constantID(1).offset(4).size(4);
+            specMap.get(2).constantID(2).offset(8).size(4);
+            specMap.get(3).constantID(3).offset(12).size(4);
+            specMap.get(4).constantID(4).offset(16).size(4);
+            specMap.get(5).constantID(5).offset(20).size(4);
+            ByteBuffer sdata = st.malloc(24);
+            IntBuffer si = sdata.asIntBuffer();
+            si.put(0, useAlpha ? 1 : 0).put(1, sAlphaOp).put(2, sFog).put(3, sTex).put(4, sLight).put(5, sRadial);
+            VkSpecializationInfo spec = VkSpecializationInfo.calloc(st).pMapEntries(specMap).pData(sdata);
             VkPipelineShaderStageCreateInfo.Buffer stages = VkPipelineShaderStageCreateInfo.calloc(2, st);
-            stages.get(0).sType$Default().stage(VK_SHADER_STAGE_VERTEX_BIT).module(vertModule).pName(st.UTF8("main"));
+            stages.get(0).sType$Default().stage(VK_SHADER_STAGE_VERTEX_BIT).module(vertModule).pName(st.UTF8("main")).pSpecializationInfo(spec);
             stages.get(1).sType$Default().stage(VK_SHADER_STAGE_FRAGMENT_BIT).module(fragModule).pName(st.UTF8("main")).pSpecializationInfo(spec);
             VkVertexInputBindingDescription.Buffer vb = VkVertexInputBindingDescription.calloc(1, st).binding(0).stride(VERTEX).inputRate(VK_VERTEX_INPUT_RATE_VERTEX);
             VkVertexInputAttributeDescription.Buffer va = VkVertexInputAttributeDescription.calloc(4, st);
@@ -1217,7 +1269,9 @@ public final class VulkanRenderer implements Renderer {
     }
 
     @Override public void glClear(int mask) {
+        boolean was = core.frameActive;
         if (!beginDraw()) return;
+        if (SKIP_INIT_CLEAR && !was) return;
         try (MemoryStack st = stackPush()) {
             int n = ((mask & COLOR_BUFFER_BIT) != 0 ? 1 : 0) + ((mask & DEPTH_BUFFER_BIT) != 0 ? 1 : 0);
             if (n == 0) return;

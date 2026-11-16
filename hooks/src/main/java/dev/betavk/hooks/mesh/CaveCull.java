@@ -1,7 +1,9 @@
 package dev.betavk.hooks.mesh;
 
 import net.minecraft.src.Block;
+import net.minecraft.src.ClippingHelper;
 import net.minecraft.src.EntityLiving;
+import net.minecraft.src.Frustrum;
 import net.minecraft.src.ICamera;
 import net.minecraft.src.MathHelper;
 import net.minecraft.src.RenderGlobal;
@@ -27,13 +29,16 @@ public final class CaveCull {
     private static long[] visMasks = new long[0];
     private static final VisGraph syncGraph = new VisGraph();
 
-    // Game-thread BFS scratch buffers
-    private static boolean[] bfsVisited = new boolean[0];
-    private static byte[] queuedMask = new byte[0];
+    // Game-thread BFS scratch buffers (stamp-indexed: zero Arrays.fill per frame)
+    private static int[] visStamp = new int[0];
+    private static int[] frustumStamp = new int[0];   // +frameId = in, -frameId = out
+    private static byte[] cellState = new byte[0];    // bits 0..5 = queued faces, bit 6 (0x40) = inQueue
     private static byte[] expandedMask = new byte[0];
-    private static byte[] frustumCache = new byte[0];   // 0=unknown, 1=out, 2=in (for empty chunks)
-    private static boolean[] inQueue = new boolean[0];
+    private static int[] lastVisible = new int[0];
     private static int[] bfsQueue = new int[0];
+    private static int frameId = 1;
+    private static int lastVisibleCount;
+    private static boolean wasFallback;
 
     private CaveCull() {
     }
@@ -113,6 +118,8 @@ public final class CaveCull {
         int n = rg.worldRenderers.length;
         if (visMasks.length != n) visMasks = new long[n];
         Arrays.fill(visMasks, ALL_VISIBLE);
+        lastVisibleCount = 0;
+        wasFallback = false;
     }
 
     public static void reset(WorldRenderer w) {
@@ -135,49 +142,109 @@ public final class CaveCull {
     }
 
     private static void ensureScratch(int n) {
-        if (bfsVisited.length < n) {
-            bfsVisited = new boolean[n];
-            queuedMask = new byte[n];
+        if (visStamp.length < n) {
+            visStamp = new int[n];
+            frustumStamp = new int[n];
+            cellState = new byte[n];
             expandedMask = new byte[n];
-            frustumCache = new byte[n];
-            inQueue = new boolean[n];
+            lastVisible = new int[n];
             bfsQueue = new int[n * 4];
+            frameId = 1;
         }
     }
 
-    private static boolean inFrustum(WorldRenderer w, int idx, ICamera cam) {
-        if (!w.skipAllRenderPasses()) return w.isInFrustum;
-        byte cached = frustumCache[idx];
-        if (cached != 0) return cached == 2;
-        boolean inside = cam.isBoundingBoxInFrustum(w.rendererBoundingBox);
-        frustumCache[idx] = (byte) (inside ? 2 : 1);
+    /** Exact 6-plane p-vertex AABB frustum check replacing ClippingHelper.isBoxInFrustum (8 corners -> 1 per plane). */
+    public static boolean fastBoxInFrustum(ClippingHelper h, double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
+        float[][] fr = h.frustum;
+        for (int i = 0; i < 6; i++) {
+            float[] p = fr[i];
+            float a = p[0], b = p[1], c = p[2];
+            double x = a >= 0f ? maxX : minX;
+            double y = b >= 0f ? maxY : minY;
+            double z = c >= 0f ? maxZ : minZ;
+            if (a * x + b * y + c * z + p[3] <= 0.0) return false;
+        }
+        return true;
+    }
+
+    private static boolean inFrustum(WorldRenderer w, int idx, ICamera cam, Frustrum fr) {
+        int st = frustumStamp[idx];
+        if (st == frameId) return true;
+        if (st == -frameId) return false;
+        boolean inside;
+        if (fr != null) {
+            float[][] frPlanes = fr.clippingHelper.frustum;
+            double x0 = w.posX - 6.0 - fr.xPosition;
+            double y0 = w.posY - 6.0 - fr.yPosition;
+            double z0 = w.posZ - 6.0 - fr.zPosition;
+            double x1 = x0 + w.sizeWidth + 12.0;
+            double y1 = y0 + w.sizeHeight + 12.0;
+            double z1 = z0 + w.sizeDepth + 12.0;
+            inside = true;
+            for (int i = 0; i < 6; i++) {
+                float[] p = frPlanes[i];
+                float a = p[0], b = p[1], c = p[2];
+                if (a * (a >= 0f ? x1 : x0) + b * (b >= 0f ? y1 : y0) + c * (c >= 0f ? z1 : z0) + p[3] <= 0.0) {
+                    inside = false;
+                    break;
+                }
+            }
+        } else {
+            inside = cam.isBoundingBoxInFrustum(w.rendererBoundingBox);
+        }
+        frustumStamp[idx] = inside ? frameId : -frameId;
         return inside;
     }
 
-    private static void seed(int idx, int inFaceBit) {
-        if (!bfsVisited[idx]) {
-            bfsVisited[idx] = true;
-            queuedMask[idx] = 0;
+    private static void seed(WorldRenderer[] wrs, int idx, int inFaceBit) {
+        if (visStamp[idx] != frameId) {
+            visStamp[idx] = frameId;
+            cellState[idx] = (byte) inFaceBit;
             expandedMask[idx] = 0;
-            inQueue[idx] = false;
-        }
-        if ((queuedMask[idx] & inFaceBit) != inFaceBit) {
-            queuedMask[idx] |= (byte) inFaceBit;
+            WorldRenderer w = wrs[idx];
+            if (!w.skipAllRenderPasses()) {
+                w.isInFrustum = true;
+                lastVisible[lastVisibleCount++] = idx;
+            }
+        } else {
+            cellState[idx] |= (byte) inFaceBit;
         }
     }
 
-    /** atEnd of RenderGlobal.clipRenderersByFrustrum: keep only subchunks reachable by air from camera. */
-    public static void cull(RenderGlobal rg, ICamera cam, float pt) {
-        if (!ENABLED || rg.worldRenderers == null || rg.mc.gameSettings.thirdPersonView) return;
-        EntityLiving ent = rg.mc.renderViewEntity;
-        if (ent == null) return;
+    /** replaceBody of RenderGlobal.clipRenderersByFrustrum: frustum + cave culling on reachable sections only. */
+    public static void clipAndCull(RenderGlobal rg, ICamera cam, float pt) {
         WorldRenderer[] wrs = rg.worldRenderers;
-        int W = rg.renderChunksWide, T = rg.renderChunksTall, D = rg.renderChunksDeep, N = wrs.length;
+        if (wrs == null) return;
+        int N = wrs.length;
+        EntityLiving ent = rg.mc.renderViewEntity;
+        if (!ENABLED || rg.mc.gameSettings.thirdPersonView || ent == null) {
+            wasFallback = true;
+            for (int i = 0; i < N; i++) {
+                WorldRenderer w = wrs[i];
+                if (!w.skipAllRenderPasses() && (!w.isInFrustum || ((i + rg.frustrumCheckOffset) & 15) == 0)) {
+                    w.updateInFrustrum(cam);
+                }
+            }
+            rg.frustrumCheckOffset++;
+            return;
+        }
+        int W = rg.renderChunksWide, T = rg.renderChunksTall, D = rg.renderChunksDeep;
         if (N == 0 || W <= 0 || T <= 0 || D <= 0) return;
         ensureScratch(N);
-        Arrays.fill(bfsVisited, 0, N, false);
-        Arrays.fill(frustumCache, 0, N, (byte) 0);
+        if (wasFallback) {
+            for (int i = 0; i < N; i++) wrs[i].isInFrustum = false;
+            wasFallback = false;
+        } else {
+            for (int i = 0; i < lastVisibleCount; i++) wrs[lastVisible[i]].isInFrustum = false;
+        }
+        lastVisibleCount = 0;
+        if (++frameId >= Integer.MAX_VALUE - 1) {
+            Arrays.fill(visStamp, 0);
+            Arrays.fill(frustumStamp, 0);
+            frameId = 1;
+        }
 
+        Frustrum fr = (cam instanceof Frustrum) ? (Frustrum) cam : null;
         float eyeOff = ent.yOffset - 1.62F;
         double camX = ent.prevPosX + (ent.posX - ent.prevPosX) * pt;
         double camY = ent.prevPosY + (ent.posY - ent.prevPosY) * pt - eyeOff;
@@ -198,9 +265,9 @@ public final class CaveCull {
                     int idx = (gz * T + cy) * W + Math.floorMod(cx, W);
                     WorldRenderer w = wrs[idx];
                     if (w.posX == (cx << 4) && w.posY == (cy << 4) && w.posZ == (cz << 4)) {
-                        seed(idx, 63);
-                        if (!inQueue[idx]) {
-                            inQueue[idx] = true;
+                        seed(wrs, idx, 63);
+                        if ((cellState[idx] & 0x40) == 0) {
+                            cellState[idx] |= 0x40;
                             bfsQueue[tail++] = idx;
                         }
                     }
@@ -215,10 +282,10 @@ public final class CaveCull {
                 for (int gx = 0; gx < W; gx++) {
                     int idx = (gz * T + edgeY) * W + gx;
                     WorldRenderer w = wrs[idx];
-                    if (inFrustum(w, idx, cam)) {
-                        seed(idx, inBit);
-                        if (!inQueue[idx] && tail < bfsQueue.length) {
-                            inQueue[idx] = true;
+                    if (inFrustum(w, idx, cam, fr)) {
+                        seed(wrs, idx, inBit);
+                        if ((cellState[idx] & 0x40) == 0 && tail < bfsQueue.length) {
+                            cellState[idx] |= 0x40;
                             bfsQueue[tail++] = idx;
                         }
                     }
@@ -226,12 +293,11 @@ public final class CaveCull {
             }
         }
 
-        if (tail == 0) return;
-
         while (head < tail) {
             int idx = bfsQueue[head++];
-            inQueue[idx] = false;
-            int qm = queuedMask[idx] & 63;
+            int cs = cellState[idx];
+            cellState[idx] = (byte) (cs & 63);
+            int qm = cs & 63;
             int em = expandedMask[idx] & 63;
             int todo = qm & ~em;
             if (todo == 0) continue;
@@ -265,21 +331,16 @@ public final class CaveCull {
                 int nIdx = (Math.floorMod(nz, D) * T + ny) * W + Math.floorMod(nx, W);
                 WorldRenderer nw = wrs[nIdx];
                 if (nw.posX != (nx << 4) || nw.posY != (ny << 4) || nw.posZ != (nz << 4)) continue;
-                if (!inFrustum(nw, nIdx, cam)) continue;
+                if (!inFrustum(nw, nIdx, cam, fr)) continue;
                 int oppBit = 1 << (dir ^ 1);
-                if (!bfsVisited[nIdx] || (queuedMask[nIdx] & oppBit) == 0) {
-                    seed(nIdx, oppBit);
-                    if (!inQueue[nIdx] && tail < bfsQueue.length) {
-                        inQueue[nIdx] = true;
+                if (visStamp[nIdx] != frameId || (cellState[nIdx] & oppBit) == 0) {
+                    seed(wrs, nIdx, oppBit);
+                    if ((cellState[nIdx] & 0x40) == 0 && tail < bfsQueue.length) {
+                        cellState[nIdx] |= 0x40;
                         bfsQueue[tail++] = nIdx;
                     }
                 }
             }
-        }
-
-        for (int i = 0; i < N; i++) {
-            WorldRenderer w = wrs[i];
-            if (w.isInFrustum && !bfsVisited[i]) w.isInFrustum = false;
         }
     }
 }

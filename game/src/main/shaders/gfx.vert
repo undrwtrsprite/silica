@@ -1,4 +1,7 @@
 #version 450
+layout(constant_id = 2) const int SPEC_FOG = -1;
+layout(constant_id = 4) const int SPEC_LIGHT = -1;
+layout(constant_id = 5) const int SPEC_RADIAL = -1;
 // Fixed-function emulation vertex stage. One packed vertex format (32 bytes): pos, uv, rgba8, normal8.
 layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec2 inUV;
@@ -22,11 +25,12 @@ layout(set = 0, binding = 0) uniform Params {
 } u;
 
 layout(location = 0) out vec2 vUV;
-layout(location = 1) out vec4 vColor;
-layout(location = 2) out float vFogDist;
+layout(location = 1) out mediump vec4 vColor;
+layout(location = 2) out highp float vFogDist;
 
 void main() {
-    vec4 p = u.mvp * vec4(inPos, 1.0);
+    vec4 pos4 = vec4(inPos, 1.0);
+    vec4 p = u.mvp * pos4;
     // Reversed depth (1 at the near plane, 0 far away): float depth precision then stays even over the whole range. A perspective matrix
     // arrives with z already = near (infinite-far form, built on the CPU); orthographic ones (the GUI) get GL's [-w, w] flipped to [w, 0].
     // Y is flipped by the negative-height viewport.
@@ -34,16 +38,23 @@ void main() {
     gl_Position = vec4(p.xy, persp ? p.z : (p.w - p.z) * 0.5, p.w);
     vUV = inUV;
 
-    vec4 c = u.flags.y > 0.5 ? inColor : u.color;
-    if (u.flags.z > 0.5) {
+    mediump vec4 c = u.flags.y > 0.5 ? inColor : u.color;
+    bool doLight = SPEC_LIGHT < 0 ? (u.flags.z > 0.5) : (SPEC_LIGHT != 0);
+    if (doLight) {
         vec3 n = u.flags.w > 0.5 ? inNormal.xyz : u.normal.xyz;
         n = normalize(mat3(u.mv) * n);
-        vec3 lit = u.ambient.rgb
+        mediump vec3 lit = u.ambient.rgb
                  + max(dot(n, u.light0.xyz), 0.0) * u.light0diff.rgb
                  + max(dot(n, u.light1.xyz), 0.0) * u.light1diff.rgb;
         c.rgb *= clamp(lit, 0.0, 1.0);   // GL_COLOR_MATERIAL ambient+diffuse
     }
     vColor = c;
-    vec3 eye = (u.mv * vec4(inPos, 1.0)).xyz;
-    vFogDist = u.alpha.w > 0.5 ? length(eye) : abs(eye.z);
+    int fm = SPEC_FOG < 0 ? int(u.fogParams.w + 0.5) : SPEC_FOG;
+    if (fm != 0) {
+        vec3 eye = (u.mv * pos4).xyz;
+        bool radial = SPEC_RADIAL < 0 ? (u.alpha.w > 0.5) : (SPEC_RADIAL != 0);
+        vFogDist = radial ? length(eye) : abs(eye.z);
+    } else {
+        vFogDist = 0.0;
+    }
 }

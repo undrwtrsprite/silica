@@ -47,10 +47,12 @@ public final class PatchSet implements dev.betavk.agent.PatchSet {
                 .replaceBody("setNormal", "(FFF)V", tess, "setNormal");
         r.on(SRC + "RenderGlobal")
                 .atEnd("loadRenderers", "()V", "dev/betavk/hooks/mesh/CaveCull", "onLoadRenderers")
-                .atEnd("clipRenderersByFrustrum", "(L" + SRC + "ICamera;F)V", "dev/betavk/hooks/mesh/CaveCull", "cull")
+                .replaceBody("clipRenderersByFrustrum", "(L" + SRC + "ICamera;F)V", "dev/betavk/hooks/mesh/CaveCull", "clipAndCull")
                 .atStart("updateRenderers", "(L" + SRC + "EntityLiving;Z)Z", am, "frameStart")
                 .replaceInt("updateRenderers", "(L" + SRC + "EntityLiving;Z)Z", 2, 1, am, "farBudget")
                 .redirectCallNth("updateRenderers", "(L" + SRC + "EntityLiving;Z)Z", SRC + "WorldRenderer", "updateRenderer", "()V", false, 2, am, "updateFar");
+        r.on(SRC + "ClippingHelper")
+                .replaceBody("isBoxInFrustum", "(DDDDDD)Z", "dev/betavk/hooks/mesh/CaveCull", "fastBoxInFrustum");
         r.on(SRC + "WorldRenderer")
                 .atStart("setDontDraw", "()V", am, "retarget")
                 .atEnd("updateRenderer", "()V", "dev/betavk/hooks/mesh/CaveCull", "onSyncRebuild");
@@ -66,6 +68,8 @@ public final class PatchSet implements dev.betavk.agent.PatchSet {
         String pop = "dev/betavk/hooks/world/Populate", rw = "dev/betavk/hooks/world/RegionWriter", gp = "dev/betavk/hooks/world/GenPool", wh = "dev/betavk/hooks/world/WorldHooks";
         r.on(SRC + "ChunkProvider")
                 .replaceNew("<init>", "(L" + SRC + "World;L" + SRC + "IChunkLoader;L" + SRC + "IChunkProvider;)V", "java/util/HashMap", "dev/betavk/hooks/world/IntKeyMap", 1)
+                .atStartReturnIfNotNull("provideChunk", "(II)L" + SRC + "Chunk;", wh, "provideChunkFast")
+                .replaceBody("chunkExists", "(II)Z", wh, "chunkExistsFast")
                 .redirectCall("prepareChunk", "(II)L" + SRC + "Chunk;", SRC + "ChunkProvider", "populate", "(L" + SRC + "IChunkProvider;II)V", false, pop, "request");
         r.on(SRC + "McRegionChunkLoader")
                 .atStart("loadChunk", "(L" + SRC + "World;II)L" + SRC + "Chunk;", rw, "beforeLoad")

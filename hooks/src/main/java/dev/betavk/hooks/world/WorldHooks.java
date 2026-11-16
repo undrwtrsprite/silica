@@ -1,6 +1,8 @@
 package dev.betavk.hooks.world;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.src.Chunk;
+import net.minecraft.src.ChunkCoordIntPair;
 import net.minecraft.src.ChunkProvider;
 import net.minecraft.src.World;
 
@@ -10,6 +12,22 @@ public final class WorldHooks {
     }
 
     private static final long POPULATE_BUDGET_NS = Long.getLong("betavk.populatebudgetus", 3000L) * 1000L;
+
+    /** atStartReturnIfNotNull of ChunkProvider.provideChunk: avoid boxing and Map dispatch on hits. */
+    @SuppressWarnings("unchecked")
+    public static Chunk provideChunkFast(ChunkProvider cp, int x, int z) {
+        if (cp.chunkMap instanceof IntKeyMap m) {
+            return ((IntKeyMap<Chunk>) m).getInt(ChunkCoordIntPair.chunkXZ2Int(x, z));
+        }
+        return null;
+    }
+
+    /** replaceBody of ChunkProvider.chunkExists: avoid boxing when backed by IntKeyMap. */
+    public static boolean chunkExistsFast(ChunkProvider cp, int x, int z) {
+        int key = ChunkCoordIntPair.chunkXZ2Int(x, z);
+        if (cp.chunkMap instanceof IntKeyMap<?> m) return m.getInt(key) != null;
+        return cp.chunkMap.containsKey(key);
+    }
 
     /** atStart of Minecraft.runTick. */
     public static void tick(Minecraft mc) {

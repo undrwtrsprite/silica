@@ -159,7 +159,10 @@ public final class AsyncMesh {
                                 skipped = true;
                                 continue;
                             }
-                            boolean splitCutout = SPLIT_ALPHA && pass == 0 && !b.isOpaqueCube();
+                            if (pass == 1 && b != Block.waterMoving && b != Block.waterStill && b != Block.ice) {
+                                res.pass1Alpha = true;
+                            }
+                            boolean splitCutout = SPLIT_ALPHA && pass == 0 && !b.isOpaqueCube() && !isOpaqueNonCube(b);
                             CapturingTessellator cap = splitCutout ? cutoutCap : primaryCap;
                             worker.tessellator = cap;
                             if (splitCutout) {
@@ -209,6 +212,12 @@ public final class AsyncMesh {
         res.lit = worker.lit;
         res.visMask = CaveCull.ENABLED ? vg.computeVisMask() : CaveCull.ALL_VISIBLE;
         return res;
+    }
+
+    private static boolean isOpaqueNonCube(Block b) {
+        return b == Block.snow || b == Block.stairSingle || b == Block.stairCompactCobblestone
+                || b == Block.stairCompactPlanks || b == Block.tilledField || b == Block.fence
+                || b == Block.pressurePlateStone || b == Block.pressurePlatePlanks || b == Block.button;
     }
 
     /** Split fancy grass side overlay quads (terrain.png tile 38) from opaque grass blocks into the alpha-tested cutout buffer. */
@@ -275,6 +284,10 @@ public final class AsyncMesh {
                     if (!r.cutoutDraws.isEmpty()) {
                         for (Draw d : r.cutoutDraws) TessHooks.emit(d);
                     }
+                } else if (pass == 1 && SPLIT_ALPHA && !r.pass1Alpha && !r.draws[1].isEmpty()) {
+                    Gfx.glDisable(Gfx.GL_ALPHA_TEST);
+                    for (Draw d : r.draws[1]) TessHooks.emit(d);
+                    Gfx.glEnable(Gfx.GL_ALPHA_TEST);
                 } else {
                     for (Draw d : r.draws[pass]) TessHooks.emit(d);
                 }

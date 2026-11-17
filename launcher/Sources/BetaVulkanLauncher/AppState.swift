@@ -70,8 +70,12 @@ final class AppState: ObservableObject {
         wizardOpen = !(install.ready && GameRunner.stageConfig(settings.stageDir) != nil)
         refreshWorlds()
         benchRuns = BenchmarkStore.runs()
-        loadAccounts()
-        activateActiveAccount()
+        if let demo = ProcessInfo.processInfo.environment["SILICA_DEMO_PLAYER"] {
+            if !demo.isEmpty { player = VerifiedMinecraftPlayer(restoringName: demo, expiresAt: .distantFuture, profileId: "demo-player") }
+        } else {
+            loadAccounts()
+            activateActiveAccount()
+        }
         if install.ready && stageReady { Task { [self] in await jars.recheckStale(stageDir: settings.stageDir, java: install.javaPath) } }
         telemetry.start(enabled: settings.shareAnonymousCount != false, playing: runner.isRunning, backend: activeSettings.backend.rawValue)
         runner.$isRunning.sink { [weak self] running in

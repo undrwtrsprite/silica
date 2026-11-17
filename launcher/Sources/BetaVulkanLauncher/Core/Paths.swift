@@ -4,6 +4,9 @@ import Foundation
 /// downloaded there at first run and are never bundled with the app.
 enum AppPaths {
     static let support: URL = {
+        if let override = ProcessInfo.processInfo.environment["SILICA_SUPPORT_DIR"], !override.isEmpty {
+            return URL(fileURLWithPath: override, isDirectory: true)
+        }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base.appendingPathComponent("BetaVulkan", isDirectory: true)
     }()

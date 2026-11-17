@@ -249,11 +249,18 @@ struct PathRow: View {
     let path: String
     let choose: () -> Void
 
+    private var displayPath: String {
+        if let override = ProcessInfo.processInfo.environment["SILICA_SUPPORT_DIR"], !override.isEmpty, path.hasPrefix(override) {
+            return "~/Library/Application Support/BetaVulkan" + String(path.dropFirst(override.count))
+        }
+        return (path as NSString).abbreviatingWithTildeInPath
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 13))
-                Text(path).font(.system(size: 11.5)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                Text(displayPath).font(.system(size: 11.5)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
             }
             Spacer()
             Button("Choose…", action: choose).buttonStyle(SecondaryButtonStyle())

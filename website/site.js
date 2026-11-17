@@ -1026,7 +1026,7 @@
   const v = $('#demo-video');
   if (v) {
     const btns = $$('[data-src]');
-    const files = { launcher: ['assets/launcher-demo.mp4', 'assets/poster-demo.jpg'], benchmark: ['assets/benchmark.mp4', 'assets/poster-bench.jpg'] };
+    const files = { launcher: ['assets/launcher-demo.mp4?v=3', 'assets/poster-demo.jpg?v=3'], benchmark: ['assets/benchmark.mp4', 'assets/poster-bench.jpg'] };
     let cur = v.dataset.start || 'launcher';
     const mark = b => btns.forEach(c => c.setAttribute('aria-pressed', String(c === b)));
     const playAt = t => { const go = () => { v.currentTime = t; v.play().catch(() => {}); }; if (v.readyState >= 3) return go(); v.addEventListener('canplay', go, { once: true }); v.play().catch(() => {}); };

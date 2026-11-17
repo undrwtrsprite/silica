@@ -89,6 +89,11 @@ struct SettingsView: View {
                     Text("Silica asks GitHub for the latest release and sends nothing but its version number. Updates are installed only if they carry the project's signature.")
                         .font(.system(size: 11.5)).foregroundStyle(.secondary)
                 }
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle("Share anonymous player count", isOn: Binding(get: { state.settings.shareAnonymousCount != false }, set: { state.settings.shareAnonymousCount = $0 }))
+                    Text("Sends only a random local session ID while Silica is open so the website can count active players. Never sends your username, Microsoft ID, or hardware info.")
+                        .font(.system(size: 11.5)).foregroundStyle(.secondary)
+                }
             }
         }
     }

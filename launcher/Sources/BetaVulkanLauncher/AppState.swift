@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import SwiftUI
 
@@ -57,6 +58,8 @@ final class AppState: ObservableObject {
     let updates = UpdateManager()
     let runner = GameRunner()
     let jars = JarLibrary()
+    private let telemetry = Telemetry()
+    private var telemetryCancellables: Set<AnyCancellable> = []
     /// The jar the setup wizard imported last, so its final page can show the result.
     @Published var wizardJarID: String?
 
@@ -68,6 +71,15 @@ final class AppState: ObservableObject {
         loadAccounts()
         activateActiveAccount()
         if install.ready && stageReady { Task { [self] in await jars.recheckStale(stageDir: settings.stageDir, java: install.javaPath) } }
+        telemetry.start(enabled: settings.shareAnonymousCount != false, playing: runner.isRunning)
+        runner.$isRunning.sink { [weak self] running in
+            guard let self else { return }
+            self.telemetry.update(enabled: self.settings.shareAnonymousCount != false, playing: running)
+        }.store(in: &telemetryCancellables)
+        $settings.sink { [weak self] next in
+            guard let self else { return }
+            self.telemetry.update(enabled: next.shareAnonymousCount != false, playing: self.runner.isRunning)
+        }.store(in: &telemetryCancellables)
     }
 
     var stageReady: Bool { GameRunner.stageConfig(settings.stageDir) != nil }

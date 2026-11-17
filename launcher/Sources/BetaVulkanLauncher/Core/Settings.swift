@@ -54,6 +54,8 @@ struct Settings: Codable, Equatable {
     var showSkins: Bool? = nil
     /// nil counts as on. When on, Silica asks GitHub once at start-up whether a newer release exists.
     var checkForUpdates: Bool? = nil
+    /// nil counts as on. Sends only a random local UUID and "launcher"/"playing" state for the live site counter.
+    var shareAnonymousCount: Bool? = nil
     var fullscreen = false
     /// Which jar to play: nil is the official Beta 1.7.3 client, otherwise the id of one you added.
     var jarID: String? = nil

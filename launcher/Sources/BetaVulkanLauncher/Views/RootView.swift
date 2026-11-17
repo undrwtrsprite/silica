@@ -3,65 +3,50 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject private var state: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var runner: GameRunner
 
-    @State private var sceneAwake = true
-    private var showsScene: Bool { state.tab == .play && !state.wizardOpen }
+    private var activeBackdropMode: DitherBackdrop.Mode {
+        switch state.tab {
+        case .play: return .launchCanyon
+        case .worlds: return .worldsTopo
+        case .jars: return .jarsMosaic
+        case .settings: return .settingsWave
+        case .advanced: return .advancedPulse
+        }
+    }
 
     var body: some View {
         ZStack {
             Theme.bg.ignoresSafeArea()
-            if !showsScene && !state.wizardOpen {
-                DitherBackdrop(paused: runner.isRunning)
-                    .frame(height: 360)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-            }
-            // The scene stays in the tree and only its opacity changes, so it really fades in when Play opens and out when you leave.
-            HeroScene(paused: runner.isRunning || !sceneAwake)
-                .overlay {
-                    LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .bottomLeading, endPoint: UnitPoint(x: 0.55, y: 0.45))
-                }
-                .overlay {
-                    LinearGradient(stops: [.init(color: Theme.bg.opacity(0), location: 0.42), .init(color: Theme.bg.opacity(0.10), location: 0.55),
-                                           .init(color: Theme.bg.opacity(0.35), location: 0.68), .init(color: Theme.bg.opacity(0.72), location: 0.84),
-                                           .init(color: Theme.bg, location: 1)], startPoint: .top, endPoint: .bottom)
-                }
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
-                .opacity(showsScene ? 1 : 0)
-                .animation(reduceMotion ? nil : (showsScene ? .easeInOut(duration: 0.9) : .easeOut(duration: 0.3)), value: showsScene)   // in slowly, out quickly
-                .onChange(of: showsScene) { _, shown in
-                    if shown { sceneAwake = true; return }
-                    // keep drawing until it has faded out, then stop so a hidden scene costs nothing
-                    Task {
-                        try? await Task.sleep(for: .seconds(0.6))
-                        if !showsScene { sceneAwake = false }
+
+            HStack(spacing: 0) {
+                LauncherSidebar()
+                ZStack(alignment: .topLeading) {
+                    if state.tab != .play && !state.wizardOpen {
+                        DitherBackdrop(mode: activeBackdropMode, paused: runner.isRunning)
+                            .frame(height: 210)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            .ignoresSafeArea()
+                            .allowsHitTesting(false)
                     }
-                }
-            VStack(spacing: 0) {
-                LauncherNavigation()
-                    .environment(\.colorScheme, state.tab == .play ? .dark : colorScheme)
-                GeometryReader { geometry in
-                    ScrollOrPlain {
-                        ZStack(alignment: .topLeading) {
+                    GeometryReader { geometry in
+                        ScrollOrPlain {
                             Group {
                                 switch state.tab {
-                                case .play: PlayView(viewportHeight: geometry.size.height)
-                                case .worlds: WorldsView().padding(32)
-                                case .jars: JarsView().padding(32)
-                                case .settings: SettingsView().padding(32)
-                                case .advanced: AdvancedView().padding(32)
+                                case .play: PlayView(viewportHeight: geometry.size.height).padding(28)
+                                case .worlds: WorldsView().padding(28)
+                                case .jars: JarsView().padding(28)
+                                case .settings: SettingsView().padding(28)
+                                case .advanced: AdvancedView().padding(28)
                                 }
                             }
                             .modifier(PageFadeIn(enabled: !reduceMotion))
-                            .id(state.tab)   // a new page each time, and the old one is gone at once: nothing half-faded can be left behind when you switch quickly
+                            .id(state.tab)
                             .frame(maxWidth: .infinity, alignment: .topLeading)
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .allowsHitTesting(!state.wizardOpen)
             .accessibilityHidden(state.wizardOpen)
@@ -83,73 +68,138 @@ struct RootView: View {
     }
 }
 
-/// Full-width website masthead: Silica wordmark on the left (clearing window controls), clean flat nav links with 6x6 green square indicator, and account chip on the right.
-private struct LauncherNavigation: View {
+/// Fixed left sidebar rail: brand, active instance status, vertical navigation list, and bottom account dock.
+private struct LauncherSidebar: View {
     @EnvironmentObject private var state: AppState
+    @EnvironmentObject private var install: InstallManager
+    @EnvironmentObject private var runner: GameRunner
+    @EnvironmentObject private var jars: JarLibrary
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var selection
 
+    private var ready: Bool { install.ready && state.stageReady }
+
     var body: some View {
-        HStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
+            // App identity below traffic lights
             HStack(spacing: 10) {
                 if let url = Bundle.main.url(forResource: "SilicaMark", withExtension: "png"),
                    let image = NSImage(contentsOf: url) {
                     Image(nsImage: image)
-                        .resizable().frame(width: 26, height: 26)
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .resizable().frame(width: 28, height: 28)
+                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                         .accessibilityHidden(true)
                 } else {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .fill(LinearGradient(colors: [Theme.tint, Theme.accent], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 26, height: 26)
-                        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                        .frame(width: 28, height: 28)
+                        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.white.opacity(0.18), lineWidth: 1))
                         .accessibilityHidden(true)
                 }
-                Text("Silica").font(.system(size: 16, weight: .bold)).tracking(-0.3)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Silica").font(.system(size: 16, weight: .bold)).tracking(-0.3)
+                    Text(UpdateManager.currentVersionText)
+                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
             }
-            .padding(.leading, 82)
+            .padding(.top, 42)
+            .padding(.horizontal, 18)
+            .padding(.bottom, 18)
 
-            HStack(spacing: 6) {
+            // Active instance badge
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(runner.isRunning ? Theme.sand : (ready ? Theme.accent : Theme.sand))
+                        .frame(width: 7, height: 7)
+                    Text(runner.isRunning ? "Running" : (ready ? "Beta 1.7.3" : "Setup needed"))
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                Text(jars.jar(state.settings.jarID)?.name ?? "Silica patched · \(state.settings.backend == .vulkan ? "Vulkan" : "OpenGL")")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.stroke, lineWidth: 1))
+            .padding(.horizontal, 14)
+            .padding(.bottom, 16)
+
+            // Vertical navigation links
+            VStack(alignment: .leading, spacing: 4) {
                 ForEach(Array(Tab.allCases.enumerated()), id: \.element) { index, tab in
-                    navItem(tab)
+                    navRow(tab, count: count(for: tab))
                         .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
                 }
             }
-            .padding(.leading, 26)
             .animation(reduceMotion ? nil : LauncherMotion.change, value: state.tab)
+            .padding(.horizontal, 12)
 
             Spacer(minLength: 12)
-            AccountMenu()
-                .padding(.trailing, 24)
-        }
-        .frame(height: 54)
-        .background {
-            if state.tab == .play {
-                Theme.bg.opacity(0.45).background(.ultraThinMaterial)
-            } else {
-                Theme.bg.opacity(0.88).background(.ultraThinMaterial)
+
+            // Pinned account dock at bottom of left rail
+            VStack(alignment: .leading, spacing: 8) {
+                Rectangle().fill(Theme.stroke).frame(height: 1)
+                AccountMenu()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
             }
+            .padding(.bottom, 8)
         }
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Theme.stroke).frame(height: 1).opacity(state.tab == .play ? 0.5 : 1)
+        .frame(width: 222)
+        .frame(maxHeight: .infinity)
+        .background(Theme.sidebar)
+        .overlay(alignment: .trailing) { Rectangle().fill(Theme.stroke).frame(width: 1) }
+        .ignoresSafeArea(.container, edges: .top)
+    }
+
+    private func count(for tab: Tab) -> Int? {
+        switch tab {
+        case .worlds: return state.worlds.isEmpty ? nil : state.worlds.count
+        case .jars: return jars.jars.isEmpty ? nil : jars.jars.count
+        default: return nil
         }
     }
 
-    private func navItem(_ tab: Tab) -> some View {
+    private func navRow(_ tab: Tab, count: Int?) -> some View {
         let selected = state.tab == tab
         return Button { state.tab = tab } label: {
-            Text(tab.rawValue)
-                .font(.system(size: 13.5, weight: selected ? .semibold : .medium))
-                .foregroundStyle(selected ? Color.primary : Color.secondary)
-                .padding(.horizontal, 11).padding(.vertical, 7)
-                .contentShape(Rectangle())
-                .overlay(alignment: .bottom) {
-                    if selected {
-                        Rectangle().fill(Theme.accent).frame(width: 5, height: 5)
-                            .offset(y: 1)
-                            .matchedGeometryEffect(id: "underline", in: selection)
-                    }
+            HStack(spacing: 10) {
+                Image(systemName: tab.symbol)
+                    .font(.system(size: 13.5, weight: .medium))
+                    .foregroundStyle(selected ? Theme.accent : .secondary)
+                    .frame(width: 18)
+                Text(tab.rawValue)
+                    .font(.system(size: 13.5, weight: selected ? .semibold : .medium))
+                    .foregroundStyle(selected ? Color.primary : Color.secondary)
+                Spacer(minLength: 0)
+                if let count {
+                    Text("\(count)")
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Color.primary.opacity(0.07), in: Capsule())
                 }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            .background {
+                if selected {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Theme.cardHigh)
+                        .overlay(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(Theme.accent)
+                                .frame(width: 3, height: 16)
+                                .offset(x: 2)
+                        }
+                        .matchedGeometryEffect(id: "nav", in: selection)
+                }
+            }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -180,36 +230,33 @@ private struct UpdateBanner: View {
             }
         }
         .animation(reduceMotion ? nil : LauncherMotion.change, value: updates.status)
+        .animation(reduceMotion ? nil : LauncherMotion.change, value: updates.bannerDismissed)
     }
 
-    private func card<Actions: View>(title: String, detail: String, @ViewBuilder actions: () -> Actions) -> some View {
+    private func card<A: View>(title: String, detail: String, @ViewBuilder action: () -> A) -> some View {
         HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 13.5, weight: .semibold))
-                Text(detail).font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 13, weight: .semibold))
+                Text(detail).font(.system(size: 11.5)).foregroundStyle(.secondary)
             }
-            actions()
+            action()
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
-        .frame(maxWidth: 440, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.stroke.opacity(2)))
-        .shadow(color: .black.opacity(0.25), radius: 18, y: 6)
-        .transition(.opacity.combined(with: .move(edge: .bottom)))
+        .surface(radius: 14, fill: Theme.cardHigh)
+        .shadow(color: .black.opacity(0.28), radius: 22, y: 10)
     }
 }
 
-/// Fades a page in (with a small slide) when it first appears. The page it replaces is removed immediately, so quick tab switches cannot leave pieces of an old page on screen.
 private struct PageFadeIn: ViewModifier {
     let enabled: Bool
     @State private var shown = false
 
     func body(content: Content) -> some View {
         content
-            .opacity(enabled && !shown ? 0 : 1)
-            .offset(y: enabled && !shown ? 5 : 0)
+            .opacity(enabled ? (shown ? 1 : 0) : 1)
+            .offset(y: enabled ? (shown ? 0 : 4) : 0)
             .onAppear {
-                guard enabled else { return }
+                guard enabled, !shown else { return }
                 withAnimation(LauncherMotion.change) { shown = true }
             }
     }

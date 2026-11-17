@@ -210,19 +210,13 @@ h2 { font-size: clamp(34px, 4.4vw, 60px); letter-spacing: -.04em; }
 .center .sect-sub { margin-inline: auto; }
 
 /* ---------- features: inventory that sorts itself ---------- */
-/* ---------- features hero canvas ---------- */
-.feat-stage { position: relative; display: grid; gap: 14px; justify-items: center; }
-.feat-canvas-wrap { position: relative; width: 100%; height: clamp(320px, 38vw, 440px); overflow: hidden; }
-#feat-world { width: 100%; height: 100%; display: block; cursor: pointer; }
-.feat-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
-.feat-pill { border: 1px solid var(--line); background: var(--card); color: var(--muted); font: 500 13px var(--mono); padding: 7px 12px; border-radius: 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; transition: color .2s, border-color .2s, background-color .2s; }
-.feat-pill i { width: 7px; height: 7px; background: var(--dim); transition: background-color .2s, box-shadow .2s; }
-.feat-pill:hover { color: var(--text); border-color: var(--line-2); }
-.feat-pill[aria-pressed="true"] { color: var(--text); border-color: rgba(123, 201, 111, .45); background: rgba(123, 201, 111, .09); }
-.feat-pill[aria-pressed="true"] i { background: var(--accent); box-shadow: 0 0 8px rgba(123, 201, 111, .65); }
-.feat-pill[data-mode="light"][aria-pressed="true"] { border-color: rgba(226, 169, 75, .45); background: rgba(226, 169, 75, .09); }
-.feat-pill[data-mode="light"][aria-pressed="true"] i { background: var(--amber); box-shadow: 0 0 8px rgba(226, 169, 75, .65); }
-.feat-cap { font-size: 13px; color: var(--dim); text-align: center; }
+/* ---------- features hero backdrop (matches roadmap dusk-hero) ---------- */
+.feat-hero { position: relative; overflow: hidden; display: flex; align-items: flex-end; min-height: clamp(520px, 72svh, 700px); padding: clamp(120px, 15vw, 170px) var(--gutter) clamp(120px, 13vw, 190px); }
+.feat-hero canvas.feat-bg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.feat-hero::after { content: ""; position: absolute; inset: auto 0 0 0; height: 120px; background: linear-gradient(to top, var(--bg), transparent); pointer-events: none; }
+.feat-hero .inner { position: relative; z-index: 2; width: 100%; }
+.feat-hero h1 { font-size: clamp(44px, 6.4vw, 92px); letter-spacing: -.045em; line-height: .98; max-width: 16ch; text-shadow: 0 2px 40px rgba(10, 13, 17, .65); }
+.feat-hero .lede { margin-top: 22px; font-size: clamp(18px, 1.5vw, 21px); max-width: 50ch; text-shadow: 0 1px 24px rgba(10, 13, 17, .9); }
 
 .grid6 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .fcard { padding: 26px; transition: translate .3s, border-color .3s; }
@@ -453,7 +447,7 @@ footer { padding: 0 var(--gutter) 48px; color: var(--dim); font-size: 14px; line
 .nbtn.next .tile { color: #cfd6dd; box-shadow: inset 0 0 0 3px #7f8a95, inset 0 0 0 5px #0a0d11, 0 14px 30px -12px rgba(0, 0, 0, .8); }
 .nbtn.later .tile { opacity: .6; box-shadow: inset 0 0 0 3px #3a424b, inset 0 0 0 5px #0a0d11; }
 .nbtn[aria-pressed="true"] .tile { transform: translateY(-4px) scale(1.08); }
-.nbtn[aria-pressed="true"]::after { content: ""; position: absolute; top: 2px; left: 50%; width: 80px; height: 80px; margin-left: -40px; border: 2px solid rgba(255, 255, 255, .85); pointer-events: none; animation: sel .5s cubic-bezier(.3, 1.5, .4, 1) both; }
+.nbtn[aria-pressed="true"]::after { content: ""; position: absolute; top: -6px; left: 50%; width: 80px; height: 80px; margin-left: -40px; border: 2px solid rgba(255, 255, 255, .85); pointer-events: none; animation: sel .5s cubic-bezier(.3, 1.5, .4, 1) both; }
 @keyframes pulse { 50% { box-shadow: inset 0 0 0 3px var(--accent), inset 0 0 0 5px #0a0d11, 0 0 34px rgba(123, 201, 111, .5); } }
 @keyframes sel { from { transform: scale(.7); opacity: 0; } }
 .detail { padding: clamp(24px, 3vw, 38px); border-left: 1px solid var(--line); display: grid; align-content: start; gap: 14px; background: rgba(255, 255, 255, .02); }
@@ -550,7 +544,6 @@ footer { padding: 0 var(--gutter) 48px; color: var(--dim); font-size: 14px; line
   .nbtn { max-width: 112px; } .nbtn .tile { width: 54px; height: 54px; }
   .nbtn[aria-pressed="true"]::after { width: 70px; height: 70px; margin-left: -35px; }
   .helpgrid { grid-template-columns: 1fr; }
-  .feat-canvas-wrap { height: 280px; }
   .dl-card { grid-template-columns: 1fr; justify-items: start; }
   .rel { grid-template-columns: auto 1fr; }
   .rel .dls, .rel .ico { display: none; }

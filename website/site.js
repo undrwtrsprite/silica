@@ -465,245 +465,170 @@
     else whileVisible(isle, v => { vis = v; if (v && !raf) raf = requestAnimationFrame(loop); });
   }
 
-  // ---------- features hero: isometric Beta chunk with LOD ring, torchlight, and backup wave ----------
-  const featStage = $('#feat-stage'), featCanvas = $('#feat-world');
-  if (featStage && featCanvas) {
-    const ctx = featCanvas.getContext('2d');
-    const N = 14, CORE_MIN = 3, CORE_MAX = 10;
-    const state = { lod: true, light: true, backup: false, backupAt: -1e9, hover: null };
-    const torches = new Set(['6,7', '8,5']);
-    const PAL = {
-      grass: ['#6fc35c', '#579a48', '#427637'],
-      dirt: ['#8a6240', '#6d4b30', '#533822'],
-      stone: ['#7b838d', '#606770', '#484e56'],
-      water: ['#4f8fd6', '#3d74b3', '#2e598c'],
-      wood: ['#7d5b36', '#614528', '#49331d'],
-      leaf: ['#58a64a', '#448339', '#326329'],
-      lod: ['#3f6a3c', '#31532f', '#253f24']
-    };
-    const grid = [];
-    for (let x = 0; x < N; x++) {
-      grid[x] = [];
-      for (let z = 0; z < N; z++) {
-        const core = x >= CORE_MIN && x <= CORE_MAX && z >= CORE_MIN && z <= CORE_MAX;
-        const n = vnoise2(x * .26 + 2.1, z * .26 + 5.4);
-        const ridge = Math.max(0, 1 - Math.hypot(x - 5.5, z - 5.2) / 5.5) * 2.6;
-        const river = Math.hypot(x - 9.2, z - 8.6) < 2.3;
-        const h = river ? 2 : Math.max(2, Math.min(6, Math.round(2.1 + n * 2.4 + ridge)));
-        const tree = core && x === 5 && z === 5;
-        grid[x][z] = { core, h, river, tree };
-      }
-    }
-    const pills = $$('.feat-pill', featStage);
-    pills.forEach(p => p.addEventListener('click', () => {
-      const m = p.dataset.mode;
-      state[m] = !state[m];
-      p.setAttribute('aria-pressed', String(state[m]));
-      if (m === 'backup' && state.backup) state.backupAt = performance.now();
-      if (still) draw(performance.now());
-    }));
-
-    let W = 0, H = 0, tw = 18, th = 9, bh = 13, ox = 0, oy = 0, lodAnim = 1, lastT = performance.now();
-    const resize = () => {
-      [W, H] = fitCanvas(featCanvas, ctx);
-      tw = Math.max(11, Math.min(20, W / (N * 2.25)));
-      th = tw * .5;
-      bh = tw * .72;
-      ox = W * .5;
-      oy = H * .46;
-    };
-    resize();
-    addEventListener('resize', () => { resize(); if (still) draw(performance.now()); });
-
-    const iso = (x, z, y) => [
-      ox + (x - z) * tw,
-      oy + (x + z - (N - 1)) * th - y * bh
+  // ---------- features hero backdrop: an alpine Beta valley at first light (same depth craft as dusk) ----------
+  const featBg = $('canvas.feat-bg');
+  if (featBg) {
+    const ctx = featBg.getContext('2d');
+    const LAYERS = [
+      { d: .06, bs: 22, base: .46, amp: .22, f: .75, seed: 7, col: [30, 62, 60], fog: .82, snow: 1 },
+      { d: .16, bs: 15, base: .54, amp: .18, f: 1.05, seed: 19, col: [22, 48, 48], fog: .66 },
+      { d: .30, bs: 11, base: .63, amp: .15, f: 1.45, seed: 31, col: [15, 36, 36], fog: .46 },
+      { d: .54, bs: 8, base: .74, amp: .11, f: 2.0, seed: 47, col: [10, 25, 24], fog: .28 },
+      { d: .82, bs: 6, base: .87, amp: .08, f: 2.9, seed: 61, col: [7, 16, 15], fog: .12 }
     ];
-
-    const shade = (hex, boost, amberMix) => {
-      let r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
-      r = Math.min(255, r * boost + 235 * amberMix);
-      g = Math.min(255, g * boost + 168 * amberMix);
-      b = Math.min(255, b * boost + 68 * amberMix);
-      return `rgb(${r | 0},${g | 0},${b | 0})`;
-    };
-
-    const drawBox = (x, z, y, height, pal, boost, amber, alpha = 1) => {
-      const [px, py] = iso(x, z, y);
-      const topY = py - height * bh;
-      ctx.globalAlpha = alpha;
-      // top
-      ctx.fillStyle = shade(pal[0], boost, amber);
-      ctx.beginPath();
-      ctx.moveTo(px, topY - th);
-      ctx.lineTo(px + tw, topY);
-      ctx.lineTo(px, topY + th);
-      ctx.lineTo(px - tw, topY);
-      ctx.closePath();
-      ctx.fill();
-      // left
-      ctx.fillStyle = shade(pal[1], boost * .96, amber * .85);
-      ctx.beginPath();
-      ctx.moveTo(px - tw, topY);
-      ctx.lineTo(px, topY + th);
-      ctx.lineTo(px, py + th);
-      ctx.lineTo(px - tw, py);
-      ctx.closePath();
-      ctx.fill();
-      // right
-      ctx.fillStyle = shade(pal[2], boost * .92, amber * .7);
-      ctx.beginPath();
-      ctx.moveTo(px + tw, topY);
-      ctx.lineTo(px, topY + th);
-      ctx.lineTo(px, py + th);
-      ctx.lineTo(px + tw, py);
-      ctx.closePath();
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    };
-
-    const hitList = [];
-    const motes = Array.from({ length: 18 }, (_, i) => ({
-      x: hash2(i, 1) * N, z: hash2(i, 2) * N, y: 2 + hash2(i, 3) * 4, sp: .25 + hash2(i, 4) * .45, ph: hash2(i, 5) * 6.28
+    let W = 0, H = 0, raf = 0, vis = false, t0 = 0, last = 0, mx = 0, tmx = 0, flies = [], torches = [];
+    const clouds = Array.from({ length: 7 }, (_, i) => ({
+      x: hash(i * 4.7), y: .11 + hash(i * 8.3) * .25, w: 90 + hash(i * 3.1) * 140, h: 12 + (i % 3) * 4, sp: .004 + hash(i * 2.9) * .005
     }));
-
+    const skyline = (L, wx) => L.base - L.amp * (vnoise(wx * .06 * L.f + L.seed) * .62 + vnoise(wx * .17 * L.f + L.seed * 2) * .28 + vnoise(wx * .5 * L.f + L.seed * 3) * .1) * 1.5 + L.amp * .5;
+    const size = () => {
+      [W, H] = fitCanvas(featBg, ctx);
+      flies = Array.from({ length: Math.round(Math.min(36, W / 38)) }, (_, i) => ({ x: hash(i * 3.7) * W, y: H * (.56 + hash(i * 7.3) * .36), p: hash(i * 6.1) * 6.28, s: .4 + hash(i * 1.9) * .9 }));
+    };
     const draw = now => {
-      const dt = Math.min(.05, (now - lastT) / 1000);
-      lastT = now;
-      lodAnim += ((state.lod ? 1 : 0) - lodAnim) * Math.min(1, dt * 8);
-      ctx.clearRect(0, 0, W, H);
+      const t = still ? 5200 : now - t0;
+      const breath = .5 + .5 * Math.sin(t / 6500);
+      mx += (tmx - mx) * .06;
 
-      // soft ambient radial glow behind chunk
-      const glow = ctx.createRadialGradient(W * .5, H * .52, 10, W * .5, H * .52, Math.max(W, H) * .48);
-      glow.addColorStop(0, state.light ? 'rgba(123, 201, 111, .14)' : 'rgba(79, 143, 214, .08)');
-      glow.addColorStop(1, 'rgba(10, 13, 17, 0)');
-      ctx.fillStyle = glow;
+      // deep pine-emerald morning sky
+      const sky = ctx.createLinearGradient(0, 0, 0, H * .82);
+      sky.addColorStop(0, '#05080d');
+      sky.addColorStop(.42, '#09151b');
+      sky.addColorStop(.78, '#12312d');
+      sky.addColorStop(1, '#1d473a');
+      ctx.fillStyle = sky;
       ctx.fillRect(0, 0, W, H);
 
-      hitList.length = 0;
-      const t = now * .001;
-      const scanPhase = state.backup ? ((t - state.backupAt * .001) * 7) % (N * 2 + 6) : -99;
-
-      for (let sum = 0; sum <= (N - 1) * 2; sum++) {
-        for (let x = 0; x < N; x++) {
-          const z = sum - x;
-          if (z < 0 || z >= N) continue;
-          const cell = grid[x][z];
-          if (!cell.core && lodAnim < .03) continue;
-
-          // torch light contribution
-          let amber = 0;
-          if (state.light) {
-            for (const key of torches) {
-              const [tx, tz] = key.split(',').map(Number);
-              const d = Math.hypot(x - tx, z - tz);
-              if (d < 4.5) amber += Math.max(0, 1 - d / 4.5) * (.42 + Math.sin(t * 5 + tx) * .04);
-            }
-            amber = Math.min(.55, amber);
-          }
-
-          const boost = state.light ? 1.02 : .72;
-          const alpha = cell.core ? 1 : lodAnim * .48;
-          const hScale = cell.core ? 1 : lodAnim;
-          const baseY = 0;
-
-          if (cell.core) {
-            if (cell.h > 2) drawBox(x, z, baseY, cell.h - 1, PAL.stone, boost, amber * .4, 1);
-            const topY = cell.h - 1;
-            const wave = cell.river ? Math.sin(t * 2.2 + x * .8 + z * .6) * .07 : 0;
-            drawBox(x, z, topY + wave, 1, cell.river ? PAL.water : PAL.grass, boost, amber, 1);
-
-            const [px, py] = iso(x, z, cell.h + wave);
-            hitList.push({ x, z, px, py, river: cell.river });
-
-            if (state.hover && state.hover.x === x && state.hover.z === z) {
-              ctx.strokeStyle = 'rgba(238, 241, 244, .75)';
-              ctx.lineWidth = 1.4;
-              ctx.beginPath();
-              ctx.moveTo(px, py - th); ctx.lineTo(px + tw, py); ctx.lineTo(px, py + th); ctx.lineTo(px - tw, py);
-              ctx.closePath(); ctx.stroke();
-            }
-
-            if (cell.tree) {
-              drawBox(x, z, cell.h, 2.2, PAL.wood, boost, amber * .5, 1);
-              drawBox(x, z, cell.h + 2.2, 1.3, PAL.leaf, boost, amber * .4, .96);
-            }
-
-            if (torches.has(`${x},${z}`)) {
-              const [txp, typ] = iso(x, z, cell.h);
-              ctx.fillStyle = '#6c4c2b';
-              ctx.fillRect(txp - 1.5, typ - 9, 3, 9);
-              const flk = state.light ? 1 + Math.sin(t * 9 + x) * .18 : .5;
-              ctx.fillStyle = state.light ? '#f6c453' : '#7a6345';
-              ctx.beginPath(); ctx.arc(txp, typ - 10, 3.2 * flk, 0, Math.PI * 2); ctx.fill();
-              if (state.light) {
-                const tg = ctx.createRadialGradient(txp, typ - 10, 1, txp, typ - 10, tw * 1.8);
-                tg.addColorStop(0, 'rgba(226, 169, 75, .42)');
-                tg.addColorStop(1, 'rgba(226, 169, 75, 0)');
-                ctx.fillStyle = tg;
-                ctx.beginPath(); ctx.arc(txp, typ - 10, tw * 1.8, 0, Math.PI * 2); ctx.fill();
-              }
-            }
-          } else {
-            drawBox(x, z, 0, cell.h * hScale, PAL.lod, boost * .9, amber * .2, alpha);
-          }
-
-          if (state.backup && cell.core && Math.abs(sum - scanPhase) < 1.35) {
-            const [px, py] = iso(x, z, cell.h);
-            ctx.strokeStyle = 'rgba(123, 201, 111, .9)';
-            ctx.lineWidth = 1.6;
-            ctx.beginPath();
-            ctx.moveTo(px, py - th); ctx.lineTo(px + tw, py); ctx.lineTo(px, py + th); ctx.lineTo(px - tw, py);
-            ctx.closePath(); ctx.stroke();
-          }
-        }
+      // crisp pixel stars fading near horizon
+      for (let i = 0; i < 95; i++) {
+        const x = Math.floor(hash(i * 13.7) * W), y = Math.floor(hash(i * 5.1) * H * .46);
+        const tw = still ? 1 : .3 + .7 * Math.abs(Math.sin(t / 950 + i * 1.9));
+        ctx.fillStyle = `rgba(210,235,230,${((.16 + hash(i * 2.4) * .48) * tw).toFixed(3)})`;
+        ctx.fillRect(x, y, i % 13 === 0 ? 3 : 2, i % 13 === 0 ? 3 : 2);
       }
 
-      if (!still) {
-        motes.forEach(m => {
-          const my = (m.y + t * m.sp) % 6.5;
-          const [mx, mpy] = iso(m.x + Math.sin(t + m.ph) * .2, m.z, my);
-          ctx.fillStyle = state.light ? 'rgba(226, 169, 75, .45)' : 'rgba(123, 201, 111, .35)';
-          ctx.fillRect(mx - 1, mpy - 1, 2.2, 2.2);
-        });
-      }
-    };
+      // blocky rising sun & emerald-gold horizon glow
+      const sx = W * .74 + mx * -32, sy = H * .34;
+      const rg = ctx.createRadialGradient(sx, sy, 0, sx, sy, W * .48);
+      rg.addColorStop(0, `rgba(166,227,154,${(.16 + .10 * breath).toFixed(3)})`);
+      rg.addColorStop(.32, `rgba(123,201,111,${(.09 + .05 * breath).toFixed(3)})`);
+      rg.addColorStop(.65, `rgba(226,169,75,${(.035 + .02 * breath).toFixed(3)})`);
+      rg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = rg;
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = `rgba(220,248,210,${(.16 + .08 * breath).toFixed(3)})`;
+      ctx.fillRect(Math.round(sx - 18), Math.round(sy - 18), 36, 36);
+      ctx.fillStyle = `rgba(240,255,235,${(.22 + .08 * breath).toFixed(3)})`;
+      ctx.fillRect(Math.round(sx - 10), Math.round(sy - 10), 20, 20);
 
-    const pick = e => {
-      const r = featCanvas.getBoundingClientRect();
-      const mx = e.clientX - r.left, my = e.clientY - r.top;
-      let best = null, bestD = 1e9;
-      for (let i = hitList.length - 1; i >= 0; i--) {
-        const h = hitList[i];
-        const d = Math.abs(mx - h.px) / tw + Math.abs(my - h.py) / th;
-        if (d < 1.05 && d < bestD) { best = h; bestD = d; }
-      }
-      return best;
-    };
-
-    featCanvas.addEventListener('pointermove', e => {
-      const h = pick(e);
-      state.hover = h ? { x: h.x, z: h.z } : null;
-      if (still) draw(performance.now());
-    });
-    featCanvas.addEventListener('pointerleave', () => { state.hover = null; });
-    featCanvas.addEventListener('click', e => {
-      const h = pick(e);
-      if (!h || h.river) return;
-      const k = `${h.x},${h.z}`;
-      if (torches.has(k)) torches.delete(k); else torches.add(k);
-      if (still) draw(performance.now());
-    });
-
-    if (still) {
-      draw(performance.now());
-    } else {
-      let raf = 0;
-      const loop = now => { draw(now); raf = requestAnimationFrame(loop); };
-      whileVisible(featCanvas, on => {
-        if (on && !raf) { lastT = performance.now(); raf = requestAnimationFrame(loop); }
-        else if (!on && raf) { cancelAnimationFrame(raf); raf = 0; }
+      // drifting blocky clouds catching top light
+      clouds.forEach(c => {
+        const cx = (((c.x + (still ? 0 : t * .000018 * c.sp * 200)) % 1.25) - .12) * W - mx * 14;
+        const cy = c.y * H;
+        ctx.fillStyle = 'rgba(180,215,205,.045)';
+        ctx.fillRect(cx | 0, cy | 0, c.w | 0, c.h);
+        ctx.fillRect((cx + c.w * .2) | 0, (cy - c.h * .6) | 0, (c.w * .52) | 0, c.h);
+        ctx.fillStyle = 'rgba(166,227,154,.04)';
+        ctx.fillRect((cx + c.w * .2) | 0, (cy - c.h * .6) | 0, (c.w * .52) | 0, 2);
       });
+
+      // 5 blocky terrain layers, far to near, with snow caps, trees, and distance fog
+      LAYERS.forEach((L, li) => {
+        const drift = still ? 0 : t * .00085 * (.25 + L.d * 1.6), off = -mx * L.d * 34;
+        const cols = Math.ceil(W / L.bs) + 3;
+        let minY = H;
+        ctx.fillStyle = `rgb(${L.col[0]},${L.col[1]},${L.col[2]})`;
+        const tops = [];
+        for (let i = -1; i < cols; i++) {
+          const wx = i + Math.floor(drift), y = Math.round((skyline(L, wx) * H) / L.bs) * L.bs;
+          tops.push([i, wx, y]); if (y < minY) minY = y;
+          ctx.fillRect(i * L.bs - (drift % 1) * L.bs + off, y, L.bs + 1, H - y + 2);
+        }
+        if (li === 4) torches = tops.filter(([i, wx]) => ((wx % 110) + 110) % 110 === 50).map(([i, wx, y]) => [i * L.bs - (drift % 1) * L.bs + off + L.bs / 2, y, L.bs]);
+
+        if (L.snow) tops.forEach(([i, wx, y]) => {
+          if (y < H * .36) {
+            ctx.fillStyle = 'rgba(210,232,228,.16)';
+            ctx.fillRect(i * L.bs - (drift % 1) * L.bs + off, y, L.bs + 1, Math.max(3, L.bs * .32));
+          }
+        });
+
+        if (li >= 2) tops.forEach(([i, wx, y]) => {
+          const j = hash(wx * 3.1 + li), a = (.11 + li * .055) * (.5 + j);
+          ctx.fillStyle = `rgba(123,201,111,${a.toFixed(3)})`;
+          ctx.fillRect(i * L.bs - (drift % 1) * L.bs + off, y, L.bs + 1, Math.max(2, L.bs * .3));
+          if (li >= 3 && hash(wx * 1.9 + li * 11) > .91) {
+            const bx = i * L.bs - (drift % 1) * L.bs + off, bs = L.bs;
+            ctx.fillStyle = `rgb(${L.col[0] - 2},${L.col[1] - 4},${L.col[2] - 3})`;
+            ctx.fillRect(bx + bs, y - bs * 3, bs, bs * 3);
+            ctx.fillRect(bx - bs, y - bs * 5, bs * 5, bs * 2);
+            ctx.fillRect(bx, y - bs * 6, bs * 3, bs);
+            ctx.fillStyle = 'rgba(123,201,111,.18)';
+            ctx.fillRect(bx, y - bs * 6, bs * 3, Math.max(2, bs * .3));
+          }
+        });
+
+        // valley fog between layers
+        const fy = Math.max(0, minY - 90), fg = ctx.createLinearGradient(0, fy, 0, H);
+        fg.addColorStop(0, 'rgba(32,74,66,0)');
+        fg.addColorStop(.24, `rgba(32,74,66,${(L.fog * .46).toFixed(3)})`);
+        fg.addColorStop(.62, `rgba(18,46,42,${(L.fog * .26).toFixed(3)})`);
+        fg.addColorStop(1, 'rgba(10,16,18,0)');
+        ctx.fillStyle = fg;
+        ctx.fillRect(0, fy, W, H - fy);
+      });
+
+      // drifting valley mist
+      for (let m = 0; m < 3; m++) {
+        const my = H * (.50 + m * .13), w = W * (.7 + m * .15), x = ((t * .0055 * (m + 1) + m * 380) % (W + w)) - w + mx * -20, a = .055 + m * .014;
+        const mg = ctx.createLinearGradient(x, 0, x + w, 0);
+        mg.addColorStop(0, 'rgba(120,180,155,0)');
+        mg.addColorStop(.5, `rgba(120,180,155,${a})`);
+        mg.addColorStop(1, 'rgba(120,180,155,0)');
+        ctx.fillStyle = mg;
+        ctx.fillRect(x, my - 26, w, 52);
+      }
+
+      // flickering torches on the foreground ridge
+      torches.forEach(([tx0, gy, bs], k) => {
+        const tx = Math.round(tx0), ty = Math.round(gy), u = bs / 6;
+        const fl = still ? 1 : .75 + .25 * Math.sin(t / 90 + k * 2) * Math.sin(t / 231 + 1 + k) + .1 * Math.sin(t / 47 + k);
+        if (tx < -120 || tx > W + 120) return;
+        const R = 48 * u * fl;
+        const tg = ctx.createRadialGradient(tx, ty - 4 * u, 0, tx, ty - 4 * u, R);
+        tg.addColorStop(0, `rgba(255,175,85,${(.25 * fl).toFixed(3)})`);
+        tg.addColorStop(.5, `rgba(230,135,60,${(.08 * fl).toFixed(3)})`);
+        tg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = tg;
+        ctx.fillRect(tx - R, ty - 4 * u - R, R * 2, R * 2);
+        ctx.fillStyle = '#4a3320'; ctx.fillRect(tx - u, ty - 5 * u, 2 * u, 5 * u);
+        ctx.fillStyle = `rgba(255,${(150 + 60 * fl) | 0},60,1)`; ctx.fillRect(tx - u, ty - 7.5 * u, 2 * u, 2.5 * u);
+        ctx.fillStyle = 'rgba(255,235,160,.95)'; ctx.fillRect(tx - u * .5, ty - 7 * u, u, u * 1.5);
+      });
+
+      // fireflies
+      flies.forEach(f => {
+        const x = f.x + Math.sin(t / 2300 * f.s + f.p) * 40 + mx * -26, y = f.y + Math.cos(t / 1900 * f.s + f.p * 1.7) * 18;
+        const b = still ? .8 : Math.pow(Math.max(0, Math.sin(t / 700 * f.s + f.p)), 2);
+        ctx.fillStyle = `rgba(170,235,130,${(.12 * b).toFixed(3)})`; ctx.fillRect(x - 5, y - 5, 10, 10);
+        ctx.fillStyle = `rgba(215,250,155,${(.9 * b).toFixed(3)})`; ctx.fillRect(x - 1, y - 1, 3, 3);
+      });
+
+      // left vignette for crisp heading legibility
+      const vg = ctx.createLinearGradient(0, 0, W, 0);
+      vg.addColorStop(0, 'rgba(7,10,14,.58)');
+      vg.addColorStop(.55, 'rgba(7,10,14,.14)');
+      vg.addColorStop(1, 'rgba(7,10,14,0)');
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, W, H);
+    };
+    const loop = now => { if (!vis) { raf = 0; return; } if (now - last > 33) { last = now; draw(now); } raf = requestAnimationFrame(loop); };
+    size();
+    if (still) { draw(0); addEventListener('resize', () => { size(); draw(0); }); }
+    else {
+      addEventListener('resize', size);
+      featBg.parentElement.addEventListener('pointermove', e => { const r = featBg.getBoundingClientRect(); tmx = ((e.clientX - r.left) / r.width - .5) * 2; }, { passive: true });
+      whileVisible(featBg, v => { vis = v; if (v && !t0) t0 = performance.now(); if (v && !raf) raf = requestAnimationFrame(loop); });
     }
   }
 

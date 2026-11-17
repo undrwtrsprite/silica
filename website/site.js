@@ -1084,14 +1084,31 @@
     let latest = null, hoverIdx = -1;
 
     const renderBars = (box, map, labels = {}, orderByCount = true) => {
+      if (!box) return;
       const entries = Object.entries(map || {}).filter(([, v]) => v > 0);
       if (!entries.length) { box.innerHTML = '<p class="pl-empty">Waiting for sessions</p>'; return; }
       if (orderByCount) entries.sort((a, b) => b[1] - a[1]);
       const total = entries.reduce((s, [, v]) => s + v, 0);
-      box.innerHTML = entries.map(([k, v]) => {
+      box.replaceChildren(...entries.map(([k, v]) => {
         const pct = Math.round((v / total) * 100);
-        return `<div class="pl-brow"><div class="pl-brow-head"><b>${labels[k] || k}</b><span>${v} (${pct}%)</span></div><div class="pl-track"><div class="pl-fill" style="width:${pct}%"></div></div></div>`;
-      }).join('');
+        const row = document.createElement('div');
+        row.className = 'pl-brow';
+        const head = document.createElement('div');
+        head.className = 'pl-brow-head';
+        const title = document.createElement('b');
+        title.textContent = labels[k] || k;
+        const count = document.createElement('span');
+        count.textContent = `${v} (${pct}%)`;
+        head.append(title, count);
+        const track = document.createElement('div');
+        track.className = 'pl-track';
+        const fill = document.createElement('div');
+        fill.className = 'pl-fill';
+        fill.style.width = `${pct}%`;
+        track.append(fill);
+        row.append(head, track);
+        return row;
+      }));
     };
 
     const drawChart = () => {

@@ -1,3 +1,5 @@
+const crypto = require('node:crypto');
+
 // Anonymous live player & runtime statistics endpoint.
 // Uses Upstash Redis / Vercel KV when KV_REST_API_URL or UPSTASH_REDIS_REST_URL is set,
 // with a clean in-memory TTL store fallback for local development or single-instance tests.
@@ -6,24 +8,62 @@
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
 const DAY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
+const RATE_WINDOW_MS = 60 * 1000;
+const GET_CACHE_MS = 10 * 1000;
+const MAX_POST_PER_ID = 5;
+const MAX_POST_PER_IP = 30;
+const MAX_GET_PER_IP = 60;
+const MAX_BODY_BYTES = 1024;
+const ALLOWED_CHIPS = new Set(['M1', 'M2', 'M3', 'M4', 'M5', 'Apple Silicon']);
+const VERSION_RE = /^v?\d{1,3}\.\d{1,3}(?:\.\d{1,3})?(?:-[a-zA-Z0-9.]{1,12})?$/;
 
 const mem = globalThis.__silicaStats || (globalThis.__silicaStats = {
+  salt: crypto.randomBytes(16),
   sessions: new Map(),   // id -> { ts, playing, backend, version, chip }
   buckets: new Map(),    // hourEpoch -> { online: Set, playing: Set }
+  rates: new Map(),      // ephemeral key -> { resetAt, count }
+  getCache: null,        // { expiresAt, payload, persisted }
 });
 
 function cleanId(raw) {
   if (typeof raw !== 'string') return null;
-  const s = raw.trim().slice(0, 64);
+  const s = raw.trim();
   return /^[a-zA-Z0-9_-]{8,64}$/.test(s) ? s : null;
 }
 
-function cleanTag(raw, allowed, maxLen = 24) {
+function cleanChip(raw) {
   if (typeof raw !== 'string') return null;
-  const s = raw.trim().slice(0, maxLen);
-  if (!s) return null;
-  if (allowed && !allowed.has(s)) return null;
-  return /^[a-zA-Z0-9._ -]{1,24}$/.test(s) ? s : null;
+  const s = raw.trim();
+  return ALLOWED_CHIPS.has(s) ? s : null;
+}
+
+function cleanVersion(raw) {
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim();
+  if (s === 'dev' || VERSION_RE.test(s)) return s;
+  return null;
+}
+
+function hashedClientKey(req) {
+  const fwd = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+  return crypto.createHmac('sha256', mem.salt).update(fwd).digest('base64url').slice(0, 16);
+}
+
+function allowRate(key, limit, now) {
+  if (mem.rates.size > 2000) {
+    for (const [k, v] of mem.rates.entries()) {
+      if (v.resetAt <= now) mem.rates.delete(k);
+    }
+    if (mem.rates.size > 2000) mem.rates.clear();
+  }
+  const cur = mem.rates.get(key);
+  if (!cur || cur.resetAt <= now) {
+    mem.rates.set(key, { resetAt: now + RATE_WINDOW_MS, count: 1 });
+    return true;
+  }
+  if (cur.count >= limit) return false;
+  cur.count++;
+  return true;
 }
 
 function redisConfig() {
@@ -55,26 +95,69 @@ function parseZSetPairs(arr) {
 }
 
 module.exports = async (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  if (req.method === 'GET' || req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(204).end();
+  }
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
   const now = Date.now();
+  const ipKey = hashedClientKey(req);
+  const cfg = redisConfig();
+
+  if (req.method === 'GET') {
+    if (!allowRate(`g:${ipKey}`, MAX_GET_PER_IP, now)) {
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Retry-After', '60');
+      return res.status(429).json({ error: 'Rate limit exceeded' });
+    }
+    res.setHeader('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=30');
+    if (mem.getCache && mem.getCache.expiresAt > now && mem.getCache.persisted === Boolean(cfg)) {
+      return res.status(200).json(mem.getCache.payload);
+    }
+  } else {
+    res.setHeader('Cache-Control', 'no-store');
+    const len = Number(req.headers['content-length'] || 0);
+    if (len > MAX_BODY_BYTES) return res.status(413).json({ ok: false });
+    if (!allowRate(`p:${ipKey}`, MAX_POST_PER_IP, now)) {
+      res.setHeader('Retry-After', '60');
+      return res.status(429).json({ ok: false });
+    }
+  }
+
   const liveCutoff = now - LIVE_WINDOW_MS;
   const dayCutoff = now - DAY_WINDOW_MS;
   const curHour = Math.floor(now / HOUR_MS);
-  const cfg = redisConfig();
 
-  const body = req.method === 'POST'
-    ? (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {}))
-    : {};
+  let body = {};
+  if (req.method === 'POST') {
+    if (typeof req.body === 'string') {
+      if (req.body.length > MAX_BODY_BYTES) return res.status(413).json({ ok: false });
+      try { body = JSON.parse(req.body || '{}'); } catch { return res.status(400).json({ ok: false }); }
+    } else if (req.body && typeof req.body === 'object') {
+      body = req.body;
+    }
+  }
   const id = req.method === 'POST' ? cleanId(body.id) : null;
+  if (req.method === 'POST') {
+    if (!id) return res.status(400).json({ ok: false, persisted: Boolean(cfg) });
+    if (!allowRate(`id:${id}`, MAX_POST_PER_ID, now)) {
+      res.setHeader('Retry-After', '60');
+      return res.status(429).json({ ok: false, persisted: Boolean(cfg) });
+    }
+  }
   const playing = body.state === 'playing';
-  const backend = cleanTag(body.backend, new Set(['vulkan', 'gl'])) || 'vulkan';
-  const chip = cleanTag(body.chip, null, 20);
-  const version = cleanTag(body.version, null, 20);
+  const backend = body.backend === 'gl' ? 'gl' : 'vulkan';
+  const chip = cleanChip(body.chip);
+  const version = cleanVersion(body.version);
 
   try {
     if (cfg) {
@@ -145,7 +228,9 @@ module.exports = async (req, res) => {
         }
       }
 
-      return res.status(200).json({ online, playing: playingCnt, dau, persisted: true, history, backends, chips, versions });
+      const payload = { online, playing: playingCnt, dau, persisted: true, history, backends, chips, versions };
+      mem.getCache = { expiresAt: now + GET_CACHE_MS, payload, persisted: true };
+      return res.status(200).json(payload);
     }
 
     // In-memory fallback (dev / unlinked Redis)
@@ -185,7 +270,9 @@ module.exports = async (req, res) => {
       history.push({ hour: h * HOUR_MS, online: b ? b.online.size : 0, playing: b ? b.playing.size : 0 });
     }
 
-    return res.status(200).json({ online, playing: playingCnt, dau, persisted: false, history, backends, chips, versions });
+    const payload = { online, playing: playingCnt, dau, persisted: false, history, backends, chips, versions };
+    mem.getCache = { expiresAt: now + GET_CACHE_MS, payload, persisted: false };
+    return res.status(200).json(payload);
   } catch (err) {
     return res.status(200).json({ online: 0, playing: 0, dau: 0, persisted: false, history: [], backends: { vulkan: 0, gl: 0 }, chips: {}, versions: {} });
   }

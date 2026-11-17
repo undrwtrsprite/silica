@@ -465,145 +465,247 @@
     else whileVisible(isle, v => { vis = v; if (v && !raf) raf = requestAnimationFrame(loop); });
   }
 
-  // ---------- features hero backdrop: Bayer-dithered pixel aurora, cratered moon & cross stars ----------
-  const featBg = $('canvas.feat-bg');
-  if (featBg) {
-    const ctx = featBg.getContext('2d', { alpha: false });
-    const PX = 4; // crisp 4x4 screen pixels per art pixel
-    const BAYER = [
-      [0, 8, 2, 10],
-      [12, 4, 14, 6],
-      [3, 11, 1, 9],
-      [15, 7, 13, 5]
-    ];
-    let pw = 0, ph = 0, img = null, buf = null, raf = 0, vis = false, t0 = 0, last = 0, mx = 0, tmx = 0;
-    let stars = [];
-
+  // ---------- shared Bayer-dithered pixel backdrop helper (with smooth fade-in) ----------
+  const BAYER = [
+    [0, 8, 2, 10],
+    [12, 4, 14, 6],
+    [3, 11, 1, 9],
+    [15, 7, 13, 5]
+  ];
+  const mountDither = (canvas, drawFrame) => {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const PX = 4;
+    let pw = 0, ph = 0, img = null, buf = null, raf = 0, vis = false, t0 = 0, last = 0, mx = 0, tmx = 0, ready = false;
     const size = () => {
-      const r = featBg.getBoundingClientRect();
+      const r = canvas.getBoundingClientRect();
       pw = Math.max(120, Math.round(r.width / PX));
       ph = Math.max(80, Math.round(r.height / PX));
-      featBg.width = pw;
-      featBg.height = ph;
+      canvas.width = pw;
+      canvas.height = ph;
       img = ctx.createImageData(pw, ph);
       buf = img.data;
-      stars = Array.from({ length: 42 }, (_, i) => ({
-        x: Math.floor(hash(i * 17.3) * pw),
-        y: Math.floor(hash(i * 9.1) * ph * .58),
-        cross: i % 5 === 0,
-        ph: hash(i * 5.7) * 6.28,
-        sp: .8 + hash(i * 3.1) * 1.6
-      }));
     };
-
-    const draw = now => {
+    const render = now => {
       const t = (still ? 3200 : now - t0) * .001;
       mx += (tmx - mx) * .06;
-      const moonCx = Math.round(pw * .92 - mx * 3);
-      const moonCy = Math.round(ph * .18);
-      const moonR = Math.max(4, Math.round(Math.min(pw, ph) * .034));
-
-      for (let y = 0; y < ph; y++) {
-        const ny = y / ph;
-        const bRow = BAYER[y & 3];
-        // base sky gradient (#0a0d11 -> #0c171b -> #0a0d11 at bottom)
-        const skyV = Math.max(0, 1 - Math.abs(ny - .55) * 1.9);
-        const fadeOut = ny > .84 ? Math.max(0, 1 - (ny - .84) / .16) : 1;
-
-        for (let x = 0; x < pw; x++) {
-          const nx = x / pw;
-          const b = (bRow[x & 3] + .5) / 16;
-          const textDim = .48 + .52 * Math.min(1, nx * 1.15);
-
-          // two rolling aurora wave ribbons across the mid/lower hero
-          const w1 = .60 + .11 * Math.sin(nx * 5.2 + t * .42 + mx * .8) + .05 * Math.cos(nx * 10.5 - t * .3);
-          const w2 = .70 + .09 * Math.cos(nx * 4.4 - t * .34 - mx * .6) + .04 * Math.sin(nx * 9.0 + t * .25);
-          const d1 = Math.exp(-Math.pow((ny - w1) / .14, 2));
-          const d2 = Math.exp(-Math.pow((ny - w2) / .12, 2));
-
-          // subtle diagonal shimmer curtain along the waves
-          const curtain = .7 + .3 * Math.sin(nx * 18 - t * .7 + ny * 6);
-          const aurora1 = d1 * curtain * (.65 + .35 * Math.sin(nx * 3.1 + t * .2)) * textDim;
-          const aurora2 = d2 * (.6 + .4 * Math.cos(nx * 4.5 - t * .25)) * textDim;
-
-          // moon halo
-          const mdx = x - moonCx, mdy = y - moonCy;
-          const mDist = Math.hypot(mdx, mdy);
-          const halo = Math.exp(-mDist / (moonR * 3.2)) * .34;
-
-          // ordered dither quantize for crisp retro banding
-          const a1 = aurora1 * fadeOut;
-          const a2 = aurora2 * fadeOut;
-          const band1 = Math.min(1, Math.floor(a1 * 5 + b) / 5);
-          const band2 = Math.min(1, Math.floor(a2 * 4 + b) / 4);
-          const hBand = Math.min(1, Math.floor((halo + skyV * .14) * 4 + b) / 4);
-
-          // Silica palette: deep slate #0a0d11 + emerald #7bc96f + teal #2e7a66 + warm amber #e2a94b accent
-          let r = 10 + hBand * 16 + band1 * 68 + band2 * 96;
-          let g = 13 + hBand * 32 + band1 * 134 + band2 * 74;
-          let bl = 17 + hBand * 34 + band1 * 80 + band2 * 36;
-
-          // square cratered pixel moon
-          if (Math.abs(mdx) <= moonR && Math.abs(mdy) <= moonR) {
-            const c1 = (mdx === -2 && mdy === -1) || (mdx === 2 && mdy === 2) || (mdx === 1 && mdy === -2);
-            const c2 = (mdx === -1 && mdy === 2) || (mdx === 0 && mdy === 0);
-            if (c1) { r = 165; g = 192; bl = 160; }
-            else if (c2) { r = 186; g = 212; bl = 178; }
-            else { r = 226; g = 244; bl = 216; }
-          }
-
-          const idx = (y * pw + x) * 4;
-          buf[idx] = Math.min(255, r | 0);
-          buf[idx + 1] = Math.min(255, g | 0);
-          buf[idx + 2] = Math.min(255, bl | 0);
-          buf[idx + 3] = 255;
-        }
-      }
-
-      // twinkling single-pixel & 4-point cross stars
-      const put = (sx, sy, br) => {
-        if (sx < 0 || sx >= pw || sy < 0 || sy >= ph) return;
-        const idx = (sy * pw + sx) * 4;
-        buf[idx] = Math.min(255, buf[idx] + (185 * br) | 0);
-        buf[idx + 1] = Math.min(255, buf[idx + 1] + (225 * br) | 0);
-        buf[idx + 2] = Math.min(255, buf[idx + 2] + (205 * br) | 0);
-      };
-      stars.forEach(s => {
-        const tw = still ? .85 : .25 + .75 * Math.pow(.5 + .5 * Math.sin(t * s.sp + s.ph), 2);
-        const sx = (s.x + Math.round(mx * 2) + pw) % pw;
-        put(sx, s.y, tw);
-        if (s.cross && tw > .45) {
-          put(sx - 1, s.y, tw * .55); put(sx + 1, s.y, tw * .55);
-          put(sx, s.y - 1, tw * .55); put(sx, s.y + 1, tw * .55);
-        }
-      });
-
+      drawFrame(buf, pw, ph, t, mx);
       ctx.putImageData(img, 0, 0);
+      if (!ready) {
+        ready = true;
+        requestAnimationFrame(() => canvas.setAttribute('data-ready', ''));
+      }
     };
-
     const loop = now => {
       if (!vis) { raf = 0; return; }
-      if (now - last > 33) { last = now; draw(now); }
+      if (now - last > 33) { last = now; render(now); }
       raf = requestAnimationFrame(loop);
     };
-
     size();
     if (still) {
-      draw(0);
-      addEventListener('resize', () => { size(); draw(0); });
+      render(0);
+      addEventListener('resize', () => { size(); render(0); });
     } else {
       addEventListener('resize', size);
-      featBg.parentElement.addEventListener('pointermove', e => {
-        const r = featBg.getBoundingClientRect();
+      canvas.parentElement.addEventListener('pointermove', e => {
+        const r = canvas.getBoundingClientRect();
         tmx = ((e.clientX - r.left) / r.width - .5) * 2;
       }, { passive: true });
-      whileVisible(featBg, v => {
+      whileVisible(canvas, v => {
         vis = v;
         if (v && !t0) t0 = performance.now();
         if (v && !raf) raf = requestAnimationFrame(loop);
       });
     }
-  }
+  };
+
+  // ---------- features hero backdrop: Bayer-dithered pixel aurora, cratered moon & cross stars ----------
+  const featStars = Array.from({ length: 42 }, (_, i) => ({
+    x: hash(i * 17.3), y: hash(i * 9.1) * .58, cross: i % 5 === 0, ph: hash(i * 5.7) * 6.28, sp: .8 + hash(i * 3.1) * 1.6
+  }));
+  mountDither($('canvas.feat-bg'), (buf, pw, ph, t, mx) => {
+    const moonCx = Math.round(pw * .92 - mx * 3);
+    const moonCy = Math.round(ph * .18);
+    const moonR = Math.max(4, Math.round(Math.min(pw, ph) * .034));
+
+    for (let y = 0; y < ph; y++) {
+      const ny = y / ph;
+      const bRow = BAYER[y & 3];
+      const skyV = Math.max(0, 1 - Math.abs(ny - .55) * 1.9);
+      const fadeOut = ny > .84 ? Math.max(0, 1 - (ny - .84) / .16) : 1;
+
+      for (let x = 0; x < pw; x++) {
+        const nx = x / pw;
+        const b = (bRow[x & 3] + .5) / 16;
+        const textDim = .48 + .52 * Math.min(1, nx * 1.15);
+
+        const w1 = .60 + .11 * Math.sin(nx * 5.2 + t * .42 + mx * .8) + .05 * Math.cos(nx * 10.5 - t * .3);
+        const w2 = .70 + .09 * Math.cos(nx * 4.4 - t * .34 - mx * .6) + .04 * Math.sin(nx * 9.0 + t * .25);
+        const d1 = Math.exp(-Math.pow((ny - w1) / .14, 2));
+        const d2 = Math.exp(-Math.pow((ny - w2) / .12, 2));
+        const curtain = .7 + .3 * Math.sin(nx * 18 - t * .7 + ny * 6);
+        const aurora1 = d1 * curtain * (.65 + .35 * Math.sin(nx * 3.1 + t * .2)) * textDim;
+        const aurora2 = d2 * (.6 + .4 * Math.cos(nx * 4.5 - t * .25)) * textDim;
+
+        const mdx = x - moonCx, mdy = y - moonCy;
+        const mDist = Math.hypot(mdx, mdy);
+        const halo = Math.exp(-mDist / (moonR * 3.2)) * .34;
+
+        const band1 = Math.min(1, Math.floor(aurora1 * fadeOut * 5 + b) / 5);
+        const band2 = Math.min(1, Math.floor(aurora2 * fadeOut * 4 + b) / 4);
+        const hBand = Math.min(1, Math.floor((halo + skyV * .14) * 4 + b) / 4);
+
+        let r = 10 + hBand * 16 + band1 * 68 + band2 * 96;
+        let g = 13 + hBand * 32 + band1 * 134 + band2 * 74;
+        let bl = 17 + hBand * 34 + band1 * 80 + band2 * 36;
+
+        if (Math.abs(mdx) <= moonR && Math.abs(mdy) <= moonR) {
+          const c1 = (mdx === -2 && mdy === -1) || (mdx === 2 && mdy === 2) || (mdx === 1 && mdy === -2);
+          const c2 = (mdx === -1 && mdy === 2) || (mdx === 0 && mdy === 0);
+          if (c1) { r = 165; g = 192; bl = 160; }
+          else if (c2) { r = 186; g = 212; bl = 178; }
+          else { r = 226; g = 244; bl = 216; }
+        }
+
+        const idx = (y * pw + x) * 4;
+        buf[idx] = Math.min(255, r | 0);
+        buf[idx + 1] = Math.min(255, g | 0);
+        buf[idx + 2] = Math.min(255, bl | 0);
+        buf[idx + 3] = 255;
+      }
+    }
+
+    const put = (sx, sy, br) => {
+      if (sx < 0 || sx >= pw || sy < 0 || sy >= ph) return;
+      const idx = (sy * pw + sx) * 4;
+      buf[idx] = Math.min(255, buf[idx] + (185 * br) | 0);
+      buf[idx + 1] = Math.min(255, buf[idx + 1] + (225 * br) | 0);
+      buf[idx + 2] = Math.min(255, buf[idx + 2] + (205 * br) | 0);
+    };
+    featStars.forEach(s => {
+      const tw = still ? .85 : .25 + .75 * Math.pow(.5 + .5 * Math.sin(t * s.sp + s.ph), 2);
+      const sx = (Math.floor(s.x * pw) + Math.round(mx * 2) + pw) % pw;
+      const sy = Math.floor(s.y * ph);
+      put(sx, sy, tw);
+      if (s.cross && tw > .45) {
+        put(sx - 1, sy, tw * .55); put(sx + 1, sy, tw * .55);
+        put(sx, sy - 1, tw * .55); put(sx, sy + 1, tw * .55);
+      }
+    });
+  });
+
+  // ---------- performance hero backdrop: dithered chunk sonar rings & frame-speed pixel streams ----------
+  const perfStreaks = Array.from({ length: 18 }, (_, i) => ({
+    y: .14 + hash(i * 7.3) * .72, sp: .28 + hash(i * 4.1) * .45, len: .08 + hash(i * 11.7) * .14, ph: hash(i * 3.9)
+  }));
+  mountDither($('canvas.perf-bg'), (buf, pw, ph, t, mx) => {
+    const cx = pw * (.72 - mx * .03), cy = ph * .52;
+    const sweepAngle = t * .65;
+    const maxR = Math.hypot(pw * .65, ph * .75);
+
+    for (let y = 0; y < ph; y++) {
+      const ny = y / ph;
+      const bRow = BAYER[y & 3];
+      const fadeOut = ny > .86 ? Math.max(0, 1 - (ny - .86) / .14) : 1;
+
+      for (let x = 0; x < pw; x++) {
+        const nx = x / pw;
+        const b = (bRow[x & 3] + .5) / 16;
+        const leftDim = .45 + .55 * Math.min(1, nx * 1.2);
+
+        const dx = x - cx, dy = y - cy;
+        const dist = Math.hypot(dx, dy);
+        const nd = dist / maxR;
+
+        // expanding concentric sonar pulses + soft sweeping radar sector
+        const pulse = Math.pow(Math.max(0, Math.sin(nd * 16 - t * 2.2)), 4) * Math.exp(-nd * 2.1);
+        const ang = Math.atan2(dy, dx);
+        const diff = ((ang - sweepAngle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+        const radar = Math.exp(-diff * 2.4) * Math.exp(-nd * 1.7) * .55;
+
+        // subtle perspective chunk grid lines on lower half
+        const gridLine = (x % 16 === 0 || y % 16 === 0) ? .08 * Math.exp(-nd * 1.6) : 0;
+
+        const val = (pulse * .65 + radar + gridLine + Math.exp(-nd * 2.6) * .28) * leftDim * fadeOut;
+        const q = Math.min(1, Math.floor(val * 5 + b) / 5);
+        const qWarm = Math.min(1, Math.floor(pulse * .5 * leftDim * fadeOut * 4 + b) / 4);
+
+        const idx = (y * pw + x) * 4;
+        buf[idx] = Math.min(255, (10 + q * 46 + qWarm * 75) | 0);
+        buf[idx + 1] = Math.min(255, (13 + q * 140 + qWarm * 54) | 0);
+        buf[idx + 2] = Math.min(255, (17 + q * 118 + qWarm * 18) | 0);
+        buf[idx + 3] = 255;
+      }
+    }
+
+    // horizontal high-speed frame-stream pixel trails
+    perfStreaks.forEach(s => {
+      const sy = Math.floor(s.y * ph);
+      if (sy < 0 || sy >= ph) return;
+      const head = ((s.ph + (still ? 0 : t * s.sp)) % 1.3) - .15;
+      const x0 = Math.floor((head - s.len) * pw), x1 = Math.floor(head * pw);
+      for (let x = Math.max(0, x0); x <= Math.min(pw - 1, x1); x++) {
+        const k = (x - x0) / Math.max(1, x1 - x0);
+        const dim = .28 + .72 * Math.min(1, (x / pw) * 1.15);
+        const idx = (sy * pw + x) * 4;
+        buf[idx] = Math.min(255, buf[idx] + (48 * k * k * dim) | 0);
+        buf[idx + 1] = Math.min(255, buf[idx + 1] + (120 * k * k * dim) | 0);
+        buf[idx + 2] = Math.min(255, buf[idx + 2] + (88 * k * k * dim) | 0);
+      }
+    });
+  });
+
+  // ---------- download hero backdrop: centered dithered beacon beam & descending pixel starlight ----------
+  const dlMotes = Array.from({ length: 34 }, (_, i) => ({
+    x: .12 + hash(i * 13.1) * .76, y: hash(i * 5.3), sp: .045 + hash(i * 8.9) * .075, cross: i % 6 === 0, ph: hash(i * 2.7) * 6.28
+  }));
+  mountDither($('canvas.dl-bg'), (buf, pw, ph, t, mx) => {
+    const cx = pw * (.5 - mx * .025);
+    for (let y = 0; y < ph; y++) {
+      const ny = y / ph;
+      const bRow = BAYER[y & 3];
+      const fadeOut = ny > .82 ? Math.max(0, 1 - (ny - .82) / .18) : 1;
+
+      for (let x = 0; x < pw; x++) {
+        const nx = x / pw;
+        const b = (bRow[x & 3] + .5) / 16;
+
+        // centered vertical beacon column + soft horizon arch below heading
+        const dx = Math.abs(x - cx) / (pw * .16);
+        const beam = Math.exp(-dx * dx * 1.4) * (.38 + .62 * ny) * (.75 + .25 * Math.sin(ny * 8 + t * 1.6));
+        const arch = Math.exp(-Math.pow((nx - .5) / .38, 2)) * Math.exp(-Math.pow((ny - .78) / .24, 2)) * .75;
+
+        const v1 = (beam * .62 + arch * .55) * fadeOut;
+        const v2 = (beam * .42 * Math.pow(ny, 1.4)) * fadeOut;
+        const q1 = Math.min(1, Math.floor(v1 * 5 + b) / 5);
+        const q2 = Math.min(1, Math.floor(v2 * 4 + b) / 4);
+
+        const idx = (y * pw + x) * 4;
+        buf[idx] = Math.min(255, (10 + q1 * 62 + q2 * 115) | 0);
+        buf[idx + 1] = Math.min(255, (13 + q1 * 138 + q2 * 88) | 0);
+        buf[idx + 2] = Math.min(255, (17 + q1 * 88 + q2 * 38) | 0);
+        buf[idx + 3] = 255;
+      }
+    }
+
+    const put = (sx, sy, br) => {
+      if (sx < 0 || sx >= pw || sy < 0 || sy >= ph) return;
+      const idx = (sy * pw + sx) * 4;
+      buf[idx] = Math.min(255, buf[idx] + (175 * br) | 0);
+      buf[idx + 1] = Math.min(255, buf[idx + 1] + (230 * br) | 0);
+      buf[idx + 2] = Math.min(255, buf[idx + 2] + (165 * br) | 0);
+    };
+    dlMotes.forEach(m => {
+      const my = (m.y + (still ? 0 : t * m.sp)) % 1;
+      const sx = Math.floor((m.x + mx * .01) * pw), sy = Math.floor(my * ph);
+      const tw = (.35 + .65 * Math.sin(t * 2 + m.ph) ** 2) * (1 - Math.max(0, my - .82) / .18);
+      put(sx, sy, tw);
+      if (m.cross && tw > .45) {
+        put(sx - 1, sy, tw * .5); put(sx + 1, sy, tw * .5);
+        put(sx, sy - 1, tw * .5); put(sx, sy + 1, tw * .5);
+      }
+    });
+  });
 
   // ---------- render distance map (performance) ----------
   const map = $('#rdmap');

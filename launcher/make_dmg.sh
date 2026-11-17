@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Packs Silica.app into a drag-to-Applications disk image: Silica-<version>.dmg.
+# Release note rule: always publish GitHub releases with a concise tagline ("Silica X.Y.Z — ...") and short technical bullets.
 # Run ./build_app.sh first. The app is ad-hoc signed here, not notarized: that needs an Apple Developer ID,
 # so macOS asks downloaders to confirm the first open (the installer window says how).
 set -euo pipefail

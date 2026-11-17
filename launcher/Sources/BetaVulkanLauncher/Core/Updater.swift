@@ -24,9 +24,18 @@ struct AppVersion: Comparable, Equatable, CustomStringConvertible {
     static func == (a: AppVersion, b: AppVersion) -> Bool { !(a < b) && !(b < a) }
 }
 
+/// Metadata for the newest published GitHub release (used to display release tagline & notes in Settings even when up to date).
+struct LatestRelease: Equatable {
+    let version: AppVersion
+    let tagline: String
+    let notes: String
+    let pageURL: URL
+}
+
 /// A newer release that can be installed: the disk image and the signature file that goes with it.
 struct UpdateInfo: Equatable {
     let version: AppVersion
+    let tagline: String
     let notes: String
     let dmgURL: URL
     let signatureURL: URL
@@ -35,6 +44,7 @@ struct UpdateInfo: Equatable {
 
 enum UpdateConfig {
     /// Where releases are published. Only the latest published release (never a draft or pre-release) is looked at.
+    /// Convention: all published GitHub releases must carry a release tagline (`name`) and concise changelog notes (`body`).
     static let latestReleaseURL = URL(string: "https://api.github.com/repos/undrwtrsprite/silica/releases/latest")!
     /// Updates must carry an Ed25519 signature made with the matching private key, which is kept off this repository.
     /// Whoever controls the GitHub repository cannot push a build the app will accept without that key.
@@ -42,12 +52,22 @@ enum UpdateConfig {
 }
 
 enum UpdateParsing {
-    /// Reads GitHub's "latest release" reply. Returns nil when it is not newer than `current`, is a draft or pre-release, or lacks a disk image and signature.
-    static func newerRelease(from data: Data, than current: AppVersion) -> UpdateInfo? {
+    /// Parses the newest published GitHub release's version, tagline (`name`), and notes (`body`). Returns nil for drafts/pre-releases.
+    static func latestRelease(from data: Data) -> LatestRelease? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               root["draft"] as? Bool != true, root["prerelease"] as? Bool != true,
-              let tag = root["tag_name"] as? String, let version = AppVersion(tag), version > current,
-              let page = (root["html_url"] as? String).flatMap(URL.init(string:)),
+              let tag = root["tag_name"] as? String, let version = AppVersion(tag),
+              let page = (root["html_url"] as? String).flatMap(URL.init(string:)) else { return nil }
+        let rawName = (root["name"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let tagline = rawName.isEmpty ? "Silica \(version)" : rawName
+        let notes = (root["body"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return LatestRelease(version: version, tagline: tagline, notes: notes, pageURL: page)
+    }
+
+    /// Reads GitHub's "latest release" reply. Returns nil when it is not newer than `current`, is a draft or pre-release, or lacks a disk image and signature.
+    static func newerRelease(from data: Data, than current: AppVersion) -> UpdateInfo? {
+        guard let latest = latestRelease(from: data), latest.version > current,
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let assets = root["assets"] as? [[String: Any]] else { return nil }
         func asset(_ suffix: String) -> URL? {
             assets.first { ($0["name"] as? String)?.hasSuffix(suffix) == true }
@@ -55,7 +75,7 @@ enum UpdateParsing {
         }
         guard let dmg = asset(".dmg"), let sig = asset(".dmg.sig"),
               dmg.host == "github.com", sig.host == "github.com" else { return nil }
-        return UpdateInfo(version: version, notes: root["body"] as? String ?? "", dmgURL: dmg, signatureURL: sig, pageURL: page)
+        return UpdateInfo(version: latest.version, tagline: latest.tagline, notes: latest.notes, dmgURL: dmg, signatureURL: sig, pageURL: latest.pageURL)
     }
 }
 
@@ -85,6 +105,7 @@ enum UpdateStatus: Equatable {
 @MainActor
 final class UpdateManager: ObservableObject {
     @Published private(set) var status: UpdateStatus = .idle
+    @Published private(set) var latestRelease: LatestRelease?
     /// Hidden for this run after the person dismisses the banner.
     @Published var bannerDismissed = false
     /// Set when installing an update failed, so the banner can say why. A failed check only shows in Settings.
@@ -113,6 +134,9 @@ final class UpdateManager: ObservableObject {
             guard (response as? HTTPURLResponse)?.statusCode == 200 else {
                 status = quiet ? .idle : .failed("GitHub did not answer. Try again later.")
                 return
+            }
+            if let latest = UpdateParsing.latestRelease(from: data) {
+                latestRelease = latest
             }
             if let info = UpdateParsing.newerRelease(from: data, than: Self.currentVersion) {
                 status = .available(info)

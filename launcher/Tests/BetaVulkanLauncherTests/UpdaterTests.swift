@@ -12,19 +12,29 @@ final class UpdaterTests: XCTestCase {
         XCTAssertNil(AppVersion(""))
     }
 
-    private func release(tag: String = "v0.2.0", draft: Bool = false, prerelease: Bool = false, dmg: String? = "https://github.com/undrwtrsprite/silica/releases/download/v0.2.0/Silica-0.2.0.dmg", sig: String? = "https://github.com/undrwtrsprite/silica/releases/download/v0.2.0/Silica-0.2.0.dmg.sig") -> Data {
+    private func release(tag: String = "v0.2.0", name: String = "Silica 0.2.0 — Clean UI & Instances", draft: Bool = false, prerelease: Bool = false, dmg: String? = "https://github.com/undrwtrsprite/silica/releases/download/v0.2.0/Silica-0.2.0.dmg", sig: String? = "https://github.com/undrwtrsprite/silica/releases/download/v0.2.0/Silica-0.2.0.dmg.sig") -> Data {
         var assets: [[String: Any]] = []
         if let dmg { assets.append(["name": "Silica-0.2.0.dmg", "browser_download_url": dmg]) }
         if let sig { assets.append(["name": "Silica-0.2.0.dmg.sig", "browser_download_url": sig]) }
-        let json: [String: Any] = ["tag_name": tag, "draft": draft, "prerelease": prerelease, "body": "Notes", "html_url": "https://github.com/undrwtrsprite/silica/releases/tag/\(tag)", "assets": assets]
+        let json: [String: Any] = ["tag_name": tag, "name": name, "draft": draft, "prerelease": prerelease, "body": "Notes", "html_url": "https://github.com/undrwtrsprite/silica/releases/tag/\(tag)", "assets": assets]
         return try! JSONSerialization.data(withJSONObject: json)
     }
 
     func testNewerReleaseIsOffered() {
         let info = UpdateParsing.newerRelease(from: release(), than: AppVersion("0.1.1")!)
         XCTAssertEqual(info?.version, AppVersion("0.2.0"))
+        XCTAssertEqual(info?.tagline, "Silica 0.2.0 — Clean UI & Instances")
         XCTAssertEqual(info?.dmgURL.lastPathComponent, "Silica-0.2.0.dmg")
         XCTAssertEqual(info?.signatureURL.lastPathComponent, "Silica-0.2.0.dmg.sig")
+    }
+
+    func testLatestReleaseParsesTaglineAndNotes() {
+        let latest = UpdateParsing.latestRelease(from: release())
+        XCTAssertEqual(latest?.version, AppVersion("0.2.0"))
+        XCTAssertEqual(latest?.tagline, "Silica 0.2.0 — Clean UI & Instances")
+        XCTAssertEqual(latest?.notes, "Notes")
+        XCTAssertNil(UpdateParsing.latestRelease(from: release(draft: true)))
+        XCTAssertNil(UpdateParsing.latestRelease(from: release(prerelease: true)))
     }
 
     func testSameOlderDraftPrereleaseAndUnsignedReleasesAreNotOffered() {

@@ -129,7 +129,7 @@ struct SettingsView: View {
                     Text(updateLine).font(.system(size: 12.5)).foregroundStyle(.secondary)
                     Spacer()
                     if let info = updates.available {
-                        Button("Update to \(info.version)") { Task { await updates.install(info) } }
+                        Button("Update to \(info.version.description)") { Task { await updates.install(info) } }
                             .buttonStyle(PrimaryButtonStyle())
                             .disabled(runner.isRunning || updates.isBusy)
                     } else {
@@ -140,6 +140,29 @@ struct SettingsView: View {
                         .buttonStyle(SecondaryButtonStyle())
                         .disabled(updates.isBusy)
                     }
+                }
+
+                if let release = updates.latestRelease {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(release.tagline)
+                                .font(.system(size: 13, weight: .semibold))
+                            Spacer()
+                            Link("View on GitHub", destination: release.pageURL)
+                                .font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(Theme.accent)
+                        }
+                        if !release.notes.isEmpty {
+                            Text(release.notes)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .surface(radius: 12, fill: Theme.cardHigh)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {

@@ -152,7 +152,7 @@ private struct UpdateToast: View {
     var body: some View {
         Group {
             if let info = updates.available, !updates.bannerDismissed {
-                toast(title: "Silica \(info.version) is available", detail: runner.isRunning ? "Close the game to update." : "Installs in a moment and restarts.") {
+                toast(title: info.tagline, detail: runner.isRunning ? "Close the game to update." : "Installs in a moment and restarts.") {
                     Button("Later") { updates.bannerDismissed = true }.buttonStyle(SecondaryButtonStyle())
                     Button("Update") { Task { await updates.install(info) } }.buttonStyle(PrimaryButtonStyle()).disabled(runner.isRunning)
                 }

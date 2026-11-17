@@ -1,6 +1,15 @@
 # Changelog
 
-Every migrated or rewritten class is listed here with where it came from.
+> **Release note rule:** Every Silica release and update must include a concise **tagline** (e.g. `Silica 0.2.0 — Minimal UI, Bayer Dither & Instances`) and short changelog bullets that stay understandable while keeping the technical detail clear.
+
+Every migrated or rewritten class is listed below alongside release history.
+
+## v0.2.0 — Minimal UI, Bayer Dither & Instances
+
+- **Ground-up launcher redesign:** Replaced the sidebar layout with a lighter website-matched top-bar workspace (`#11151b` / `#191f27`), subtle 4×4 Bayer-dithered motion (`DitherAurora`, `DitherHorizonStage`), and deterministic world seed previews (`WorldDitherMap`).
+- **Instance system:** Replaced the Jars tab with `InstanceStore` for isolated Beta 1.7.3 profiles, separate save directories, per-instance Vulkan/OpenGL and fullscreen overrides, duplication, and auto-migration of existing custom jars.
+- **GitHub release notes in Settings:** `UpdateManager` now parses the newest GitHub release tagline and changelog (`LatestRelease`) into About Silica and update banners.
+- **Anonymous live telemetry:** Launcher heartbeats report random session ID, renderer, Apple Silicon generation, macOS version, and build tag to `/api/players`.
 
 ## Unreleased
 

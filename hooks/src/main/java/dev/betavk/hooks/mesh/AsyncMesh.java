@@ -29,12 +29,12 @@ public final class AsyncMesh {
 
     private static final class State {
         int generation;
-        boolean jobInFlight, pendingRebuild;
+        boolean jobInFlight, pendingRebuild, inDeferred;
         int jobGeneration = -1;
     }
 
     private static final WeakHashMap<WorldRenderer, State> states = new WeakHashMap<>();
-    private static final ArrayList<WorldRenderer> deferred = new ArrayList<>();
+    private static final java.util.ArrayDeque<WorldRenderer> deferred = new java.util.ArrayDeque<>();
     private static long budgetEnd;
     private static int farCalls;
     private static boolean syncFallback;   // the next updateRenderer is the fallback after a failed job: it must not be sent to a worker again
@@ -51,9 +51,10 @@ public final class AsyncMesh {
         budgetEnd = System.nanoTime() + 2_000_000L;
         farCalls = 0;
         // sections that did not fit last frame's time budget go first
-        for (int i = 0; i < deferred.size() && System.nanoTime() < budgetEnd; ) {
-            WorldRenderer w = deferred.remove(i);
+        while (!deferred.isEmpty() && System.nanoTime() < budgetEnd) {
+            WorldRenderer w = deferred.pollFirst();
             State st = states.get(w);
+            if (st != null) st.inDeferred = false;
             if (w.worldObj == null || st == null) continue;
             if (st.jobInFlight && st.jobGeneration == st.generation) {
                 st.pendingRebuild = true;
@@ -73,18 +74,121 @@ public final class AsyncMesh {
     private static final int[] bestSlot = new int[MAX_FAR_BUDGET];
     private static final double[] bestKey = new double[MAX_FAR_BUDGET];
     private static final ArrayList<WorldRenderer> nearWr = new ArrayList<>();
+    @SuppressWarnings("unchecked")
+    private static final ArrayList<WorldRenderer>[] dirtyBuckets = new ArrayList[17];
+    static {
+        for (int i = 0; i < dirtyBuckets.length; i++) dirtyBuckets[i] = new ArrayList<>();
+    }
+    private static List<WorldRenderer> lastDirtyList;
+    private static long lastSortNs;
+    private static int lastDirtySize;
+    private static double sortX, sortY, sortZ;
 
-    /** replaceBody of RenderGlobal.updateRenderers: single-pass O(n) selection & in-place compaction without per-frame RenderSorter/ArrayList/Arrays.sort churn. */
+    private static void rebuildNearbyGrid(RenderGlobal rg, double vx, double vy, double vz) {
+        WorldRenderer[] wrs = rg.worldRenderers;
+        int W = rg.renderChunksWide, T = rg.renderChunksTall, D = rg.renderChunksDeep;
+        if (wrs == null || W <= 0 || T <= 0 || D <= 0) return;
+        int scx = net.minecraft.src.MathHelper.floor_double(vx) >> 4;
+        int scy = net.minecraft.src.MathHelper.floor_double(vy) >> 4;
+        int scz = net.minecraft.src.MathHelper.floor_double(vz) >> 4;
+        for (int dz = -1; dz <= 1; dz++) {
+            int gz = Math.floorMod(scz + dz, D);
+            for (int dy = -1; dy <= 1; dy++) {
+                int cy = scy + dy;
+                if (cy < 0 || cy >= T) continue;
+                for (int dx = -1; dx <= 1; dx++) {
+                    WorldRenderer w = wrs[(gz * T + cy) * W + Math.floorMod(scx + dx, W)];
+                    if (w.needsUpdate) {
+                        double ddx = w.posXPlus - vx, ddy = w.posYPlus - vy, ddz = w.posZPlus - vz;
+                        if (ddx * ddx + ddy * ddy + ddz * ddz <= 256.0) {
+                            w.updateRenderer();
+                            w.needsUpdate = false;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /** replaceBody of RenderGlobal.updateRenderers: periodic-sort + O(budget) tail-pop for large dirty queues, O(n) single-pass when small. */
     @SuppressWarnings("unchecked")
     public static boolean updateRenderers(RenderGlobal rg, EntityLiving viewer, boolean limit) {
         frameStart(rg, viewer, limit);
         List<WorldRenderer> dirty = rg.worldRenderersToUpdate;
         int n = dirty.size();
         if (n == 0) return true;
+        double vx = viewer.posX, vy = viewer.posY, vz = viewer.posZ;
         int budget = Math.max(2, Math.min(MAX_FAR_BUDGET, farBudget(rg)));
+        if (n > 128 && !limit) {
+            rebuildNearbyGrid(rg, vx, vy, vz);
+            long now = System.nanoTime();
+            if (dirty != lastDirtyList || lastSortNs == 0L || now - lastSortNs >= 150_000_000L
+                    || n > lastDirtySize + 512
+                    || Math.abs(vx - sortX) + Math.abs(vy - sortY) + Math.abs(vz - sortZ) > 16.0) {
+                for (ArrayList<WorldRenderer> b : dirtyBuckets) b.clear();
+                for (int i = 0; i < n; i++) {
+                    WorldRenderer w = dirty.get(i);
+                    if (w == null || !w.needsUpdate) continue;
+                    if (!w.isInFrustum) {
+                        dirtyBuckets[0].add(w);
+                    } else {
+                        double dx = w.posXPlus - vx, dy = w.posYPlus - vy, dz = w.posZPlus - vz;
+                        int d2 = (int) Math.min(1_000_000_000.0, dx * dx + dy * dy + dz * dz);
+                        int log = 31 - Integer.numberOfLeadingZeros(Math.max(256, d2));
+                        dirtyBuckets[16 - Math.max(0, Math.min(15, log - 8))].add(w);
+                    }
+                }
+                dirty.clear();
+                for (ArrayList<WorldRenderer> b : dirtyBuckets) {
+                    if (!b.isEmpty()) dirty.addAll(b);
+                }
+                if (dirty.isEmpty()) {
+                    lastDirtyList = dirty;
+                    lastDirtySize = 0;
+                    return true;
+                }
+                sortX = vx; sortY = vy; sortZ = vz;
+                // Sort only the closest <= 256 tail slice exactly; the rest is bucket-ordered in O(N).
+                int total = dirty.size();
+                int tailStart = Math.max(dirtyBuckets[0].size(), total - 256);
+                if (total - tailStart > 1) {
+                    dirty.subList(tailStart, total).sort((a, b) -> {
+                        double dax = a.posXPlus - sortX, day = a.posYPlus - sortY, daz = a.posZPlus - sortZ;
+                        double dbx = b.posXPlus - sortX, dby = b.posYPlus - sortY, dbz = b.posZPlus - sortZ;
+                        int c = Double.compare(dbx * dbx + dby * dby + dbz * dbz, dax * dax + day * day + daz * daz);
+                        return c != 0 ? c : Integer.compare(b.chunkIndex, a.chunkIndex);
+                    });
+                }
+                for (ArrayList<WorldRenderer> b : dirtyBuckets) b.clear();
+                lastSortNs = now;
+                lastDirtyList = dirty;
+                lastDirtySize = total;
+            }
+            int submittedFar = 0;
+            while (!dirty.isEmpty() && submittedFar < budget) {
+                WorldRenderer w = dirty.remove(dirty.size() - 1);
+                if (w == null || !w.needsUpdate) continue;
+                if (!w.isInFrustum && submittedFar > 0) {
+                    dirty.add(w);
+                    break;
+                }
+                double dx = w.posXPlus - vx, dy = w.posYPlus - vy, dz = w.posZPlus - vz;
+                if (dx * dx + dy * dy + dz * dz <= 256.0) {
+                    w.updateRenderer();
+                    w.needsUpdate = false;
+                } else {
+                    updateFar(w);
+                    w.needsUpdate = false;
+                    submittedFar++;
+                }
+            }
+            lastDirtySize = Math.min(lastDirtySize, dirty.size());
+            return dirty.isEmpty();
+        }
+        lastSortNs = 0L;
+        lastDirtyList = dirty;
         int bestCount = 0;
         nearWr.clear();
-        double vx = viewer.posX, vy = viewer.posY, vz = viewer.posZ;
         for (int i = 0; i < n; i++) {
             WorldRenderer w = dirty.get(i);
             if (w == null) continue;
@@ -150,6 +254,11 @@ public final class AsyncMesh {
         return write == 0;
     }
 
+    /** redirectCall of List.contains in RenderGlobal.sortAndRender: skip 15,000-entry O(n) scans while dirty queue is large. */
+    public static boolean alreadyQueued(List<?> dirty, Object wr) {
+        return dirty.size() > 256 || dirty.contains(wr);
+    }
+
     /** redirectCallNth / helper for submitting a far section to MeshPool workers. */
     public static void updateFar(WorldRenderer w) {
         if (!MeshPool.canMesh(w.worldObj)) {
@@ -158,7 +267,10 @@ public final class AsyncMesh {
         }
         if (++farCalls > 1 && System.nanoTime() > budgetEnd) {   // out of per-frame time (a submit may generate chunks synchronously): later
             State st = state(w);
-            if (!deferred.contains(w)) deferred.add(w);
+            if (!st.inDeferred) {
+                st.inDeferred = true;
+                deferred.addLast(w);
+            }
             return;
         }
         State st = state(w);

@@ -19,7 +19,11 @@ public final class SliderButton extends GuiButton {
     }
 
     public SliderButton(int id, int x, int y, float value, Consumer<Float> apply, Supplier<String> label, Runnable onRelease) {
-        super(id, x, y, 150, 20, label.get());
+        this(id, x, y, 150, 20, value, apply, label, onRelease);
+    }
+
+    public SliderButton(int id, int x, int y, int w, int h, float value, Consumer<Float> apply, Supplier<String> label, Runnable onRelease) {
+        super(id, x, y, w, h, label.get());
         this.value = value;
         this.apply = apply;
         this.label = label;
@@ -37,7 +41,7 @@ public final class SliderButton extends GuiButton {
     }
 
     @Override public void mouseDragged(Minecraft mc, int mx, int my) {
-        if (!enabled2) return;
+        if (!enabled || !enabled2) return;
         if (dragging) set(mx);
         dev.betavk.render.Gfx.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
         drawTexturedModalRect(xPosition + (int) (value * (float) (width - 8)), yPosition, 0, 66, 4, 20);

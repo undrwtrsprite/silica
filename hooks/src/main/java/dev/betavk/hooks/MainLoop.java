@@ -62,9 +62,10 @@ public final class MainLoop {
         }
     }
 
-    /** afterFieldSet of EntityRenderer.farPlaneDistance inside setupCameraTransform: match far clip & fog to the chunk slider. */
+    /** afterFieldSet of EntityRenderer.farPlaneDistance inside setupCameraTransform: match far clip & fog to the chunk + LOD sliders. */
     public static void applyFarPlane(net.minecraft.src.EntityRenderer er) {
-        er.farPlaneDistance = Opts.effectiveFarPlane(er.mc.gameSettings);
+        float realFar = Opts.effectiveFarPlane(er.mc.gameSettings);
+        er.farPlaneDistance = dev.betavk.lod.LodEngine.effectiveFarPlane(er.mc, realFar);
     }
 
     /** afterFieldSet / replaceBody of Minecraft.func_28001_B: the paid-account check talked to a login server that no longer exists. */

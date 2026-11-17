@@ -28,7 +28,8 @@ public final class GenPool {
     private GenPool() {
     }
 
-    public static final int WORKERS = Integer.getInteger("betavk.genworkers", 2);
+    public static final int WORKERS = Integer.getInteger("betavk.genworkers",
+            Math.max(2, Math.min(4, Runtime.getRuntime().availableProcessors() / 2)));
 
     private static final class Job {
         final int x, z, priority, epoch;
@@ -53,7 +54,7 @@ public final class GenPool {
     private static boolean started;
     private static int tickCounter;
     private static final List<int[]> OFFSETS = new ArrayList<>();
-    private static final int MAX_RADIUS = 35;
+    private static final int MAX_RADIUS = 38;
     private static final int SQUARE = 12;
     public static final AtomicInteger hits = new AtomicInteger(), waited = new AtomicInteger(), cancelled = new AtomicInteger(), misses = new AtomicInteger();
 
@@ -218,14 +219,16 @@ public final class GenPool {
                 : switch (mc.gameSettings.renderDistance) { case 0 -> 17; case 1 -> 9; case 2 -> 5; default -> 3; };
         int radius = Math.min(MAX_RADIUS, 3 + chunks);   // 3 chunks beyond what the game loads
         int cx = (int) Math.floor(mc.thePlayer.posX) >> 4, cz = (int) Math.floor(mc.thePlayer.posZ) >> 4;
-        if (jobs.size() < 160) {
+        int maxQueue = Math.max(160, radius * 16);
+        int batchLimit = radius > 20 ? 48 : 24;
+        if (jobs.size() < maxQueue) {
             int added = 0;
             for (int[] o : OFFSETS) {
                 int d2 = o[0] * o[0] + o[1] * o[1];
                 if (d2 > 2 * MAX_RADIUS * MAX_RADIUS) break;
                 // the game keeps a SQUARE of about +-10 chunks loaded around the player whatever the render distance, so prefetch the square too
                 if (d2 > radius * radius && Math.max(Math.abs(o[0]), Math.abs(o[1])) > SQUARE) continue;
-                if (enqueue(w, cx + o[0], cz + o[1], d2) && ++added >= 24) break;
+                if (enqueue(w, cx + o[0], cz + o[1], d2) && ++added >= batchLimit) break;
             }
         }
         if (++tickCounter % 40 == 0) {   // drop finished chunks that fell far behind the player

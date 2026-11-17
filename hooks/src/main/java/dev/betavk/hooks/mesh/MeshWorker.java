@@ -61,6 +61,9 @@ public final class MeshWorker extends Thread {
             MeshResult res;
             try {
                 lit = false;
+                if (blocks[Block.leaves.blockID] instanceof net.minecraft.src.BlockLeaves bl) {
+                    bl.setGraphicsLevel(Block.leaves.graphicsLevel);
+                }
                 res = AsyncMesh.buildMesh(job.renderer, job.cache, this, job.generation);
             } catch (Throwable t) {
                 res = new MeshResult(job.renderer, job.generation);

@@ -28,9 +28,12 @@ public final class PatchSet implements dev.betavk.agent.PatchSet {
         r.on(SRC + "MouseHelper").replaceBody("ungrabMouseCursor", "()V", loop, "ungrab");
 
         // field of view, zoom, hand, render distance
+        String lodHooks = "dev/betavk/lod/LodHooks";
         r.on(SRC + "EntityRenderer")
                 .onReturn("getFOVModifier", "(F)F", zoom, "fov")
                 .afterFieldSet("setupCameraTransform", "(FI)V", SRC + "EntityRenderer", "farPlaneDistance", loop, "applyFarPlane")
+                .redirectCall("renderWorld", "(FJ)V", SRC + "RenderGlobal", "sortAndRender", "(L" + SRC + "EntityLiving;ID)I", false, lodHooks, "sortAndRender")
+                .redirectCall("renderWorld", "(FJ)V", SRC + "RenderGlobal", "renderAllRenderLists", "(ID)V", false, lodHooks, "renderAllRenderLists")
                 .atStart("updateCameraAndRender", "(F)V", zoom, "update")
                 .replaceFloat("updateCameraAndRender", "(F)V", 8.0F, 1, zoom, "turnScale")
                 .atStart("func_4135_b", "(FI)V", zoom, "hand");
@@ -49,23 +52,35 @@ public final class PatchSet implements dev.betavk.agent.PatchSet {
         r.on(SRC + "RenderGlobal")
                 .afterFieldSet("loadRenderers", "()V", SRC + "RenderGlobal", "renderChunksDeep", loop, "applyLoadRenderersSize")
                 .atEnd("loadRenderers", "()V", "dev/betavk/hooks/mesh/CaveCull", "onLoadRenderers")
+                .redirectCall("sortAndRender", "(L" + SRC + "EntityLiving;ID)I", "java/util/List", "contains", "(Ljava/lang/Object;)Z", false, am, "alreadyQueued")
                 .replaceBody("clipRenderersByFrustrum", "(L" + SRC + "ICamera;F)V", "dev/betavk/hooks/mesh/CaveCull", "clipAndCull")
-                .replaceBody("updateRenderers", "(L" + SRC + "EntityLiving;Z)Z", am, "updateRenderers");
+                .replaceBody("renderSortedRenderers", "(IIID)I", "dev/betavk/hooks/mesh/CaveCull", "renderSortedRenderers")
+                .replaceBody("updateRenderers", "(L" + SRC + "EntityLiving;Z)Z", am, "updateRenderers")
+                .atEnd("markBlockAndNeighborsNeedsUpdate", "(III)V", lodHooks, "onBlockMarked");
         r.on(SRC + "ClippingHelper")
                 .replaceBody("isBoxInFrustum", "(DDDDDD)Z", "dev/betavk/hooks/mesh/CaveCull", "fastBoxInFrustum");
         r.on(SRC + "WorldRenderer")
                 .atStart("setDontDraw", "()V", am, "retarget")
+                .atEnd("setPosition", "(III)V", "dev/betavk/hooks/mesh/CaveCull", "onSetPosition")
                 .atEnd("updateRenderer", "()V", "dev/betavk/hooks/mesh/CaveCull", "onSyncRebuild");
         r.on(SRC + "ChunkCache")
                 .atStartCancelable("getBlockTileEntity", "(III)L" + SRC + "TileEntity;", mh, "noTileEntities")
-                .atStartReturnIfNotNull("getWorldChunkManager", "()L" + SRC + "WorldChunkManager;", mh, "chunkManager");
+                .atStartReturnIfNotNull("getWorldChunkManager", "()L" + SRC + "WorldChunkManager;", mh, "chunkManager")
+                .replaceBody("isBlockOpaqueCube", "(III)Z", mh, "isOpaque")
+                .replaceBody("getBrightness", "(IIII)F", mh, "getBrightness")
+                .replaceBody("getLightBrightness", "(III)F", mh, "getLightBrightness");
         r.on(SRC + "Chunk").redirectStaticWrite("getBlockLightValue", "(IIII)I", SRC + "Chunk", "isLit", mh, "markLit");
         r.on(SRC + "RenderBlocks")
                 .redirectStaticRead("renderBlockReed", "(L" + SRC + "Block;III)Z", SRC + "Block", "tallGrass", mh, "tallGrass")
                 .redirectStaticRead("renderStandardBlockWithColorMultiplier", "(L" + SRC + "Block;IIIFFF)Z", SRC + "Block", "grass", mh, "grass");
+        r.on(SRC + "BlockLeavesBase")
+                .replaceBody("shouldSideBeRendered", "(L" + SRC + "IBlockAccess;IIII)Z", mh, "shouldLeafSideBeRendered");
 
         // world: loaded-chunk map, deferred population, terrain prefetch, asynchronous saves
-        String pop = "dev/betavk/hooks/world/Populate", rw = "dev/betavk/hooks/world/RegionWriter", gp = "dev/betavk/hooks/world/GenPool", wh = "dev/betavk/hooks/world/WorldHooks";
+        String pop = "dev/betavk/hooks/world/Populate", rw = "dev/betavk/hooks/world/RegionWriter", gp = "dev/betavk/hooks/world/GenPool", wh = "dev/betavk/hooks/world/WorldHooks", tf = "dev/betavk/hooks/world/TerrainFast";
+        r.on(SRC + "MetadataChunkBlock").replaceBody("func_4127_a", "(L" + SRC + "World;)V", tf, "lightUpdateFast");
+        r.on(SRC + "WorldGenMinable").replaceBody("generate", "(L" + SRC + "World;Ljava/util/Random;III)Z", tf, "generateMinableFast");
+        r.on(SRC + "NoiseGeneratorPerlin").replaceBody("func_805_a", "([DDDDIIIDDDD)V", tf, "perlinNoiseFast");
         r.on(SRC + "ChunkProvider")
                 .replaceNew("<init>", "(L" + SRC + "World;L" + SRC + "IChunkLoader;L" + SRC + "IChunkProvider;)V", "java/util/HashMap", "dev/betavk/hooks/world/IntKeyMap", 1)
                 .atStartReturnIfNotNull("provideChunk", "(II)L" + SRC + "Chunk;", wh, "provideChunkFast")
@@ -79,6 +94,7 @@ public final class PatchSet implements dev.betavk.agent.PatchSet {
         r.on(SRC + "ChunkProviderGenerate")
                 .atEnd("<init>", "(L" + SRC + "World;J)V", gp, "registerMain")
                 .atStartReturnIfNotNull("provideChunk", "(II)L" + SRC + "Chunk;", gp, "take");
+        r.on(SRC + "World").replaceBody("updatingLighting", "()Z", wh, "updatingLighting");
         r.on(mcc)
                 .atStart("runTick", "()V", wh, "tick")
                 .atStart("changeWorld2", "(L" + SRC + "World;Ljava/lang/String;)V", wh, "newWorld")

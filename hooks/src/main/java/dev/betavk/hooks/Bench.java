@@ -66,6 +66,9 @@ final class Bench {
     private static void init(Minecraft mc) {
         int chunks = Integer.getInteger("betavk.bench.chunks", 0);
         Opts.renderChunks = chunks >= 2 ? Math.min(32, chunks) : 0;
+        int benchLod = Integer.getInteger("betavk.bench.lod", 0);
+        Opts.lodEnabled = benchLod > 0;
+        if (benchLod > 0) Opts.lodChunks = benchLod;
         mc.gameSettings.renderDistance = Opts.renderChunks >= 2 ? 0 : DISTANCE;
         if (Opts.renderChunks >= 2) Opts.syncLegacyRenderDistance(mc.gameSettings, Opts.renderChunks);
         mc.gameSettings.limitFramerate = 0;   // "Performance: Max": no sleeping

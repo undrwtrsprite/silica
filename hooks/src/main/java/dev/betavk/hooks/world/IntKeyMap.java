@@ -13,17 +13,40 @@ public final class IntKeyMap<V> extends AbstractMap<Integer, V> {
     private int[] keys = new int[64];
     private Object[] vals = new Object[64];
     private int size, mask = 63, shift = 32 - 6;
+    private int lastKey;
+    private Object lastVal;
+    private final int[] cKeys = new int[64];
+    private final Object[] cVals = new Object[64];
 
     private int slot(int key) {
         return (key * 0x9E3779B9) >>> shift;   // top bits of the product: well mixed for any key pattern
     }
 
+    /** Direct-mapped 8x8 chunk neighborhood slot matching ChunkCoordIntPair.chunkXZ2Int layout (bits 0..15=z, 16..31=x). */
+    private static int cacheSlot(int key) {
+        return (key & 7) | ((key >>> 13) & 0x38);
+    }
+
     @SuppressWarnings("unchecked")
     public V getInt(int key) {
+        if (key == lastKey && lastVal != null) return (V) lastVal;
+        int cs = cacheSlot(key);
+        Object cv = cVals[cs];
+        if (cv != null && cKeys[cs] == key) {
+            lastKey = key;
+            lastVal = cv;
+            return (V) cv;
+        }
         int i = slot(key);
         Object v;
         while ((v = vals[i]) != null) {
-            if (keys[i] == key) return (V) v;
+            if (keys[i] == key) {
+                lastKey = key;
+                lastVal = v;
+                cKeys[cs] = key;
+                cVals[cs] = v;
+                return (V) v;
+            }
             i = (i + 1) & mask;
         }
         return null;
@@ -43,6 +66,11 @@ public final class IntKeyMap<V> extends AbstractMap<Integer, V> {
         if (value == null) return remove(k);
         int key = k;
         if ((size + 1) * 2 > keys.length) grow();
+        lastKey = key;
+        lastVal = value;
+        int cs = cacheSlot(key);
+        cKeys[cs] = key;
+        cVals[cs] = value;
         int i = slot(key);
         Object v;
         while ((v = vals[i]) != null) {
@@ -61,6 +89,9 @@ public final class IntKeyMap<V> extends AbstractMap<Integer, V> {
     @SuppressWarnings("unchecked")
     @Override public V remove(Object k) {
         int key = (Integer) k, i = slot(key);
+        if (key == lastKey) lastVal = null;
+        int cs = cacheSlot(key);
+        if (cKeys[cs] == key) cVals[cs] = null;
         Object v;
         while ((v = vals[i]) != null) {
             if (keys[i] == key) {
@@ -103,6 +134,8 @@ public final class IntKeyMap<V> extends AbstractMap<Integer, V> {
     }
 
     private void grow() {
+        lastVal = null;
+        Arrays.fill(cVals, null);
         int[] ok = keys;
         Object[] ov = vals;
         int n = ok.length * 2;

@@ -197,6 +197,51 @@ final class TestHarness {
             gs.guiScale = 0;
             Display.captureNextFrame(DIR + "/video.png");
         }
+        if (frame == 55) {
+            var vs = (net.minecraft.src.GuiVideoSettings) mc.currentScreen;
+            net.minecraft.src.GuiButton lodBtn = null;
+            for (Object o : vs.controlList) {
+                if (o instanceof net.minecraft.src.GuiButton b && b.id == 306) lodBtn = b;
+            }
+            check("Video Settings has LOD Settings button", lodBtn != null);
+            if (lodBtn != null) vs.actionPerformed(lodBtn);
+        }
+        if (frame == 60) {
+            check("LOD Settings button opens LodOptionsScreen", mc.currentScreen instanceof LodOptionsScreen);
+            if (mc.currentScreen instanceof LodOptionsScreen lo) {
+                net.minecraft.src.GuiButton enableBtn = null, qualityBtn = null, doneBtn = null;
+                SliderButton extraSlider = null;
+                for (Object o : lo.controlList) {
+                    if (o instanceof SliderButton sb && sb.id == 341) extraSlider = sb;
+                    else if (o instanceof net.minecraft.src.GuiButton b) {
+                        if (b.id == 340) enableBtn = b;
+                        else if (b.id == 342) qualityBtn = b;
+                        else if (b.id == 200) doneBtn = b;
+                    }
+                }
+                check("LodOptionsScreen has Enable, Extra Chunks, LOD Detail, and Done", enableBtn != null && extraSlider != null && qualityBtn != null && doneBtn != null);
+                lo.actionPerformed(enableBtn);
+                check("LOD toggle turns OFF completely: " + Opts.effectiveLodChunks(gs), !Opts.lodEnabled && Opts.effectiveLodChunks(gs) == 0 && !extraSlider.enabled);
+                lo.actionPerformed(enableBtn);
+                check("LOD toggle turns back ON cleanly", Opts.lodEnabled && extraSlider.enabled);
+                extraSlider.mousePressed(mc, extraSlider.xPosition + extraSlider.width - 4, extraSlider.yPosition + 5);
+                extraSlider.mouseReleased(0, 0);
+                check("Extra Chunks slider sets +128 past Render Distance: " + Opts.effectiveLodChunks(gs), Opts.lodChunks == 128 && Opts.effectiveLodChunks(gs) == 148);
+                extraSlider.mousePressed(mc, extraSlider.xPosition + 4 + Math.round((5.0F / 9.0F) * (extraSlider.width - 8)), extraSlider.yPosition + 5);
+                extraSlider.mouseReleased(0, 0);
+                lo.actionPerformed(qualityBtn);
+                check("LOD Detail cycles to High", Opts.lodQuality == 2 && qualityBtn.displayString.contains("High"));
+                Display.captureNextFrame(DIR + "/lod-settings.png");
+            }
+        }
+        if (frame == 65 && mc.currentScreen instanceof LodOptionsScreen lo) {
+            for (Object o : lo.controlList) {
+                if (o instanceof net.minecraft.src.GuiButton b && b.id == 200) {
+                    lo.actionPerformed(b);
+                    break;
+                }
+            }
+        }
         if (frame == 70) {
             mc.displayGuiScreen(null);
             try {
@@ -204,8 +249,11 @@ final class TestHarness {
                 check("options.txt has fov:70.0 and renderChunks:20", txt.contains("fov:70.0") && txt.contains("renderChunks:20"));
                 Opts.renderChunks = 0;
                 Opts.continuousMusic = false;
+                Opts.lodQuality = 1;
                 Settings.load(gs);
-                check("Continuous Music and renderChunks persist and reload", txt.contains("continuousMusic:true") && Opts.continuousMusic && Opts.renderChunks == 20);
+                check("Continuous Music, renderChunks, and LOD settings persist and reload",
+                        txt.contains("continuousMusic:true") && txt.contains("lodEnabled:true") && txt.contains("lodQuality:2")
+                                && Opts.continuousMusic && Opts.renderChunks == 20 && Opts.lodQuality == 2);
                 check("options.txt has showFps, maxFps, masterVolume, autosaveMinutes:1 and worldBackups:3", txt.contains("showFps:") && txt.contains("maxFps:") && txt.contains("masterVolume:0.2") && txt.contains("autosaveMinutes:1") && txt.contains("worldBackups:3"));
             } catch (Exception e) {
                 check("options.txt readable", false);
@@ -1242,6 +1290,155 @@ final class TestHarness {
         System.exit(0);
     }
 
+    private static void treesTest(Minecraft mc) {
+        frame++;
+        if (frame == 5) {
+            mc.playerController = new net.minecraft.src.PlayerControllerSP(mc);
+            Opts.renderChunks = 8;
+            Opts.syncLegacyRenderDistance(mc.gameSettings, 8);
+            Opts.lodEnabled = false;
+            Opts.lodChunks = 0;
+            mc.gameSettings.fancyGraphics = true;
+            mc.gameSettings.difficulty = 0;
+            mc.startWorld("treetest", "treetest", 1337L);
+            mc.displayGuiScreen(null);
+            mc.inGameHasFocus = true;
+        }
+        if (frame < 5 || mc.theWorld == null || mc.thePlayer == null) return;
+        if (mc.currentScreen != null) mc.displayGuiScreen(null);
+        if (frame == 25) {
+            var w = mc.theWorld;
+            // Clear a flat platform and build a 5x5x5 solid leaf + log crown 5 blocks away (sync) and 22 blocks away (MeshWorker).
+            for (int x = -2; x <= 28; x++) {
+                for (int z = -6; z <= 6; z++) {
+                    for (int y = 78; y <= 92; y++) w.setBlockWithNotify(x, y, z, y == 78 ? 2 : 0);
+                }
+            }
+            for (int bx : new int[]{6, 22}) {
+                for (int y = 79; y <= 81; y++) w.setBlockWithNotify(bx, y, 0, 17);
+                for (int y = 81; y <= 84; y++) {
+                    for (int dx = -2; dx <= 2; dx++) {
+                        for (int dz = -2; dz <= 2; dz++) {
+                            if (dx == 0 && dz == 0 && y < 84) continue;
+                            w.setBlockWithNotify(bx + dx, y, dz, 18);
+                        }
+                    }
+                }
+            }
+            w.setWorldTime(6000L);
+            boolean rInner = net.minecraft.src.Block.leaves.shouldSideBeRendered(w, 4, 83, -2, 4);
+            net.minecraft.src.ChunkCache cc = new net.minecraft.src.ChunkCache(w, -1, 79, -4, 10, 86, 4);
+            boolean rCache = net.minecraft.src.Block.leaves.shouldSideBeRendered(cc, 4, 83, -2, 4);
+            check("Fancy leaves render interior faces (world & ChunkCache)", rInner && rCache);
+        }
+        var p = mc.thePlayer;
+        p.noClip = true;
+        p.motionX = p.motionY = p.motionZ = 0;
+        p.setPosition(0.5, 81.5, 0.5);
+        p.prevPosX = p.lastTickPosX = 0.5;
+        p.prevPosY = p.lastTickPosY = 81.5;
+        p.prevPosZ = p.lastTickPosZ = 0.5;
+        p.rotationYaw = p.prevRotationYaw = 270.0F;
+        p.rotationPitch = p.prevRotationPitch = -5.0F;
+        if (frame == 80) Display.captureNextFrame(DIR + "/tree-close.png");
+        if (frame == 90) System.exit(0);
+    }
+
+    private static long lodReadyAt, lodReloadAt;
+    private static boolean lodTowerBuilt, lodNightSet, lodShot1, lodShot2, lodReloaded;
+
+    /** -Dbetavk.test=lod: builds a player landmark outside real renderChunks, verifies live edit capture, day/night LOD rendering, and disk McRegion reload. */
+    private static void lodTest(Minecraft mc) {
+        frame++;
+        if (frame == 5) {
+            mc.playerController = new net.minecraft.src.PlayerControllerSP(mc);
+            Opts.renderChunks = 8;
+            Opts.syncLegacyRenderDistance(mc.gameSettings, 8);
+            Opts.lodEnabled = true;
+            Opts.lodChunks = 64;
+            mc.gameSettings.difficulty = 0;
+            mc.startWorld("lodtest", "lodtest", 1337L);
+            mc.displayGuiScreen(null);
+            mc.inGameHasFocus = true;
+        }
+        if (frame < 5 || mc.theWorld == null || mc.thePlayer == null) return;
+        if (mc.currentScreen != null) mc.displayGuiScreen(null);
+        if (!lodTowerBuilt && frame == 20) {
+            lodTowerBuilt = true;
+            net.minecraft.src.World w = mc.theWorld;
+            // Build a 4x32x4 brick/gold/glowstone player landmark at x=136..139, z=-2..1 (> 12 chunks from x=-64).
+            for (int y = 62; y <= 94; y++) {
+                int id = y >= 92 ? 89 : (y % 4 == 0 ? 41 : 45);
+                for (int x = 136; x <= 139; x++) {
+                    for (int z = -2; z <= 1; z++) {
+                        w.setBlockWithNotify(x, y, z, id);
+                    }
+                }
+            }
+            for (int k = 0; k < 200 && w.updatingLighting(); k++) { }
+            dev.betavk.lod.LodEngine.onChunkEdited(w, w.getChunkFromChunkCoords(136 >> 4, 0));
+            dev.betavk.lod.LodEngine.onChunkEdited(w, w.getChunkFromChunkCoords(136 >> 4, -1));
+            w.setWorldTime(6000L);
+        }
+        var p = mc.thePlayer;
+        p.noClip = true;
+        p.motionX = p.motionY = p.motionZ = 0;
+        p.setPosition(-64.0, 96.0, 0.0);
+        p.prevPosX = p.lastTickPosX = -64.0;
+        p.prevPosY = p.lastTickPosY = 96.0;
+        p.prevPosZ = p.lastTickPosZ = 0.0;
+        p.rotationYaw = p.prevRotationYaw = 270.0F;   // +X toward tower + open terrain
+        p.rotationPitch = p.prevRotationPitch = 6.0F;
+        int camCX = ((int) Math.floor(p.posX)) >> 4, camCZ = ((int) Math.floor(p.posZ)) >> 4;
+        int minLodDist = dev.betavk.lod.LodEngine.minDrawnCheb(camCX, camCZ);
+        int reqMinDist = Math.max(1, Opts.effectiveChunks(mc.gameSettings) - 2) + 1;
+        if (minLodDist < reqMinDist) {
+            check("LOD stayed outside player's inner real chunks (dist=" + minLodDist + " < " + reqMinDist + ")", false);
+        }
+
+        if (lodTowerBuilt && lodReadyAt == 0 && frame > 180 && dev.betavk.lod.LodEngine.jobsWaiting() == 0 && dev.betavk.lod.LodEngine.drawnLastFrame > 0) {
+            lodReadyAt = frame;
+        }
+        if (lodReadyAt > 0 && !lodShot1 && frame >= lodReadyAt + 20) {
+            lodShot1 = true;
+            check("LOD drew visible nodes: " + dev.betavk.lod.LodEngine.drawnLastFrame, dev.betavk.lod.LodEngine.drawnLastFrame > 0);
+            boolean hasGlow = dev.betavk.lod.LodEngine.nodeHasBlock(0, 136 >> 4, 0, 89) || dev.betavk.lod.LodEngine.nodeHasBlock(1, 136 >> 4, 0, 89);
+            boolean hasBrick = dev.betavk.lod.LodEngine.nodeHasBlock(0, 136 >> 4, 0, 45) || dev.betavk.lod.LodEngine.nodeHasBlock(1, 136 >> 4, 0, 45);
+            check("Live tower landmark captured in near LOD", hasGlow && hasBrick);
+            Display.captureNextFrame(DIR + "/lod-day.png");
+        }
+        if (lodShot1 && !lodNightSet && frame >= lodReadyAt + 35) {
+            lodNightSet = true;
+            mc.theWorld.setWorldTime(18000L);
+        }
+        if (lodNightSet && !lodShot2 && frame >= lodReadyAt + 140 && dev.betavk.lod.LodEngine.jobsWaiting() == 0) {
+            lodShot2 = true;
+            Display.captureNextFrame(DIR + "/lod-night.png");
+        }
+        if (lodShot2 && !lodReloaded && frame >= lodReadyAt + 150) {
+            lodReloaded = true;
+            mc.theWorld.saveWorld(true, null);
+            mc.startWorld("lodtest", "lodtest", 1337L);   // resets LodEngine & clears liveSnaps; reloads from McRegion disk
+            mc.displayGuiScreen(null);
+            mc.inGameHasFocus = true;
+            lodReloadAt = frame;
+        }
+        if (lodReloaded && frame >= lodReloadAt + 160 && dev.betavk.lod.LodEngine.jobsWaiting() == 0 && dev.betavk.lod.LodEngine.drawnLastFrame > 0) {
+            boolean diskGlow = dev.betavk.lod.LodEngine.nodeHasBlock(0, 136 >> 4, 0, 89) || dev.betavk.lod.LodEngine.nodeHasBlock(1, 136 >> 4, 0, 89);
+            boolean diskBrick = dev.betavk.lod.LodEngine.nodeHasBlock(0, 136 >> 4, 0, 45) || dev.betavk.lod.LodEngine.nodeHasBlock(1, 136 >> 4, 0, 45);
+            check("Disk McRegion reload preserved tower landmark outside real chunks", diskGlow && diskBrick);
+            java.io.File regDir = new java.io.File(new java.io.File(Minecraft.getMinecraftDir(), "saves/lodtest"), "region");
+            boolean emptyDistant = new java.io.File(regDir, "r.3.0.mcr").exists() || new java.io.File(regDir, "r.-3.0.mcr").exists();
+            check("Unexplored distant region files were NOT created on disk", !emptyDistant);
+            System.out.println("[lod] done drawn=" + dev.betavk.lod.LodEngine.drawnLastFrame + " regs=" + (regDir.list() == null ? 0 : regDir.list().length));
+            System.exit(0);
+        }
+        if (frame > 5000) {
+            check("LOD test timed out", false);
+            System.exit(1);
+        }
+    }
+
     static void frame(Minecraft mc) {
         if ("join".equals(System.getProperty("betavk.test"))) {
             join(mc);
@@ -1285,6 +1482,14 @@ final class TestHarness {
         }
         if ("world".equals(System.getProperty("betavk.test"))) {
             world(mc);
+            return;
+        }
+        if ("lod".equals(System.getProperty("betavk.test"))) {
+            lodTest(mc);
+            return;
+        }
+        if ("trees".equals(System.getProperty("betavk.test"))) {
+            treesTest(mc);
             return;
         }
         if ("inv".equals(System.getProperty("betavk.test"))) {

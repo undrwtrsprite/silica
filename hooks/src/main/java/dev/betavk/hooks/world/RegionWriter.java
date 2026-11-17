@@ -68,6 +68,7 @@ public final class RegionWriter {
 
     /** replaceBody of McRegionChunkLoader.saveChunk. */
     public static void save(McRegionChunkLoader l, World world, Chunk chunk) throws java.io.IOException {
+        dev.betavk.lod.LodEngine.onChunkEdited(world, chunk);
         world.checkSessionLock();
         final NBTTagCompound root = new NBTTagCompound();
         NBTTagCompound level = new NBTTagCompound();

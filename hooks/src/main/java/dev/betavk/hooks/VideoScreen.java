@@ -18,12 +18,16 @@ public final class VideoScreen {
 
     private static final EnumOptions[] VANILLA = {EnumOptions.GRAPHICS, EnumOptions.RENDER_DISTANCE, EnumOptions.AMBIENT_OCCLUSION, EnumOptions.FRAMERATE_LIMIT,
             EnumOptions.ANAGLYPH, EnumOptions.VIEW_BOBBING, EnumOptions.GUI_SCALE, EnumOptions.ADVANCED_OPENGL};
-    private static final int FOV = 301, FPS_CAP = 302, RENDER_DIST = 303, SHOW_FPS = 304, FULLSCREEN = 305;
+    private static final int FOV = 301, FPS_CAP = 302, RENDER_DIST = 303, SHOW_FPS = 304, FULLSCREEN = 305, LOD_SETTINGS = 306;
     private static final int MIN_CHUNKS = 2, MAX_CHUNKS = 32;
     private static int appliedChunks = -1;
 
     private static String renderLabel(GameSettings opts) {
         return "Render Distance: " + Opts.effectiveChunks(opts) + " chunks";
+    }
+
+    private static String lodBtnLabel() {
+        return Opts.lodEnabled ? "LOD Settings..." : "LOD Settings (OFF)";
     }
 
     private static void applyRenderDistance(GuiVideoSettings gs) {
@@ -84,6 +88,8 @@ public final class VideoScreen {
         n++;
         gs.controlList.add(new GuiButton(FULLSCREEN, slotX(gs, n), slotY(gs, n), 150, 20, fullscreenLabel(gs)));
         n++;
+        gs.controlList.add(new GuiButton(LOD_SETTINGS, slotX(gs, n), slotY(gs, n), 150, 20, lodBtnLabel()));
+        n++;
         gs.controlList.add(new GuiButton(200, gs.width / 2 - 100, gs.height / 6 + 24 * ((n + 1) >> 1) + 12, tr.translateKey("gui.done")));
     }
 
@@ -107,9 +113,14 @@ public final class VideoScreen {
         switch (b.id) {
             case SHOW_FPS -> Opts.showFps = !Opts.showFps;
             case FULLSCREEN -> gs.mc.toggleFullscreen();
+            case LOD_SETTINGS -> {
+                gs.mc.displayGuiScreen(new LodOptionsScreen(gs, opts));
+                return;
+            }
             case 200 -> {
                 opts.saveOptions();
                 gs.mc.displayGuiScreen(gs.field_22110_h);
+                return;
             }
             default -> {
             }

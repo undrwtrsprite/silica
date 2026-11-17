@@ -18,7 +18,8 @@ public final class MeshPool {
 
     private static final double RATE = Double.parseDouble(System.getProperty("betavk.meshrate", "900"));
     private static final int BUDGET = Integer.getInteger("betavk.meshbudget", 2);
-    public static final int WORKERS = Integer.getInteger("betavk.meshworkers", 1);
+    public static final int WORKERS = Integer.getInteger("betavk.meshworkers",
+            Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() / 2)));
     static final LinkedBlockingQueue<MeshWorker.Job> jobs = new LinkedBlockingQueue<>();
     static final ConcurrentLinkedQueue<MeshResult> done = new ConcurrentLinkedQueue<>();
     private static boolean started;
@@ -38,7 +39,10 @@ public final class MeshPool {
         if (lastBudgetCall != 0) frameEma += (Math.min(0.1, (now - lastBudgetCall) / 1e9) - frameEma) * 0.1;
         lastBudgetCall = now;
         if (RATE <= 0) return Math.max(2, Math.min(48, BUDGET));
-        return Math.max(2, Math.min(24, (int) Math.round(RATE * frameEma)));
+        boolean boost = WORKERS > 1 && dev.betavk.hooks.Opts.renderChunks >= 20;
+        double rate = boost ? RATE * 2.0 : RATE;
+        int cap = boost ? 40 : 24;
+        return Math.max(2, Math.min(cap, (int) Math.round(rate * frameEma)));
     }
 
     public static boolean enabled() {

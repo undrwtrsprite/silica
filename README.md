@@ -43,16 +43,17 @@ Silica is a passion project and it is heavily AI assisted. I decide what gets bu
 
 ## Performance
 
-Same world, camera path and seed on both renderers. Average FPS on an Apple M5, 1080p fullscreen, seed 1337, 5 s warm-up and 10 s measured (3 s/4 s at 32 chunks), 16 Nov 2026.
+Same world, camera path and seed on both renderers. Average FPS on an Apple M5, 1080p fullscreen, seed 1337, 5 s warm-up and 10 s measured (3 s/4 s at 32 chunks; 8 s/8 s with LODs at 12+64 chunks), 17 Nov 2026.
 
 | Render distance | OpenGL | Vulkan |
 |---|---:|---:|
-| Far · 256 blocks | 121 | **996** |
-| Normal · 128 blocks | 247 | **1582** |
-| Short · 64 blocks | 482 | **2495** |
-| Extreme · 32 chunks | — | **441** |
+| Far · 256 blocks | 121 | **1129** |
+| Normal · 128 blocks | 247 | **1836** |
+| Short · 64 blocks | 482 | **2809** |
+| Extreme · 32 chunks | — | **600** |
+| Real-block LOD · 76 chunks (`12+64`) | — | **437** |
 
-On the far setting that is about 8.2× the frame rate, with a 99th percentile frame of 3.0 ms (14.8 ms on OpenGL). Normal is about 6.4× (1.9 ms 99th percentile), short is about 5.2× (1.3 ms 99th percentile), and 32-chunk distance runs at 441 FPS (10.4 ms 99th percentile). Longer multi-minute runs settle lower as the chip warms up. The title screen is up in about 1.5 s, against about 3.2 s for the original game under Rosetta.
+On the far setting that is about 9.3× the frame rate, with a 99th percentile frame of 2.6 ms (14.8 ms on OpenGL). Normal is about 7.4× (1.6 ms 99th percentile), short is about 5.8× (1.3 ms 99th percentile), 32-chunk real distance runs at 600 FPS (6.9 ms 99th percentile), and 76-chunk real-block LODs (`12` real + `+64` extra chunks) run at 437 FPS (6.0 ms 99th percentile). Longer multi-minute runs settle lower as the chip warms up. The title screen is up in about 1.5 s, against about 3.2 s for the original game under Rosetta.
 
 ## The launcher
 
@@ -81,7 +82,8 @@ On the far setting that is about 8.2× the frame rate, with a 99th percentile fr
 - **Controls and sound:** toggle sneak, a zoom key, volume sliders, directional sound captions.
 - **Commands and debug:** optional cheats with Tab completion and a much fuller F3 screen.
 - **2–32 chunk render distance slider:** replace Beta's 4-step limit in Video Settings with a modern chunk slider (`F` cycles `{2, 4, 8, 12, 16, 20, 24, 32}`).
-- **Faster chunk generation & updates:** terrain is generated ahead of you on background threads (identical to the original's) with single-pass dirty chunk selection and lower Vulkan draw overhead.
+- **Real-block distant LODs:** progressive 5-tier real-block quadtree (`1×1×1` near blocks stepping smoothly down to `2×1×2`, `4×2×4`, `8×4×8`, and `16×4×16`) extending up to `+128` extra chunks beyond `Render Distance`, including live player edits, saved `McRegion` worlds, day/night emissive lighting, and a **LOD Settings** menu (`ON/OFF`, `Extra Chunks`, `LOD Detail`).
+- **Faster terrain generation, lighting & culling:** hoisted Perlin noise, direct-chunk lighting & ore generation, time-budgeted light updates, O(N) dirty-queue bucketing, and fixed `CaveCull` hardware occlusion queries.
 
 Gameplay stays vanilla.
 
@@ -113,7 +115,7 @@ The game build, the preparation steps and the benchmark scripts are described in
 
 ## Status
 
-Sign-in works against Microsoft's live services. [Silica 0.1.9 is available on the website](https://silicalauncher.xyz) and [GitHub Releases](https://github.com/undrwtrsprite/silica/releases/latest). Basic, experimental mod support is in: add a modded Beta 1.7.3 jar and Silica checks that its improvements fit before you play. Support for other Beta and Alpha versions is planned; the launcher is meant to run them all. The app is ad-hoc signed, not notarized, so macOS will warn on first open.
+Sign-in works against Microsoft's live services. [Silica 0.1.10 is available on the website](https://silicalauncher.xyz) and [GitHub Releases](https://github.com/undrwtrsprite/silica/releases/latest). Basic, experimental mod support is in: add a modded Beta 1.7.3 jar and Silica checks that its improvements fit before you play. Support for other Beta and Alpha versions is planned; the launcher is meant to run them all. The app is ad-hoc signed, not notarized, so macOS will warn on first open.
 
 ## License
 

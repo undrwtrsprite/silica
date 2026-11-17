@@ -783,59 +783,98 @@
     }
   });
 
-  // ---------- render distance map (performance) ----------
-  const map = $('#rdmap');
-  if (map) {
-    const ctx = map.getContext('2d'), R = 98, S = R * 2 + 1, px = 4;
-    map.width = map.height = S * px;
-    const slider = $('#rd'), lodBox = $('#lod'), out = { rd: $('#rd-val'), blocks: $('#rd-blocks'), total: $('#rd-total') };
-    let rd = +slider.value, lod = lodBox.checked, shown = rd, shownLod = lod ? 64 : 0, from = { r: 0, l: 0 }, t0 = 0, anim = 0;
-    const tierSize = e => e < 8 ? 2 : e < 16 ? 4 : e < 32 ? 8 : 16;   // illustration: the far ring is drawn coarser further out
-    const draw = (rReal, rLod, now) => {
-      ctx.fillStyle = '#06080b'; ctx.fillRect(0, 0, map.width, map.height);
-      for (let gy = -R; gy <= R; gy++) for (let gx = -R; gx <= R; gx++) {
-        const d = Math.hypot(gx, gy), X = (gx + R) * px, Y = (gy + R) * px;
-        if (d <= rReal) {
-          const j = hash2(gx, gy), front = rReal - d < 1.2 && rReal < rd + .01 && now - t0 < 900;
-          ctx.fillStyle = front ? 'rgba(200,255,190,.95)' : `rgba(${110 + j * 30 | 0},${186 + j * 30 | 0},${86 + j * 20 | 0},${.8 + j * .2})`;
-          ctx.fillRect(X, Y, px - 1, px - 1);
-        } else if (rLod > 0 && d <= rReal + rLod) {
-          const s = tierSize(d - rReal), j = hash2(Math.floor(gx / s), Math.floor(gy / s)), edge = ((gx % s) + s) % s === 0 || ((gy % s) + s) % s === 0;
-          const a = .62 - (d - rReal) / (rLod + 1) * .42 + (edge ? .1 : 0);
-          ctx.fillStyle = `rgba(${74 + j * 40 | 0},${130 + j * 40 | 0},${70 + j * 20 | 0},${a})`;
-          ctx.fillRect(X, Y, px, px);
-        } else if ((gx + gy) % 2 === 0) { ctx.fillStyle = 'rgba(255,255,255,.035)'; ctx.fillRect(X + 1, Y + 1, px - 2, px - 2); }
+  // ---------- OpenGL vs Vulkan render-distance & frame-pacing comparison (performance hero) ----------
+  const cmp = $('#perf-cmp'), scope = $('#perf-scope');
+  if (cmp && scope) {
+    const ctx = scope.getContext('2d');
+    const MODES = {
+      short: { vk: 2809, vkP99: '1.29 ms 99th', gl: 482, glP99: '5.56 ms 99th', badge: '5.8× faster', vkCol: [28, 32, 30, 25, 29, 27, 25, 24, 27], glCol: [55, 56, 52, 50, 42, 45, 37, 39, 50] },
+      normal: { vk: 1836, vkP99: '1.64 ms 99th', gl: 247, glP99: '8.20 ms 99th', badge: '7.4× faster', vkCol: [22, 20, 19, 17, 14, 16, 15, 18, 20], glCol: [25, 28, 30, 24, 21, 23, 24, 24, 24] },
+      far: { vk: 1129, vkP99: '2.58 ms 99th', gl: 121, glP99: '14.81 ms 99th', badge: '9.3× faster', vkCol: [11, 11, 10, 9, 7, 10, 11, 14, 16], glCol: [12, 13, 11, 9, 8, 12, 13, 15, 15] },
+      '32': { vk: 600, vkP99: '6.90 ms 99th', gl: 0, glP99: 'Vanilla caps at 16 chunks', badge: '512 blocks real', vkCol: [6, 6.4, 5.9, 6.2, 5.8, 6.1, 6.0, 5.9, 6.0], glCol: [] },
+      lod: { vk: 437, vkP99: '6.00 ms 99th', gl: 0, glP99: 'No LODs in vanilla', badge: '12 + 64 chunks', vkCol: [4.4, 4.6, 4.2, 4.5, 4.3, 4.4, 4.2, 4.5, 4.4], glCol: [] }
+    };
+    let mode = 'far', W = 0, H = 0, raf = 0, vis = false, t0 = performance.now();
+    const btns = $$('.perf-tabs button', cmp);
+    const ui = {
+      badge: $('#pc-badge'), vkBar: $('#pc-vk-bar'), vkVal: $('#pc-vk-val'), vkP99: $('#pc-vk-p99'),
+      glBar: $('#pc-gl-bar'), glVal: $('#pc-gl-val'), glP99: $('#pc-gl-p99')
+    };
+    const resize = () => { [W, H] = fitCanvas(scope, ctx); };
+    resize();
+    addEventListener('resize', () => { resize(); if (still) draw(performance.now()); });
+
+    const setMode = k => {
+      mode = k;
+      btns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.dist === k)));
+      const d = MODES[k];
+      ui.badge.textContent = d.badge;
+      ui.vkVal.innerHTML = `${d.vk.toLocaleString('en-US')} <small>FPS</small>`;
+      ui.vkP99.textContent = d.vkP99;
+      ui.vkBar.style.width = '100%';
+      if (d.gl > 0) {
+        ui.glVal.innerHTML = `${d.gl.toLocaleString('en-US')} <small>FPS</small>`;
+        ui.glBar.style.width = Math.max(4, (d.gl / d.vk) * 100).toFixed(1) + '%';
+      } else {
+        ui.glVal.innerHTML = `— <small>n/a</small>`;
+        ui.glBar.style.width = '0%';
       }
-      // the original game's Far setting: 256 blocks, 16 chunks
-      ctx.strokeStyle = 'rgba(226,169,75,.95)'; ctx.setLineDash([6, 6]); ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc((R + .5) * px, (R + .5) * px, 16 * px, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-      // you
-      const blink = still ? 1 : (Math.sin(now / 250) > 0 ? 1 : .4);
-      ctx.fillStyle = `rgba(255,255,255,${blink})`; ctx.fillRect(R * px - px, R * px - px, px * 3, px * 3);
+      ui.glP99.textContent = d.glP99;
+      if (still) draw(performance.now());
     };
-    const update = () => {
-      rd = +slider.value; lod = lodBox.checked;
-      slider.style.setProperty('--fill', ((rd - 2) / 30 * 100) + '%');
-      out.rd.innerHTML = `${rd}<small>chunks</small>`;
-      out.blocks.innerHTML = `${(rd * 16).toLocaleString('en-US')}<small>blocks</small>`;
-      out.total.innerHTML = lod ? `${rd + 64}<small>chunks with LODs</small>` : `${rd}<small>chunks, LODs off</small>`;
-      from = { r: shown, l: shownLod }; t0 = performance.now();
-      if (still) { shown = rd; shownLod = lod ? 64 : 0; draw(shown, shownLod, 0); return; }
-      if (!anim) anim = requestAnimationFrame(tick);
+    btns.forEach(b => b.addEventListener('click', () => setMode(b.dataset.dist)));
+
+    const draw = now => {
+      const d = MODES[mode], t = still ? 2.5 : (now - t0) * .001;
+      ctx.clearRect(0, 0, W, H);
+
+      // subtle grid lines
+      ctx.strokeStyle = 'rgba(255,255,255,.045)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 1; i < 4; i++) { const y = (H / 4) * i; ctx.moveTo(0, y); ctx.lineTo(W, y); }
+      ctx.stroke();
+
+      // draw scrolling frame-pulse stream for Vulkan (top lane) and OpenGL (bottom lane)
+      const drawLane = (yMid, fps, col, amp) => {
+        if (fps <= 0) {
+          ctx.fillStyle = 'rgba(154,165,176,.35)';
+          ctx.font = '500 12px "JetBrains Mono", monospace';
+          ctx.fillText('Not supported in vanilla Beta 1.7.3', 16, yMid + 4);
+          return;
+        }
+        const speed = Math.min(280, Math.max(36, fps * .18));
+        const gap = Math.max(8, Math.min(48, 2200 / Math.max(60, fps)));
+        const count = Math.ceil(W / gap) + 3;
+        const off = (t * speed) % gap;
+        ctx.fillStyle = col;
+        for (let i = -1; i < count; i++) {
+          const x = i * gap - off;
+          const jitter = Math.sin(i * 1.9 + t * 2) * amp;
+          const h = 14 + jitter;
+          ctx.fillRect(Math.round(x), Math.round(yMid - h / 2), 3, Math.max(6, Math.round(h)));
+        }
+      };
+
+      drawLane(H * .32, d.vk, 'rgba(123, 201, 111, .85)', 3);
+      drawLane(H * .72, d.gl, 'rgba(120, 134, 148, .7)', 9);
+
+      ctx.fillStyle = 'rgba(238,241,244,.55)';
+      ctx.font = '500 11px "JetBrains Mono", monospace';
+      ctx.fillText('VULKAN', 12, 20);
+      ctx.fillStyle = 'rgba(154,165,176,.45)';
+      ctx.fillText('OPENGL', 12, Math.round(H * .56));
     };
-    const tick = now => {
-      const p = Math.min(1, (now - t0) / 800), e = 1 - Math.pow(1 - p, 3);
-      shown = from.r + (rd - from.r) * e; shownLod = from.l + ((lod ? 64 : 0) - from.l) * e;
-      draw(shown, shownLod, now);
-      anim = requestAnimationFrame(tick);
-    };
-    slider.addEventListener('input', update); lodBox.addEventListener('change', update);
-    shown = rd; shownLod = lod ? 64 : 0;
-    slider.style.setProperty('--fill', ((rd - 2) / 30 * 100) + '%');
-    draw(shown, shownLod, performance.now());
-    if (!still) {
-      const idle = now => { draw(shown, shownLod, now); anim = requestAnimationFrame(idle); };
-      anim = requestAnimationFrame(idle);
+
+    setMode('far');
+    if (still) {
+      draw(performance.now());
+    } else {
+      const loop = now => { if (!vis) { raf = 0; return; } draw(now); raf = requestAnimationFrame(loop); };
+      whileVisible(scope, v => {
+        vis = v;
+        if (v && !raf) raf = requestAnimationFrame(loop);
+      });
     }
   }
 

@@ -71,16 +71,32 @@
         <p class="lede">Vulkan against our OpenGL baseline, measured by the project's own benchmark harness. And it draws much further.</p>
         <div class="cta"><a class="btn secondary" href="#bench">Pick a render distance <svg class="ico" aria-hidden="true"><use href="#i-down"/></svg></a></div>
       </div>
-      <div class="rdmap card">
-        <canvas id="rdmap" role="img" aria-label="A top-down map of the chunks drawn around you: real chunks in the middle, the real-block LOD ring around them, and the original game's Far distance as a dashed ring"></canvas>
-        <div class="rd-ctl">
-          <div class="rd-row"><label for="rd">Render distance</label><span class="rd-val" id="rd-val">12<small>chunks</small></span></div>
-          <input type="range" id="rd" min="2" max="32" value="12" step="1" aria-describedby="rd-blocks">
-          <div class="rd-row">
-            <label class="toggle"><input type="checkbox" id="lod" checked><span class="sw"></span>Real-block LODs</label>
-            <span class="rd-val" id="rd-total">76<small>chunks with LODs</small></span>
+      <div class="perf-cmp card" id="perf-cmp">
+        <div class="perf-cmp-head">
+          <span class="kicker" style="margin:0"><b>Live comparison</b> / Apple M5, 1080p</span>
+          <span class="perf-badge mono" id="pc-badge">9.3× faster</span>
+        </div>
+        <div class="seg sm perf-tabs" role="group" aria-label="Render distance preset">
+          <button type="button" data-dist="short" aria-pressed="false">Short · 4</button>
+          <button type="button" data-dist="normal" aria-pressed="false">Normal · 8</button>
+          <button type="button" data-dist="far" aria-pressed="true">Far · 16</button>
+          <button type="button" data-dist="32" aria-pressed="false">32 ch</button>
+          <button type="button" data-dist="lod" aria-pressed="false">76 LOD</button>
+        </div>
+        <canvas id="perf-scope" role="img" aria-label="Animated frame-pacing and throughput comparison between Vulkan and OpenGL"></canvas>
+        <div class="perf-rows">
+          <div class="perf-row vk">
+            <div class="perf-row-lbl"><span class="dot"></span>Vulkan <small>MoltenVK</small></div>
+            <div class="perf-bar-wrap"><div class="perf-bar" id="pc-vk-bar" style="width:100%"></div></div>
+            <div class="perf-num num" id="pc-vk-val">1,129 <small>FPS</small></div>
+            <div class="perf-p99 mono" id="pc-vk-p99">2.58 ms 99th</div>
           </div>
-          <div class="rd-row"><span class="rd-legend"><span><i style="background:#7bc96f"></i>Real chunks</span><span><i style="background:#4a8a46"></i>LODs</span><span><i style="background:transparent;border:2px dashed #e2a94b"></i>Original Far, 16 chunks</span></span><span class="rd-val" id="rd-blocks">192<small>blocks</small></span></div>
+          <div class="perf-row gl">
+            <div class="perf-row-lbl"><span class="dot"></span>OpenGL <small>Baseline</small></div>
+            <div class="perf-bar-wrap"><div class="perf-bar" id="pc-gl-bar" style="width:10.7%"></div></div>
+            <div class="perf-num num" id="pc-gl-val">121 <small>FPS</small></div>
+            <div class="perf-p99 mono" id="pc-gl-p99">14.81 ms 99th</div>
+          </div>
         </div>
       </div>
     </div>

@@ -21,7 +21,14 @@
     const a = hash2(ix, iy), b = hash2(ix + 1, iy), c = hash2(ix, iy + 1), d = hash2(ix + 1, iy + 1);
     return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
   };
-  const fitCanvas = (c, ctx) => { const r = c.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1); c.width = Math.max(1, Math.round(r.width * d)); c.height = Math.max(1, Math.round(r.height * d)); ctx.setTransform(d, 0, 0, d, 0, 0); return [r.width, r.height]; };
+  const fitCanvas = (c, ctx) => {
+    const r = c.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1);
+    const w = Math.max(1, Math.round(r.width * d)), h = Math.max(1, Math.round(r.height * d));
+    if (c.width !== w) c.width = w;
+    if (c.height !== h) c.height = h;
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    return [r.width, r.height];
+  };
 
   // ---------- landing on a #section ----------
   // Nothing above the target changes height after load (the release list reserves its rows), so the browser's own jump is

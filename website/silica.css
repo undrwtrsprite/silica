@@ -222,13 +222,12 @@ h2 { font-size: clamp(34px, 4.4vw, 60px); letter-spacing: -.04em; }
 .feat-hero .lede { margin-top: 22px; font-size: clamp(18px, 1.5vw, 21px); max-width: 50ch; text-shadow: 0 1px 24px rgba(10, 13, 17, .9); }
 
 /* ---------- documentation page (sticky left sidebar + reference sections) ---------- */
-.docs-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: clamp(28px, 4vw, 56px); align-items: start; }
-.docs-side { position: sticky; top: 96px; padding: 18px 16px; border-radius: var(--r-card); background: var(--card); border: 1px solid var(--line); }
-.docs-side-title { font: 600 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin-bottom: 10px; padding-left: 10px; }
-.docs-side nav { display: grid; gap: 3px; }
-.docs-side a { text-decoration: none; font-size: 14px; font-weight: 500; color: var(--muted); padding: 7px 10px; border-radius: 8px; border-left: 2px solid transparent; transition: color .2s, background-color .2s, border-color .2s; }
-.docs-side a:hover { color: var(--text); background: rgba(255, 255, 255, .04); }
-.docs-side a[aria-current="true"] { color: var(--accent); background: rgba(123, 201, 111, .08); border-left-color: var(--accent); }
+.docs-layout { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: clamp(28px, 5vw, 64px); align-items: start; }
+.docs-side { position: sticky; top: 96px; }
+.docs-side nav { display: grid; gap: 2px; border-left: 1px solid var(--line); }
+.docs-side a { text-decoration: none; font-size: 14px; font-weight: 500; color: var(--dim); padding: 6px 0 6px 14px; margin-left: -1px; border-left: 2px solid transparent; transition: color .2s, border-color .2s; }
+.docs-side a:hover { color: var(--text); }
+.docs-side a[aria-current="true"] { color: var(--text); border-left-color: var(--accent); }
 .docs-main { display: grid; gap: clamp(48px, 6vw, 72px); min-width: 0; }
 .doc-section { scroll-margin-top: 96px; display: grid; gap: 16px; }
 .doc-section h2 { font-size: clamp(26px, 3vw, 38px); letter-spacing: -.035em; }

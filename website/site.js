@@ -830,9 +830,13 @@
       anim = requestAnimationFrame(tick);
     };
     slider.addEventListener('input', update); lodBox.addEventListener('change', update);
-    shown = 0; shownLod = 0;
-    draw(0, 0, 0);
-    if (still) update(); else setTimeout(update, 450);   // the map sits in the page's first screen, so it loads its chunks straight away
+    shown = rd; shownLod = lod ? 64 : 0;
+    slider.style.setProperty('--fill', ((rd - 2) / 30 * 100) + '%');
+    draw(shown, shownLod, performance.now());
+    if (!still) {
+      const idle = now => { draw(shown, shownLod, now); anim = requestAnimationFrame(idle); };
+      anim = requestAnimationFrame(idle);
+    }
   }
 
   // ---------- benchmarks: real runs from the project's own harness (bench/results) ----------

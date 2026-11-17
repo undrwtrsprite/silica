@@ -533,7 +533,7 @@
   const mountDither = (canvas, drawFrame) => {
     if (!canvas) return;
     const ctx = canvas.getContext('2d', { alpha: false });
-    const PX = 4;
+    const PX = innerWidth < 700 ? 5 : 4;
     let pw = 0, ph = 0, img = null, buf = null, raf = 0, vis = false, t0 = 0, last = 0, mx = 0, tmx = 0, ready = false;
     const size = (force = false) => {
       const r = canvas.getBoundingClientRect();
@@ -563,7 +563,7 @@
     };
     const loop = now => {
       if (!vis) { raf = 0; return; }
-      if (now - last > 33) { last = now; render(now); }
+      if (now - last > 42) { last = now; render(now); }
       raf = requestAnimationFrame(loop);
     };
     size(true);

@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0d11">
+<meta name="description" content="Download Silica, the Minecraft Beta launcher for Mac. Free and open source, for Apple Silicon on macOS 14 and later.">
+<title>Download Silica</title>
+<link rel="icon" href="assets/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="silica.css">
+<script>document.documentElement.classList.add('js')</script>
+<script type="module">
+  import { inject } from "https://cdn.jsdelivr.net/npm/@vercel/analytics@2.0.1/dist/index.mjs";
+  inject();
+</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-ok" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 4.6"/></symbol>
+  <symbol id="i-no" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></symbol>
+  <symbol id="i-down" viewBox="0 0 16 16"><path d="M8 2v8M4.5 6.8L8 10.3l3.5-3.5M3 13.5h10"/></symbol>
+  <symbol id="i-right" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4"/></symbol>
+  <symbol id="i-gh" viewBox="0 0 16 16"><path fill="currentColor" stroke="none" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 16 16"><path d="M5 11l6-6M6.5 5H11v4.5"/></symbol>
+  <symbol id="i-laptop" viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="7.5" rx="1"/><path d="M1.5 13h13"/></symbol>
+  <symbol id="i-chip" viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1.2"/><path d="M6.5 1.5v2.5M9.5 1.5v2.5M6.5 12v2.5M9.5 12v2.5M1.5 6.5H4M1.5 9.5H4M12 6.5h2.5M12 9.5h2.5"/></symbol>
+  <symbol id="i-file" viewBox="0 0 16 16"><path d="M4 1.5h5l3 3V14a.5.5 0 01-.5.5h-7.5a.5.5 0 01-.5-.5V2a.5.5 0 01.5-.5z M9 1.5v3h3"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 16 16"><path d="M2 2h5.5l6.5 6.5-5.5 5.5L2 7.5z"/><circle cx="5" cy="5" r=".9"/></symbol>
+  <symbol id="i-bug" viewBox="0 0 16 16"><rect x="4.5" y="5" width="7" height="8" rx="3.5"/><path d="M6 5a2 2 0 014 0M2 8h2.5M11.5 8H14M3 12l2-1M13 12l-2-1M3 4.5l2 1.3M13 4.5l-2 1.3M8 6.5V13"/></symbol>
+  <symbol id="i-scale" viewBox="0 0 16 16"><path d="M8 2v12M4 14h8M2 5h12M3.5 5L1.5 9.5a2 2 0 003 0zM12.5 5l-2 4.5a2 2 0 003 0z"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 16 16"><path d="M6 2h4M6.5 2v4.5L3 13a1 1 0 00.9 1.5h8.2A1 1 0 0013 13L9.5 6.5V2M5 10h6"/></symbol>
+  <symbol id="i-book" viewBox="0 0 16 16"><path d="M2.5 3a1 1 0 011-1H13v11H3.5a1 1 0 00-1 1zM2.5 14a1 1 0 011-1H13"/></symbol>
+  <symbol id="i-list" viewBox="0 0 16 16"><path d="M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 7.2v4M8 5h.01"/></symbol>
+  <symbol id="i-key" viewBox="0 0 16 16"><circle cx="5" cy="10.5" r="3"/><path d="M7.2 8.3L13.5 2M11 4.5l1.8 1.8M9.5 6l1.3 1.3"/></symbol>
+  <symbol id="i-cursor" viewBox="0 0 16 16"><path d="M3 2l9.5 5.5-4 1-1.5 4z"/></symbol>
+  <symbol id="i-chunks" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z M12 12l8-4.5 M12 12v9 M12 12L4 7.5"/></symbol>
+  <symbol id="i-inv" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M4 9.3h16M4 14.7h16M9.3 4v16M14.7 4v16"/></symbol>
+  <symbol id="i-ctl" viewBox="0 0 24 24"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></symbol>
+  <symbol id="i-snd" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z M16.5 9a4 4 0 010 6 M18.5 6.5a7.5 7.5 0 010 11"/></symbol>
+  <symbol id="i-dbg" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="1.5"/><path d="M7.5 10l3 2.5-3 2.5M12.5 15h4"/></symbol>
+  <symbol id="i-mod" viewBox="0 0 24 24"><path d="M5 8l7-4 7 4v8l-7 4-7-4z M9 12l2.2 2.2L15.5 10"/></symbol>
+</svg>
+<a class="skip" href="#main">Skip to content</a>
+<header class="masthead">
+  <a class="brand" href="/"><img src="assets/icon.png" width="34" height="34" alt=""><span>Silica</span></a>
+  <nav aria-label="Main">
+    <a href="/features">Features</a>
+    <a href="/performance">Performance</a>
+    <a href="/roadmap">Roadmap</a>
+    <a href="/download" aria-current="page">Download</a>
+    <a href="/download#faq">FAQ</a>
+  </nav>
+  <div class="bar-actions">
+    <a class="gh-link" href="https://github.com/undrwtrsprite/silica" aria-label="Silica on GitHub"><svg class="ico fill" aria-hidden="true"><use href="#i-gh"/></svg><span>GitHub</span></a>
+    <a class="btn primary sm" href="https://github.com/undrwtrsprite/silica/releases/download/v0.1.11/Silica-0.1.11.dmg" download>Download</a>
+  </div>
+</header>
+
+<main id="main">
+  <section class="page-hero solo" aria-labelledby="h1">
+    <div class="inner rise">
+      <span class="kicker"><b>Download</b> / v0.1.11</span>
+      <h1 id="h1">Ready when <span class="hl">you are.</span></h1>
+      <p class="lede">Free and open source. Beta 1.7.3 on Apple Silicon, no Rosetta.</p>
+    </div>
+  </section>
+
+  <section class="block" aria-label="Get Silica" style="padding-top:0">
+    <div class="inner">
+      <div class="dl-card card" data-r>
+        <span class="appicon-wrap"><img class="appicon" src="assets/icon-256.png" width="112" height="112" alt=""></span>
+        <div><h2>Silica 0.1.11</h2><ul class="meta">
+        <li><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg>v0.1.11</li>
+        <li><svg class="ico" aria-hidden="true"><use href="#i-file"/></svg>17 MB</li>
+        <li><svg class="ico" aria-hidden="true"><use href="#i-laptop"/></svg>macOS 14+</li>
+        <li><svg class="ico" aria-hidden="true"><use href="#i-chip"/></svg>Apple Silicon</li>
+      </ul></div>
+        <div class="cta" style="margin-top:0">
+          <a class="btn primary lg" href="https://github.com/undrwtrsprite/silica/releases/download/v0.1.11/Silica-0.1.11.dmg" download><svg class="ico" aria-hidden="true"><use href="#i-down"/></svg>Download for Mac</a>
+          <a class="btn secondary lg" href="https://github.com/undrwtrsprite/silica"><svg class="ico fill" aria-hidden="true"><use href="#i-gh"/></svg>Source</a>
+        </div>
+      </div>
+      <div class="reqs">
+        <div class="req card"><svg class="ico" aria-hidden="true"><use href="#i-chip"/></svg><b>Apple Silicon</b><span>Native. Intel Macs aren't supported.</span></div>
+        <div class="req card"><svg class="ico" aria-hidden="true"><use href="#i-laptop"/></svg><b>macOS 14 or later</b><span>Sonoma and newer.</span></div>
+        <div class="req card"><svg class="ico" aria-hidden="true"><use href="#i-key"/></svg><b>Minecraft: Java Edition</b><span>Sign in with the account that owns it.</span></div>
+        <div class="req card"><svg class="ico" aria-hidden="true"><use href="#i-file"/></svg><b>17 MB</b><span>The game itself comes from Mojang on first run.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="install-title" style="padding-top:0">
+    <div class="inner">
+      <div class="split-head"><div><span class="kicker"><b>01</b> / Install</span><h2 id="install-title">Three steps, once.</h2></div></div>
+      <ol class="steps">
+        <li class="card"><h3>Drag it to Applications</h3><p>Open the disk image and drag Silica into Applications.</p></li>
+        <li class="card"><h3>Allow it once</h3><p>Silica is unsigned, so macOS blocks the first open. Click Open Anyway.</p>
+          <div class="mac" aria-hidden="true"><div class="bar"><i></i><i></i><i></i></div>
+            <div class="step">System Settings<span class="sp"></span><span class="chev">Privacy &amp; Security ›</span></div>
+            <div class="step">"Silica" was blocked<span class="sp"></span><span class="fake go">Open Anyway</span></div></div></li>
+        <li class="card"><h3>Sign in and play</h3><p>Sign in with Microsoft. The first run downloads Beta 1.7.3 from Mojang and checks it against Mojang's checksum.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="block" aria-label="More" style="padding-top:0">
+    <div class="inner">
+      <a class="banner card" href="/roadmap#shipped" data-r>
+        <div><span class="kicker"><b>02</b> / Releases</span><h3>Every version, and what is next.</h3><p class="sect-sub" style="margin-top:10px">Release history straight from GitHub, plus the roadmap.</p></div>
+        <span class="go">See releases and roadmap <svg class="ico" aria-hidden="true"><use href="#i-right"/></svg></span>
+      </a>
+    </div>
+  </section>
+
+  <section class="block" id="faq" aria-labelledby="faq-title" style="padding-top:0">
+    <div class="inner">
+      <div class="split-head"><div><span class="kicker"><b>03</b> / FAQ</span><h2 id="faq-title">Questions</h2></div></div>
+      <div class="faq-cols">
+        <div>
+          <details><summary>Is it vibecoded?</summary><div class="ans"><p>Yes, openly AI-assisted. It's open source under GPL-3.0, so you can read every line.</p></div></details>
+          <details><summary>Why does macOS block it?</summary><div class="ans"><p>It's unsigned. Go to System Settings → Privacy &amp; Security → Open Anyway.</p></div></details>
+          <details><summary>Do I need to own Minecraft?</summary><div class="ans"><p>Yes, a Java Edition account.</p></div></details>
+          <details><summary>Is it free?</summary><div class="ans"><p>Yes.</p></div></details>
+          <details><summary>Does it ship Mojang files?</summary><div class="ans"><p>No. They're downloaded on first run and checksum-verified.</p></div></details>
+        </div>
+        <div>
+          <details><summary>Will my old worlds work?</summary><div class="ans"><p>Yes. They stay plain Beta 1.7.3 worlds, so the original game and servers can open them.</p></div></details>
+          <details><summary>Other versions?</summary><div class="ans"><p>Other Betas and Alphas are coming.</p></div></details>
+          <details><summary>Mods?</summary><div class="ans"><p>Basic and experimental for now.</p></div></details>
+          <details><summary>Intel Macs?</summary><div class="ans"><p>No. Apple Silicon, macOS 14+ only.</p></div></details>
+        </div>
+      </div>
+    </div>
+    <canvas class="band" data-band aria-hidden="true"></canvas>
+  </section>
+</main>
+<footer>
+  <div class="foot">
+    <div>
+      <a class="brand" href="/"><img src="assets/icon.png" width="28" height="28" alt=""><span>Silica</span></a>
+      <p>The Minecraft Beta launcher for Mac. A passion project, heavily AI-assisted.</p>
+    </div>
+    <div><h4>Silica</h4><ul><li><a href="/features">Features</a></li><li><a href="/performance">Performance</a></li><li><a href="/roadmap">Roadmap</a></li><li><a href="/download">Download</a></li><li><a href="/download#faq">FAQ</a></li></ul></div>
+    <div><h4>Project</h4><ul><li><a href="https://github.com/undrwtrsprite/silica">Source</a></li><li><a href="https://github.com/undrwtrsprite/silica/releases">Releases</a></li><li><a href="https://github.com/undrwtrsprite/silica/issues">Issues</a></li><li><a href="https://github.com/undrwtrsprite/silica/blob/main/CHANGELOG.md">Changelog</a></li></ul></div>
+    <div><h4>Legal</h4><ul><li><a href="/privacy">Privacy</a></li><li><a href="/terms">Terms</a></li><li><a href="https://github.com/undrwtrsprite/silica/blob/main/LICENSE">License (GPL-3.0)</a></li></ul></div>
+  </div>
+  <div class="legal"><span>Not affiliated with Mojang or Microsoft. Minecraft is a trademark of Mojang Synergies AB.</span><span>Silica ships no Mojang files.</span></div>
+</footer>
+<script src="site.js" defer></script>
+</body>
+</html>

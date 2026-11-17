@@ -528,14 +528,21 @@
     const ctx = canvas.getContext('2d', { alpha: false });
     const PX = 4;
     let pw = 0, ph = 0, img = null, buf = null, raf = 0, vis = false, t0 = 0, last = 0, mx = 0, tmx = 0, ready = false;
-    const size = () => {
+    const size = (force = false) => {
       const r = canvas.getBoundingClientRect();
-      pw = Math.max(120, Math.round(r.width / PX));
-      ph = Math.max(80, Math.round(r.height / PX));
+      const nw = Math.max(120, Math.round(r.width / PX));
+      const nh = Math.max(80, Math.round(r.height / PX));
+      if (!force && nw === pw && Math.abs(nh - ph) < 16) return;
+      pw = nw;
+      ph = nh;
       canvas.width = pw;
       canvas.height = ph;
       img = ctx.createImageData(pw, ph);
       buf = img.data;
+      if (ready) {
+        drawFrame(buf, pw, ph, (still ? 3200 : performance.now() - t0) * .001, mx);
+        ctx.putImageData(img, 0, 0);
+      }
     };
     const render = now => {
       const t = (still ? 3200 : now - t0) * .001;
@@ -552,12 +559,12 @@
       if (now - last > 33) { last = now; render(now); }
       raf = requestAnimationFrame(loop);
     };
-    size();
+    size(true);
     if (still) {
       render(0);
       addEventListener('resize', () => { size(); render(0); });
     } else {
-      addEventListener('resize', size);
+      addEventListener('resize', () => size(false));
       canvas.parentElement.addEventListener('pointermove', e => {
         const r = canvas.getBoundingClientRect();
         tmx = ((e.clientX - r.left) / r.width - .5) * 2;

@@ -93,12 +93,24 @@
     t.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' });
     history.replaceState(null, '', u.pathname + u.hash);
   }));
+  let activeCard = null;
+  const clearCardGlow = () => {
+    if (!activeCard) return;
+    activeCard.style.removeProperty('--mx');
+    activeCard.style.removeProperty('--my');
+    activeCard = null;
+  };
   document.addEventListener('pointermove', e => {
     const c = e.target.closest && e.target.closest('.card');
+    if (c !== activeCard) clearCardGlow();
     if (!c) return;
+    activeCard = c;
     const r = c.getBoundingClientRect();
-    c.style.setProperty('--mx', (e.clientX - r.left) + 'px'); c.style.setProperty('--my', (e.clientY - r.top) + 'px');
+    c.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+    c.style.setProperty('--my', (e.clientY - r.top) + 'px');
   }, { passive: true });
+  document.addEventListener('pointerleave', clearCardGlow, { passive: true });
+  addEventListener('blur', clearCardGlow);
 
   // ---------- numbers count up once ----------
   const countUp = el => {

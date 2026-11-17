@@ -57,6 +57,8 @@ struct Settings: Codable, Equatable {
     /// nil counts as on. Sends only a random local UUID and "launcher"/"playing" state for the live site counter.
     var shareAnonymousCount: Bool? = nil
     var fullscreen = false
+    /// Selected instance identifier (`nil` uses the built-in Beta 1.7.3 default instance).
+    var instanceID: String? = nil
     /// Which jar to play: nil is the official Beta 1.7.3 client, otherwise the id of one you added.
     var jarID: String? = nil
     var width = 1280

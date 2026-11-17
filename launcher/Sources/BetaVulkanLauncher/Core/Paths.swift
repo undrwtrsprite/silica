@@ -15,6 +15,9 @@ enum AppPaths {
     /// Extra jars you add (modded Beta 1.7.3 jars), each in its own folder: jars/<id>/{original.jar, readable.jar, resources/, game/}. The original client.jar is never touched.
     static var jars: URL { support.appendingPathComponent("jars", isDirectory: true) }
     static var jarIndex: URL { jars.appendingPathComponent("index.json") }
+    /// Isolated game instances, each with its own saves, options, and optional custom jar.
+    static var instances: URL { support.appendingPathComponent("instances", isDirectory: true) }
+    static var instanceIndex: URL { instances.appendingPathComponent("index.json") }
     static var mappings: URL { retroMCP.appendingPathComponent("conf/mappings.tiny") }
     static var retroMCP: URL { support.appendingPathComponent("retromcp", isDirectory: true) }
     static var assets: URL { support.appendingPathComponent("assets", isDirectory: true) }

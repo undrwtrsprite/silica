@@ -54,7 +54,7 @@ struct BenchmarkView: View {
             if baseline != nil {
                 resultsCard
             } else {
-                ContentUnavailable(title: "No benchmark results", detail: "Run a benchmark to see its results here.")
+                ContentUnavailable(title: "No benchmark results", detail: "Run a benchmark to see its results here.", symbol: "speedometer")
                     .surface()
             }
         }
@@ -71,10 +71,9 @@ struct BenchmarkView: View {
         Card(title: "Run a benchmark", subtitle: "Fixed world and camera path · Three render distances · Fullscreen") {
             HStack(spacing: 10) {
                 Button {
-                    let backend = state.settings.backend
-                    state.startBenchmark([backend])
+                    state.startBenchmark([state.activeSettings.backend])
                 } label: {
-                    Label("Run " + (state.settings.backend == .vulkan ? "Vulkan" : "OpenGL"), systemImage: "speedometer")
+                    Label("Run " + (state.activeSettings.backend == .vulkan ? "Vulkan" : "OpenGL"), systemImage: "speedometer")
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(!state.canPlay || state.benchBusy)
@@ -89,19 +88,19 @@ struct BenchmarkView: View {
 
                 Spacer(minLength: 0)
                 if state.benchBusy {
-                    Button {
-                        state.stopBenchmark()
-                    } label: {
+                    Button { state.stopBenchmark() } label: {
                         Label(state.benchCountdown == nil ? "Stop" : "Cancel", systemImage: "stop.fill")
                     }
                     .buttonStyle(SecondaryButtonStyle(tint: Theme.bad))
                     .keyboardShortcut(.cancelAction)
                 }
             }
+
             if state.player == nil && !state.benchBusy {
                 Button("Sign in on the Play page to run a benchmark") { state.tab = .play }
                     .buttonStyle(SecondaryButtonStyle(tint: Theme.accent))
             }
+
             if let seconds = state.benchCountdown {
                 HStack(spacing: 12) {
                     Image(systemName: "timer").font(.title2).foregroundStyle(Theme.tintDeep)
@@ -123,12 +122,13 @@ struct BenchmarkView: View {
                         Text(state.benchProgress, format: .percent.precision(.fractionLength(0))).monospacedDigit()
                     }
                     .font(.callout.weight(.medium))
-                    ProgressView(value: state.benchProgress).tint(Theme.tint)
+                    ProgressView(value: state.benchProgress).tint(Theme.accent)
                     Text(state.benchStage).font(.caption).foregroundStyle(.secondary)
                 }
                 .padding(12)
                 .surface(radius: 12, fill: Theme.cardHigh)
             }
+
             if let status = state.benchStatus, !status.isEmpty {
                 Text(status).font(.caption).foregroundStyle(.secondary)
             }
@@ -141,6 +141,7 @@ struct BenchmarkView: View {
         let before = baseline?.results.first { $0.distance == distance } ?? (shared.isEmpty ? baseline?.results.first : nil)
         let after = comparison?.results.first { $0.distance == distance } ?? (shared.isEmpty ? comparison?.results.first : nil)
         let differentDistances = before != nil && after != nil && before?.distance != after?.distance
+
         return Card(title: "Results") {
             if !openGLRuns.isEmpty && !vulkanRuns.isEmpty {
                 Segmented(options: [false, true], selection: Binding(get: { comparing }, set: {
@@ -150,13 +151,15 @@ struct BenchmarkView: View {
                     selectedDistance = nil
                 })) { $0 ? "Compare backends" : "Single run" }
             }
+
             HStack(spacing: 10) {
                 runSelector(comparing ? "OpenGL run" : "Benchmark run", run: baseline, tint: Theme.tint,
                             selection: $baselineName, runs: comparing ? openGLRuns : state.benchRuns)
                 if comparing {
-                    runSelector("Vulkan run", run: comparison, tint: Theme.tintDeep, selection: $comparisonName, runs: vulkanRuns)
+                    runSelector("Vulkan run", run: comparison, tint: Theme.accent, selection: $comparisonName, runs: vulkanRuns)
                 }
             }
+
             if differentDistances && distances.count == 2 {
                 Text("These runs used different render distances. Percentage changes require matching distances.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -212,13 +215,9 @@ struct BenchmarkView: View {
                 Circle().fill(tint).frame(width: 7, height: 7)
                 Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }
-            Button {
-                openSelector = title
-            } label: {
+            Button { openSelector = title } label: {
                 HStack(spacing: 8) {
-                    Text(run.map(backendName) ?? "Select a run")
-                        .font(.system(size: 17, weight: .semibold, design: .rounded))
-                        .lineLimit(1)
+                    Text(run.map(backendName) ?? "Select a run").font(.system(size: 16, weight: .semibold)).lineLimit(1)
                     Image(systemName: "chevron.down").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 }
                 .contentShape(Rectangle())
@@ -245,20 +244,16 @@ struct BenchmarkView: View {
                 .frame(width: 310, height: min(CGFloat(runs.count) * 38 + 20, 280))
             }
             if let run {
-                Text(run.date.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption).foregroundStyle(.secondary)
+                Text(run.date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                 if let result = run.results.first, !result.renderer.isEmpty {
-                    Text(result.renderer)
-                        .font(.caption).foregroundStyle(.secondary)
-                        .lineLimit(1).help(result.renderer)
+                    Text(result.renderer).font(.caption).foregroundStyle(.secondary).lineLimit(1).help(result.renderer)
                 }
             } else {
-                Text("Run another benchmark to compare.")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text("Run another benchmark to compare.").font(.caption).foregroundStyle(.secondary)
             }
         }
         .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 105, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
         .surface(radius: 12, fill: Theme.cardHigh)
     }
 

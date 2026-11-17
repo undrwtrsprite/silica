@@ -1,17 +1,22 @@
 import SwiftUI
 
-/// Benchmark and Logs live here, out of the way of everyday use.
+/// Clean container for Benchmark and Logs.
 struct AdvancedView: View {
     @EnvironmentObject private var state: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top) {
-                PageHeader(title: "Advanced", subtitle: "Compare game performance and inspect logs.")
+            HStack(alignment: .bottom) {
+                PageHeader(
+                    eyebrow: "Diagnostics",
+                    title: "Advanced",
+                    subtitle: "Compare Vulkan against OpenGL and inspect runtime output."
+                )
                 Spacer()
                 Segmented(options: AdvancedTab.allCases, selection: $state.advancedTab) { $0.rawValue }
             }
+
             ZStack(alignment: .topLeading) {
                 Group {
                     switch state.advancedTab {

@@ -25,14 +25,15 @@ struct BetaVulkanLauncherApp: App {
                 .environmentObject(state.install)
                 .environmentObject(state.runner)
                 .environmentObject(state.jars)
+                .environmentObject(state.instances)
                 .environmentObject(state.updates)
                 .task {
                     if state.settings.checkForUpdates != false { await state.updates.check(quiet: true) }
                 }
                 .preferredColorScheme(.dark)
-                .frame(minWidth: 940, minHeight: 600)
+                .frame(minWidth: 960, minHeight: 620)
         }
-        .defaultSize(width: 1080, height: 700)
+        .defaultSize(width: 1120, height: 700)
         .windowStyle(.hiddenTitleBar)
     }
 }

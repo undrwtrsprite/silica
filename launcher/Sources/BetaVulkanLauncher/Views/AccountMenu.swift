@@ -1,46 +1,71 @@
 import SwiftUI
 
-/// The account control: the signed-in account as a menu (switch, add, sign out).
-/// It sits in the top-right corner of every page.
+/// Minimal account button in the top bar and crisp account menu popover.
 struct AccountMenu: View {
     @EnvironmentObject private var state: AppState
     @EnvironmentObject private var runner: GameRunner
     @Environment(\.colorScheme) private var scheme
     @State private var open = false
+    @State private var hover = false
 
-    /// SILICA_DEMO_NAME replaces the shown account name, so screenshots and recordings for the website do not show a real one.
+    /// SILICA_DEMO_NAME replaces the shown account name, so screenshots and recordings do not show a real one.
     private static let demoName = ProcessInfo.processInfo.environment["SILICA_DEMO_NAME"]
 
     private var busy: Bool { runner.isRunning || state.benchBusy || state.signingIn }
     private var hasAccounts: Bool { state.player != nil || !state.accounts.isEmpty }
+    private var displayName: String {
+        Self.demoName ?? state.player?.name ?? (state.signingIn ? "Signing in…" : "Choose an account")
+    }
 
     var body: some View {
-        HStack(spacing: 14) {
+        Group {
             if hasAccounts {
-                menu
+                accountButton
             } else {
-                Button { state.signInWithMicrosoft() } label: {
-                    Text(state.signingIn ? "Signing in…" : "Sign in").font(.system(size: 14, weight: .medium))
+                Button {
+                    state.signInWithMicrosoft()
+                } label: {
+                    Text(state.signingIn ? "Signing in…" : "Sign in")
+                        .font(.system(size: 13.5, weight: .medium))
+                        .foregroundStyle(hover ? Theme.text : Theme.dim)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(hover ? Color.primary.opacity(0.06) : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .disabled(busy)
+                .onHover { hover = $0 }
             }
         }
-        .foregroundStyle(.primary)
     }
 
-    private var menu: some View {
-        Button { open.toggle() } label: {
+    private var accountButton: some View {
+        Button {
+            open.toggle()
+        } label: {
             HStack(spacing: 8) {
-                Image(systemName: "person.crop.circle").font(.system(size: 17)).accessibilityHidden(true)
-                Text(Self.demoName ?? state.player?.name ?? (state.signingIn ? "Signing in…" : "Choose an account")).font(.system(size: 14, weight: .medium)).lineLimit(1)
-                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary).rotationEffect(.degrees(open ? 180 : 0)).accessibilityHidden(true)
+                Circle()
+                    .fill(state.player?.isValid == true ? Theme.accent : Theme.sand)
+                    .frame(width: 7, height: 7)
+                Text(displayName)
+                    .font(.system(size: 13.5, weight: .medium))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Theme.dim)
+                    .rotationEffect(.degrees(open ? 180 : 0))
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(hover || open ? Color.primary.opacity(0.06) : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(busy)
         .accessibilityLabel("Account")
+        .onHover { hover = $0 }
         .popover(isPresented: $open, arrowEdge: .bottom) {
             AccountList(close: { open = false })
                 .environment(\.colorScheme, scheme)
@@ -48,7 +73,6 @@ struct AccountMenu: View {
     }
 }
 
-/// The card that opens from the account button: every saved account, then Add account and Sign out.
 private struct AccountList: View {
     @EnvironmentObject private var state: AppState
     let close: () -> Void
@@ -56,8 +80,11 @@ private struct AccountList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             if !state.accounts.isEmpty {
-                Text("ACCOUNTS").font(.system(size: 9.5, weight: .bold)).tracking(0.8).foregroundStyle(.secondary)
-                    .padding(.horizontal, 10).padding(.bottom, 4)
+                Text("Accounts")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.dim)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 4)
                 ForEach(state.accounts) { account in
                     AccountRow(name: account.name, active: account.profileId == state.activeAccountId) {
                         state.switchAccount(to: account.profileId)
@@ -78,7 +105,7 @@ private struct AccountList: View {
             }
         }
         .padding(10)
-        .frame(width: 270)
+        .frame(width: 264)
     }
 }
 
@@ -90,21 +117,33 @@ private struct AccountRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 Text(String(name.prefix(1)).uppercased())
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(Theme.onAccent)
-                    .frame(width: 30, height: 30)
-                    .background(Theme.accent, in: Circle())
+                    .frame(width: 28, height: 28)
+                    .background(active ? Theme.accent : Theme.dim, in: Circle())
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(active ? "Playing as" : "Switch to this account").font(.system(size: 11)).foregroundStyle(.secondary)
-                    Text(name).font(.system(size: 14, weight: active ? .semibold : .medium)).lineLimit(1)
+                    Text(name)
+                        .font(.system(size: 13.5, weight: active ? .semibold : .medium))
+                        .lineLimit(1)
+                    Text(active ? "Active" : "Switch account")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
-                if active { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.accent) }
+                if active {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11.5, weight: .bold))
+                        .foregroundStyle(Theme.accent)
+                }
             }
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(hover || active ? 0.08 : 0)))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.primary.opacity(hover || active ? 0.08 : 0))
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -121,13 +160,23 @@ private struct ActionRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: symbol).font(.system(size: 15)).frame(width: 30).foregroundStyle(tint ?? .secondary)
-                Text(title).font(.system(size: 14, weight: .medium)).foregroundStyle(tint ?? .primary).lineLimit(1)
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.system(size: 14))
+                    .frame(width: 28)
+                    .foregroundStyle(tint ?? .secondary)
+                Text(title)
+                    .font(.system(size: 13.5, weight: .medium))
+                    .foregroundStyle(tint ?? .primary)
+                    .lineLimit(1)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(hover ? 0.08 : 0)))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.primary.opacity(hover ? 0.08 : 0))
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

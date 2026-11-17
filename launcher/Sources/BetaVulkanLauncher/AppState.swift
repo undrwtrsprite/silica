@@ -4,15 +4,15 @@ import Foundation
 import SwiftUI
 
 enum Tab: String, CaseIterable, Identifiable {
-    case play = "Play", worlds = "Worlds", jars = "Jars", settings = "Settings", advanced = "Advanced"
+    case play = "Play", instances = "Instances", worlds = "Worlds", settings = "Settings", advanced = "Advanced"
     var id: String { rawValue }
     var symbol: String {
         switch self {
         case .play: return "play.fill"
+        case .instances: return "square.stack.3d.up.fill"
         case .worlds: return "globe.europe.africa.fill"
-        case .jars: return "shippingbox.fill"
         case .settings: return "slider.horizontal.3"
-        case .advanced: return "wrench.and.screwdriver.fill"
+        case .advanced: return "waveform.path.ecg"
         }
     }
 }
@@ -58,6 +58,7 @@ final class AppState: ObservableObject {
     let updates = UpdateManager()
     let runner = GameRunner()
     let jars = JarLibrary()
+    let instances = InstanceStore()
     private let telemetry = Telemetry()
     private var telemetryCancellables: Set<AnyCancellable> = []
     /// The jar the setup wizard imported last, so its final page can show the result.
@@ -65,21 +66,33 @@ final class AppState: ObservableObject {
 
     init() {
         settings = Settings.load()
+        instances.syncLegacyJars(jars)
         wizardOpen = !(install.ready && GameRunner.stageConfig(settings.stageDir) != nil)
         refreshWorlds()
         benchRuns = BenchmarkStore.runs()
         loadAccounts()
         activateActiveAccount()
         if install.ready && stageReady { Task { [self] in await jars.recheckStale(stageDir: settings.stageDir, java: install.javaPath) } }
-        telemetry.start(enabled: settings.shareAnonymousCount != false, playing: runner.isRunning, backend: settings.backend.rawValue)
+        telemetry.start(enabled: settings.shareAnonymousCount != false, playing: runner.isRunning, backend: activeSettings.backend.rawValue)
         runner.$isRunning.sink { [weak self] running in
             guard let self else { return }
-            self.telemetry.update(enabled: self.settings.shareAnonymousCount != false, playing: running, backend: self.settings.backend.rawValue)
+            self.telemetry.update(enabled: self.settings.shareAnonymousCount != false, playing: running, backend: self.activeSettings.backend.rawValue)
         }.store(in: &telemetryCancellables)
         $settings.sink { [weak self] next in
             guard let self else { return }
-            self.telemetry.update(enabled: next.shareAnonymousCount != false, playing: self.runner.isRunning, backend: next.backend.rawValue)
+            let eff = self.instances.effectiveSettings(next, for: self.instances.instance(for: next.instanceID))
+            self.telemetry.update(enabled: next.shareAnonymousCount != false, playing: self.runner.isRunning, backend: eff.backend.rawValue)
         }.store(in: &telemetryCancellables)
+    }
+
+    var activeInstance: GameInstance { instances.instance(for: settings.instanceID) }
+    var activeSettings: Settings { instances.effectiveSettings(settings, for: activeInstance) }
+    var activeGameDir: String { instances.gameDir(for: activeInstance, defaultDir: settings.gameDir, jars: jars) }
+
+    func selectInstance(_ id: String) {
+        settings.instanceID = id
+        settings.jarID = instances.instance(for: id).jarID
+        refreshWorlds()
     }
 
     var stageReady: Bool { GameRunner.stageConfig(settings.stageDir) != nil }
@@ -210,7 +223,7 @@ final class AppState: ObservableObject {
     }
 
     func refreshWorlds() {
-        let dir = settings.gameDir
+        let dir = activeGameDir
         Task.detached {
             let list = Worlds.list(gameDir: dir)
             await MainActor.run { self.worlds = list }
@@ -218,25 +231,45 @@ final class AppState: ObservableObject {
     }
 
     func play() {
-        guard let java = install.javaPath else { message = "Install the JDK first (Play tab → Set up)."; return }
+        guard let java = install.javaPath else { message = "Install Java first (Play → Set up)."; return }
         guard !benchBusy else { return }
+        let instance = activeInstance
+        let launchSettings = activeSettings
+        let dir = activeGameDir
         Task { [self] in
             // opened already signed in: the game still needs the sign-in token for online-mode servers, which the quiet renewal brings (a second at most)
             if player?.accessToken == nil { await renewal?.value }
-            let chosen = jars.selection(for: settings.jarID)
-            if settings.jarID != nil && chosen == nil { message = "That jar is no longer in your list. Pick another one or the original game."; settings.jarID = nil; return }
-            message = runner.launch(settings: settings, java: java, player: player, jar: chosen)
+            let chosen = jars.selection(for: instance.jarID)
+            if instance.jarID != nil && chosen == nil {
+                message = "The custom jar for \"\(instance.name)\" could not be found."
+                return
+            }
+            if let err = runner.launch(settings: launchSettings, java: java, player: player, jar: chosen, gameDirOverride: dir) {
+                message = err
+            } else {
+                instances.touchLastPlayed(instance.id)
+            }
         }
     }
 
-    /// Adds a jar from the Play page or the setup, runs the checks and, when it is usable, makes it the one that launches.
-    func addJar(_ url: URL, select: Bool = true) {
+    /// Creates a new isolated instance (either vanilla Silica Beta 1.7.3 or backed by a custom jar URL).
+    func createInstance(name: String, customJarURL: URL? = nil, select: Bool = true) {
         Task { [self] in
-            if let added = await jars.importJar(url, stageDir: settings.stageDir, java: install.javaPath, official: install) {
+            var jarID: String? = nil
+            if let customJarURL {
+                guard let added = await jars.importJar(customJarURL, stageDir: settings.stageDir, java: install.javaPath, official: install) else { return }
+                jarID = added.id
                 wizardJarID = added.id
-                if select, added.report?.level != .red { settings.jarID = added.id }
             }
+            let created = instances.create(name: name, jarID: jarID)
+            if select { selectInstance(created.id) }
         }
+    }
+
+    /// Adds a jar from setup wizard and attaches it as an instance cleanly.
+    func addJar(_ url: URL, select: Bool = true) {
+        let name = url.deletingPathExtension().lastPathComponent
+        createInstance(name: name, customJarURL: url, select: select)
     }
 
     func chooseJarFile(select: Bool = true) {
@@ -408,7 +441,7 @@ final class AppState: ObservableObject {
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let dir = settings.gameDir
+        let dir = activeGameDir
         Task.detached {
             do { let name = try Worlds.importWorld(from: url, gameDir: dir); await MainActor.run { self.message = "Imported \(name)"; self.refreshWorlds() } }
             catch { await MainActor.run { self.message = error.localizedDescription } }

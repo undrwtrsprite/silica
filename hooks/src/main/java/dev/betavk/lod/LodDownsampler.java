@@ -62,7 +62,15 @@ public final class LodDownsampler {
             int bx0 = vx << 1;
             for (int vz = 0; vz < 8; vz++) {
                 int bz0 = vz << 1;
-                out.colTint[(vx << 3) | vz] = LodNode.packTint(temp[(bx0 << 4) | bz0], hum[(bx0 << 4) | bz0]);
+                double tSum = 0, hSum = 0;
+                for (int dz = 0; dz < 2; dz++) {
+                    for (int dx = 0; dx < 2; dx++) {
+                        int ti = ((bx0 + dx) << 4) | (bz0 + dz);
+                        tSum += temp[ti];
+                        hSum += hum[ti];
+                    }
+                }
+                out.colTint[(vx << 3) | vz] = LodNode.packTint(tSum * 0.25, hSum * 0.25);
 
                 for (int y = 0; y < 128; y++) {
                     int leafCnt = 0, waterCnt = 0, snowCnt = 0, natCnt = 0, manCnt = 0;
@@ -103,14 +111,20 @@ public final class LodDownsampler {
                     int win = 0;
                     int flags = 0;
                     if (manCnt >= 1) win = manSample;
-                    else if (natCnt >= 2) {
+                    else if (natCnt >= 2 || (natCnt == 1 && (natCnt + leafCnt + waterCnt) >= 2)) {
                         win = natSample;
                         if ((win & 255) == 2 && hasAirAbove) flags |= LodNode.FLAG_GRASS_SIDE;
                     } else if (waterCnt >= 2) {
                         win = waterSample;
                         if (y + 1 < 128) {
-                            int above = blocks[(bx0 << 11) | (bz0 << 7) | (y + 1)] & 255;
-                            if (above == 8 || above == 9) flags |= LodNode.FLAG_WATER_FULL;
+                            boolean aboveWater = false;
+                            for (int dz = 0; dz < 2 && !aboveWater; dz++) {
+                                for (int dx = 0; dx < 2 && !aboveWater; dx++) {
+                                    int above = blocks[((bx0 + dx) << 11) | ((bz0 + dz) << 7) | (y + 1)] & 255;
+                                    if (above == 8 || above == 9) aboveWater = true;
+                                }
+                            }
+                            if (aboveWater) flags |= LodNode.FLAG_WATER_FULL;
                         }
                     } else if (leafCnt >= 2) {
                         win = leafSample;
@@ -181,7 +195,15 @@ public final class LodDownsampler {
                     for (int vy = 0; vy < h; vy++) dst.set(vx, vy, vz, LodNode.pack(0, 0, 15, 0, 0));
                     continue;
                 }
-                dst.colTint[(vx << 3) | vz] = child.colTint[(sxBase << 3) | szBase];
+                double tSum = 0, hSum = 0;
+                for (int dz = 0; dz < 2; dz++) {
+                    for (int dx = 0; dx < 2; dx++) {
+                        short ct = child.colTint[((sxBase + dx) << 3) | (szBase + dz)];
+                        tSum += LodNode.tintTemp(ct);
+                        hSum += LodNode.tintHum(ct);
+                    }
+                }
+                dst.colTint[(vx << 3) | vz] = LodNode.packTint(tSum * 0.25, hSum * 0.25);
 
                 for (int vy = 0; vy < h; vy++) {
                     int n = 0;
@@ -195,6 +217,15 @@ public final class LodDownsampler {
                         }
                     }
                     dst.set(vx, vy, vz, mergeCells(src, n));
+                }
+                // Recompute FLAG_WATER_FULL cleanly against the merged voxel directly above
+                for (int vy = 0; vy < h - 1; vy++) {
+                    int v = dst.get(vx, vy, vz);
+                    int id = LodNode.id(v);
+                    if (id == 8 || id == 9) {
+                        int aboveId = LodNode.id(dst.get(vx, vy + 1, vz));
+                        if (aboveId == 8 || aboveId == 9) dst.set(vx, vy, vz, v | LodNode.FLAG_WATER_FULL);
+                    }
                 }
             }
         }
@@ -249,6 +280,7 @@ public final class LodDownsampler {
         else if (snowCnt >= threshold) win = snowWin;
 
         if (win == 0) return LodNode.pack(0, 0, skyMax, blkMax, 0);
-        return (win & ~(0xFF << 12)) | ((skyMax & 0xF) << 12) | ((blkMax & 0xF) << 16);
+        int cleaned = win & ~((0xFF << 12) | LodNode.FLAG_WATER_FULL);
+        return cleaned | ((skyMax & 0xF) << 12) | ((blkMax & 0xF) << 16);
     }
 }

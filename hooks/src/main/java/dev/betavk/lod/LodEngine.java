@@ -34,13 +34,13 @@ public final class LodEngine {
             Math.max(2, Math.min(4, Runtime.getRuntime().availableProcessors() / 2)));
     private static final int UPLOAD_BUDGET_INTS = Integer.getInteger("betavk.lodbudget", 300_000);
 
-    private record Job(boolean mesh, int level, int gx, int gz, int prio, int epoch, int version) {
+    private record Job(boolean mesh, LodNode node, int prio, int epoch, int version) {
     }
 
     private record BuiltMesh(LodNode node, int epoch, int version, int lightSub, boolean fancy, int nbMask, LodMesher.Mesh mesh) {
     }
 
-    private static final Map<Long, LodNode> nodes = new HashMap<>();
+    private static final ConcurrentHashMap<Long, LodNode> nodes = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<Long, LodNode> readyNodes = new ConcurrentHashMap<>();
     private static final Set<Long> selectedKeys = new HashSet<>();
     private static final List<LodNode> selectedList = new ArrayList<>();
@@ -160,6 +160,54 @@ public final class LodEngine {
         }
     }
 
+    /** Samples a neighbor voxel across LOD levels (L0..L4) or live captured chunks so level transitions and real-chunk seams never emit underground cliff curtains. */
+    static int sampleCrossLevel(LodNode node, int vx, int vy, int vz) {
+        int wx = node.gx * node.span * 16 + vx * node.scaleXZ + (node.scaleXZ >> 1);
+        int wy = Math.max(0, Math.min(127, vy * node.scaleY + (node.scaleY >> 1)));
+        int wz = node.gz * node.span * 16 + vz * node.scaleXZ + (node.scaleXZ >> 1);
+        int cx = wx >> 4, cz = wz >> 4;
+
+        for (int lvl = 0; lvl <= 4; lvl++) {
+            int shift = lvl <= 1 ? 0 : (lvl - 1);
+            LodNode other = readyNodes.get(key(lvl, cx >> shift, cz >> shift));
+            if (other != null && other.dataReady) {
+                int ox = Math.floorDiv(wx, other.scaleXZ) - (other.gx * other.dim);
+                int oz = Math.floorDiv(wz, other.scaleXZ) - (other.gz * other.dim);
+                int oy = Math.min(other.h - 1, wy / other.scaleY);
+                if (ox >= 0 && ox < other.dim && oz >= 0 && oz < other.dim) {
+                    return other.get(ox, oy, oz);
+                }
+            }
+        }
+        LodChunkSource.ChunkSnap snap = LodChunkSource.peekSnap(cx, cz);
+        if (snap != null) {
+            int id = snap.blocks[((wx & 15) << 11) | ((wz & 15) << 7) | wy] & 255;
+            if (id != 0) return LodNode.pack(id, 0, 15, 0, 0);
+            return LodNode.pack(0, 0, 15, 0, 0);
+        }
+        // Unloaded outer horizon edge: hide underground skirts below sea level so the world edge doesn't hang stone walls into the void.
+        if (wy < 62) return LodNode.pack(1, 0, 0, 0, 0);
+        return LodNode.pack(0, 0, 15, 0, 0);
+    }
+
+    private static int neighborMask(LodNode n) {
+        int mask = 0;
+        int c0x = n.gx * n.span, c1x = c0x + n.span - 1;
+        int c0z = n.gz * n.span, c1z = c0z + n.span - 1;
+        int[][] probes = {{c0x - 1, c0z}, {c1x + 1, c0z}, {c0x, c0z - 1}, {c0x, c1z + 1}};
+        for (int k = 0; k < 4; k++) {
+            int px = probes[k][0], pz = probes[k][1];
+            boolean found = LodChunkSource.peekSnap(px, pz) != null;
+            for (int lvl = 0; lvl <= 4 && !found; lvl++) {
+                int shift = lvl <= 1 ? 0 : (lvl - 1);
+                LodNode other = readyNodes.get(key(lvl, px >> shift, pz >> shift));
+                if (other != null && other.dataReady) found = true;
+            }
+            if (found) mask |= 1 << k;
+        }
+        return mask;
+    }
+
     private static void workerLoop() {
         LodChunkSource.WorkerGen wg = null;
         int wgEpoch = -1;
@@ -172,9 +220,13 @@ public final class LodEngine {
             } catch (InterruptedException e) {
                 return;
             }
-            if (j.epoch != epoch) continue;
+            LodNode node = j.node;
+            if (j.epoch != epoch || activeWorld == null) {
+                if (j.mesh) node.queuedMesh = false;
+                else node.queuedData = false;
+                continue;
+            }
             World w = activeWorld;
-            if (w == null) continue;
 
             try {
                 if (wg == null || wgEpoch != j.epoch) {
@@ -182,32 +234,27 @@ public final class LodEngine {
                     wgEpoch = j.epoch;
                 }
                 if (j.mesh) {
-                    LodNode n = readyNodes.get(key(j.level, j.gx, j.gz));
-                    if (n == null || !n.dataReady || n.version != j.version) continue;
+                    if (!node.dataReady || node.version != j.version) continue;
                     LodNode[] nb = {
-                            readyNodes.get(key(j.level, j.gx - 1, j.gz)),
-                            readyNodes.get(key(j.level, j.gx + 1, j.gz)),
-                            readyNodes.get(key(j.level, j.gx, j.gz - 1)),
-                            readyNodes.get(key(j.level, j.gx, j.gz + 1))
+                            readyNodes.get(key(node.level, node.gx - 1, node.gz)),
+                            readyNodes.get(key(node.level, node.gx + 1, node.gz)),
+                            readyNodes.get(key(node.level, node.gx, node.gz - 1)),
+                            readyNodes.get(key(node.level, node.gx, node.gz + 1))
                     };
-                    int nbMask = 0;
-                    for (int k = 0; k < 4; k++) if (nb[k] != null && nb[k].dataReady) nbMask |= 1 << k;
+                    int nbMask = neighborMask(node);
                     float[] table = w.worldProvider.lightBrightnessTable;
                     int skySub = w.skylightSubtracted;
                     boolean fancy = Minecraft.isFancyGraphicsEnabled();
-                    LodMesher.Mesh m = LodMesher.mesh(n, nb, table, skySub, fancy, scratch);
-                    done.add(new BuiltMesh(n, j.epoch, n.version, skySub, fancy, nbMask, m));
+                    LodMesher.Mesh m = LodMesher.mesh(node, nb, table, skySub, fancy, scratch);
+                    done.add(new BuiltMesh(node, j.epoch, node.version, skySub, fancy, nbMask, m));
                 } else {
-                    ensureData(wg, j.level, j.gx, j.gz, j.epoch);
+                    ensureData(wg, node.level, node.gx, node.gz, j.epoch);
                 }
             } catch (Throwable t) {
                 t.printStackTrace();
             } finally {
-                LodNode n = nodes.get(key(j.level, j.gx, j.gz));
-                if (n != null) {
-                    if (j.mesh) n.queuedMesh = false;
-                    else n.queuedData = false;
-                }
+                if (j.mesh) node.queuedMesh = false;
+                else node.queuedData = false;
             }
         }
     }
@@ -299,12 +346,17 @@ public final class LodEngine {
         WorldRenderer w0 = wrs[gz * T * W + gx];
         if (w0.posX != wx || w0.posZ != wz) return false;
         boolean anyInit = false;
+        boolean groundInit = false;
         for (int cy = 0; cy < T; cy++) {
             WorldRenderer w = wrs[(gz * T + cy) * W + gx];
-            if (w.isInFrustum && cy >= 1 && !w.isInitialized) return false;
-            if (w.isInitialized) anyInit = true;
+            if (w.isInitialized) {
+                anyInit = true;
+                if (cy >= 1 && cy <= 5) groundInit = true;
+            } else if (w.isInFrustum && cy >= 1 && cy <= 4) {
+                return false;
+            }
         }
-        return anyInit;
+        return groundInit || anyInit;
     }
 
     private static void selectNode(RenderGlobal rg, int level, int gx, int gz, int camCX, int camCZ, int innerSafe,
@@ -346,7 +398,7 @@ public final class LodEngine {
 
         if ((!node.dataReady || node.dataDirty) && !node.queuedData && jobs.size() < 256) {
             node.queuedData = true;
-            jobs.add(new Job(false, chosenLevel, gx, gz, (int) d + chosenLevel * 8, epoch, node.version));
+            jobs.add(new Job(false, node, (int) d + chosenLevel * 8, epoch, node.version));
         }
     }
 
@@ -465,11 +517,7 @@ public final class LodEngine {
             double ox = n.gx * size, oz = n.gz * size;
             if (!sharedFrustum.isBoxInFrustum(ox, 0.0, oz, ox + size, 128.0, oz + size)) continue;
 
-            int nbMask = 0;
-            if (readyNodes.containsKey(key(n.level, n.gx - 1, n.gz))) nbMask |= 1;
-            if (readyNodes.containsKey(key(n.level, n.gx + 1, n.gz))) nbMask |= 2;
-            if (readyNodes.containsKey(key(n.level, n.gx, n.gz - 1))) nbMask |= 4;
-            if (readyNodes.containsKey(key(n.level, n.gx, n.gz + 1))) nbMask |= 8;
+            int nbMask = neighborMask(n);
 
             boolean needsMesh = n.bakedVersion != n.version
                     || n.bakedLightSub != skySub
@@ -479,7 +527,7 @@ public final class LodEngine {
                 n.queuedMesh = true;
                 double cx = ox + size * 0.5 - camX, cz = oz + size * 0.5 - camZ;
                 int dist = (int) Math.hypot(cx, cz);
-                jobs.add(new Job(true, n.level, n.gx, n.gz, dist - 50000, epoch, n.version));
+                jobs.add(new Job(true, n, dist - 50000, epoch, n.version));
                 meshQueued++;
             }
 

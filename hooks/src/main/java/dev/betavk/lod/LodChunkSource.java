@@ -80,14 +80,23 @@ public final class LodChunkSource {
     public static void captureChunk(Chunk c) {
         if (c == null || c.blocks == null || c.blocks.length != 32768) return;
         if (liveSnaps.size() > MAX_LIVE_SNAPS) {
-            // Simple bounded clear of older entries when cache overflows; disk & gen remain available.
-            liveSnaps.clear();
+            int drop = MAX_LIVE_SNAPS / 4;
+            var it = liveSnaps.keySet().iterator();
+            while (it.hasNext() && drop-- > 0) {
+                it.next();
+                it.remove();
+            }
         }
         byte[] bl = c.blocks.clone();
         byte[] dt = c.data != null && c.data.data != null ? c.data.data.clone() : new byte[16384];
         byte[] sk = c.skylightMap != null && c.skylightMap.data != null ? c.skylightMap.data.clone() : new byte[16384];
         byte[] bk = c.blocklightMap != null && c.blocklightMap.data != null ? c.blocklightMap.data.clone() : new byte[16384];
         liveSnaps.put(key(c.xPosition, c.zPosition), new ChunkSnap(bl, dt, sk, bk));
+    }
+
+    /** Lock-free lookup of a cached live chunk snapshot (returns null if not captured). */
+    static ChunkSnap peekSnap(int cx, int cz) {
+        return liveSnaps.get(key(cx, cz));
     }
 
     /** Worker thread: resolve chunk (cx, cz) from live edits, McRegion disk, or generator fallback. */

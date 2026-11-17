@@ -103,13 +103,14 @@ public final class LodMesher {
         if (vy >= node.h) return LodNode.pack(0, 0, 15, 0, 0);
         if (vx >= 0 && vx < dim && vz >= 0 && vz < dim) return node.get(vx, vy, vz);
         int ni = -1;
-        if (vx < 0 && vz >= 0 && vz < dim) { ni = 0; vx += dim; }
-        else if (vx >= dim && vz >= 0 && vz < dim) { ni = 1; vx -= dim; }
-        else if (vz < 0 && vx >= 0 && vx < dim) { ni = 2; vz += dim; }
-        else if (vz >= dim && vx >= 0 && vx < dim) { ni = 3; vz -= dim; }
+        int nx = vx, nz = vz;
+        if (nx < 0 && nz >= 0 && nz < dim) { ni = 0; nx += dim; }
+        else if (nx >= dim && nz >= 0 && nz < dim) { ni = 1; nx -= dim; }
+        else if (nz < 0 && nx >= 0 && nx < dim) { ni = 2; nz += dim; }
+        else if (nz >= dim && nx >= 0 && nx < dim) { ni = 3; nz -= dim; }
         LodNode n = ni >= 0 ? nb[ni] : null;
-        if (n == null || !n.dataReady || n.dim != dim || n.h != node.h) return LodNode.pack(0, 0, 15, 0, 0);
-        return n.get(vx, vy, vz);
+        if (n != null && n.dataReady && n.dim == dim && n.h == node.h) return n.get(nx, vy, nz);
+        return LodEngine.sampleCrossLevel(node, vx, vy, vz);
     }
 
     private static boolean isWater(int id) {

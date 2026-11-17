@@ -17,11 +17,37 @@ struct PlayView: View {
     private var activeJar: CustomJar? { instance.jarID.flatMap { jars.jar($0) } }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             heroStage
-            quickStrip
-            instanceWarning
-            bottomPair
+
+            HStack(spacing: 12) {
+                quickCell("Instance") {
+                    instancePicker
+                }
+                quickCell("Renderer") {
+                    Segmented(options: [Backend.vulkan, Backend.gl], selection: backendBinding, expanded: true) {
+                        $0 == .vulkan ? "Vulkan" : "OpenGL"
+                    }
+                    .disabled(runner.isRunning)
+                }
+                quickCell("Display") {
+                    Segmented(options: [false, true], selection: fullscreenBinding, expanded: true) {
+                        $0 ? "Fullscreen" : "Window"
+                    }
+                    .disabled(runner.isRunning)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+
+            if let warning = activeWarningRow {
+                warning
+            }
+
+            HStack(spacing: 12) {
+                worldsCard
+                utilityCard
+            }
+            .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear { state.refreshWorlds() }
@@ -99,27 +125,7 @@ struct PlayView: View {
         return "\(renderer) · \(screen) · \(mem)"
     }
 
-    // MARK: - Minimal 3-Column Quick Strip
-
-    private var quickStrip: some View {
-        HStack(spacing: 12) {
-            quickCell("Instance") {
-                instancePicker
-            }
-            quickCell("Renderer") {
-                Segmented(options: [Backend.vulkan, Backend.gl], selection: backendBinding) {
-                    $0 == .vulkan ? "Vulkan" : "OpenGL"
-                }
-                .disabled(runner.isRunning)
-            }
-            quickCell("Display") {
-                Segmented(options: [false, true], selection: fullscreenBinding) {
-                    $0 ? "Fullscreen" : "Window"
-                }
-                .disabled(runner.isRunning)
-            }
-        }
-    }
+    // MARK: - Bindings & Pickers
 
     private var backendBinding: Binding<Backend> {
         Binding(
@@ -192,44 +198,38 @@ struct PlayView: View {
                 .font(.system(size: 11.5, weight: .medium))
                 .foregroundStyle(Theme.dim)
             content()
+                .frame(height: 34)
         }
         .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .surface(radius: 14)
     }
 
-    @ViewBuilder private var instanceWarning: some View {
-        if let j = activeJar {
-            let level: JarReport.Level = j.report?.level ?? .red
-            if level != .green {
-                HStack(spacing: 10) {
-                    Image(systemName: level.symbol).foregroundStyle(level.color)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(j.report?.headline ?? "Custom jar issue")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text(j.failure ?? (j.report?.reasons.first ?? ""))
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                    Spacer()
-                    Button("Inspect") { state.tab = .instances }
-                        .buttonStyle(SecondaryButtonStyle(tint: level.color))
+    private var activeWarningRow: AnyView? {
+        guard let j = activeJar else { return nil }
+        let level: JarReport.Level = j.report?.level ?? .red
+        guard level != .green else { return nil }
+        return AnyView(
+            HStack(spacing: 10) {
+                Image(systemName: level.symbol).foregroundStyle(level.color)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(j.report?.headline ?? "Custom jar issue")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(j.failure ?? (j.report?.reasons.first ?? ""))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
-                .padding(12)
-                .surface(radius: 12, fill: level.color.opacity(0.10))
+                Spacer()
+                Button("Inspect") { state.tab = .instances }
+                    .buttonStyle(SecondaryButtonStyle(tint: level.color))
             }
-        }
+            .padding(12)
+            .surface(radius: 12, fill: level.color.opacity(0.10))
+        )
     }
 
     // MARK: - Bottom Pair
-
-    private var bottomPair: some View {
-        HStack(alignment: .top, spacing: 14) {
-            worldsCard
-            utilityCard
-        }
-    }
 
     private var worldsCard: some View {
         let recent = Array(state.worlds.sorted { ($0.modified ?? .distantPast) > ($1.modified ?? .distantPast) }.prefix(3))
@@ -267,7 +267,7 @@ struct PlayView: View {
             }
         }
         .padding(18)
-        .frame(maxWidth: .infinity, minHeight: 156, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 156, maxHeight: .infinity, alignment: .topLeading)
         .surface(radius: 16)
     }
 
@@ -302,8 +302,8 @@ struct PlayView: View {
             }
         }
         .padding(18)
-        .frame(width: 272, alignment: .topLeading)
-        .frame(minHeight: 156, alignment: .topLeading)
+        .frame(width: 286, alignment: .topLeading)
+        .frame(minHeight: 156, maxHeight: .infinity, alignment: .topLeading)
         .surface(radius: 16)
     }
 

@@ -187,6 +187,7 @@ struct SecondaryButtonStyle: ButtonStyle {
 struct Segmented<T: Hashable>: View {
     let options: [T]
     @Binding var selection: T
+    var expanded = false
     let title: (T) -> String
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var highlight
@@ -201,6 +202,7 @@ struct Segmented<T: Hashable>: View {
                     Text(title(option))
                         .font(.system(size: 12.5, weight: on ? .semibold : .medium))
                         .foregroundStyle(on ? Theme.bg : Theme.dim)
+                        .frame(maxWidth: expanded ? .infinity : nil)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background {
@@ -217,6 +219,7 @@ struct Segmented<T: Hashable>: View {
             }
         }
         .padding(3)
+        .frame(maxWidth: expanded ? .infinity : nil)
         .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.stroke, lineWidth: 1))
         .animation(reduceMotion ? nil : LauncherMotion.change, value: selection)
@@ -313,5 +316,87 @@ struct ContentUnavailable: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 36)
+    }
+}
+
+/// Renders lightweight GitHub release markdown (headings, bullet lists, inline bold/italic/code/links).
+struct MarkdownView: View {
+    let text: String
+
+    private enum LineKind {
+        case spacer
+        case heading(Int, String)
+        case bullet(String)
+        case paragraph(String)
+    }
+
+    private var lines: [LineKind] {
+        text.replacingOccurrences(of: "\r\n", with: "\n")
+            .components(separatedBy: "\n")
+            .map { raw in
+                let trimmed = raw.trimmingCharacters(in: .whitespaces)
+                if trimmed.isEmpty { return .spacer }
+                if trimmed.hasPrefix("### ") { return .heading(3, String(trimmed.dropFirst(4))) }
+                if trimmed.hasPrefix("## ") { return .heading(2, String(trimmed.dropFirst(3))) }
+                if trimmed.hasPrefix("# ") { return .heading(1, String(trimmed.dropFirst(2))) }
+                if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") || trimmed.hasPrefix("• ") {
+                    return .bullet(String(trimmed.dropFirst(2)))
+                }
+                return .paragraph(trimmed)
+            }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, kind in
+                switch kind {
+                case .spacer:
+                    Spacer().frame(height: 3)
+                case .heading(let level, let raw):
+                    inlineText(raw)
+                        .font(.system(size: level == 1 ? 14 : 13, weight: .semibold))
+                        .foregroundStyle(Theme.text)
+                        .padding(.top, 2)
+                case .bullet(let raw):
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Circle()
+                            .fill(Theme.accent.opacity(0.8))
+                            .frame(width: 5, height: 5)
+                            .offset(y: -1.5)
+                        inlineText(raw)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                case .paragraph(let raw):
+                    inlineText(raw)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .textSelection(.enabled)
+    }
+
+    private func inlineText(_ raw: String) -> Text {
+        guard var attributed = try? AttributedString(
+            markdown: raw,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) else {
+            return Text(raw)
+        }
+        for run in attributed.runs {
+            if let intent = run.inlinePresentationIntent {
+                if intent.contains(.code) {
+                    attributed[run.range].font = .system(size: 11.5, design: .monospaced)
+                    attributed[run.range].foregroundColor = Theme.text
+                }
+                if intent.contains(.stronglyEmphasized) {
+                    attributed[run.range].foregroundColor = Theme.text
+                }
+            }
+        }
+        return Text(attributed)
     }
 }

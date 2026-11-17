@@ -153,11 +153,7 @@ struct SettingsView: View {
                                 .foregroundStyle(Theme.accent)
                         }
                         if !release.notes.isEmpty {
-                            Text(release.notes)
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                                .fixedSize(horizontal: false, vertical: true)
+                            MarkdownView(text: release.notes)
                         }
                     }
                     .padding(12)

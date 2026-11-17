@@ -12,6 +12,13 @@ struct RootView: View {
     var body: some View {
         ZStack {
             Theme.bg.ignoresSafeArea()
+            if !showsScene && !state.wizardOpen {
+                DitherBackdrop(paused: runner.isRunning)
+                    .frame(height: 360)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
             // The scene stays in the tree and only its opacity changes, so it really fades in when Play opens and out when you leave.
             HeroScene(paused: runner.isRunning || !sceneAwake)
                 .overlay {
@@ -76,59 +83,70 @@ struct RootView: View {
     }
 }
 
-/// The floating bar at the top: the app's name, then the four pages. The selected page carries the accent underline.
+/// Full-width website masthead: Silica wordmark on the left (clearing window controls), clean flat nav links with 6x6 green square indicator, and account chip on the right.
 private struct LauncherNavigation: View {
     @EnvironmentObject private var state: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var selection
 
     var body: some View {
-        HStack(spacing: 30) {
-            HStack(spacing: 24) {
+        HStack(spacing: 0) {
+            HStack(spacing: 10) {
+                if let url = Bundle.main.url(forResource: "SilicaMark", withExtension: "png"),
+                   let image = NSImage(contentsOf: url) {
+                    Image(nsImage: image)
+                        .resizable().frame(width: 26, height: 26)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .accessibilityHidden(true)
+                } else {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(LinearGradient(colors: [Theme.tint, Theme.accent], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 26, height: 26)
+                        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                        .accessibilityHidden(true)
+                }
+                Text("Silica").font(.system(size: 16, weight: .bold)).tracking(-0.3)
+            }
+            .padding(.leading, 82)
+
+            HStack(spacing: 6) {
                 ForEach(Array(Tab.allCases.enumerated()), id: \.element) { index, tab in
                     navItem(tab)
                         .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
                 }
             }
+            .padding(.leading, 26)
+            .animation(reduceMotion ? nil : LauncherMotion.change, value: state.tab)
+
+            Spacer(minLength: 12)
+            AccountMenu()
+                .padding(.trailing, 24)
         }
-        .animation(reduceMotion ? nil : LauncherMotion.change, value: state.tab)
-        .padding(.horizontal, 14)
+        .frame(height: 54)
         .background {
             if state.tab == .play {
-                Capsule().fill(.ultraThinMaterial)
+                Theme.bg.opacity(0.45).background(.ultraThinMaterial)
             } else {
-                Capsule().fill(Theme.sidebar)
+                Theme.bg.opacity(0.88).background(.ultraThinMaterial)
             }
         }
-        .overlay { Capsule().strokeBorder(Theme.stroke).allowsHitTesting(false) }
-        .padding(.horizontal, 24)
-        .padding(.top, 28)
-        .padding(.bottom, 8)
-        .frame(maxWidth: .infinity)
-        .overlay(alignment: .leading) {
-            // the name sits in the corner beside the window buttons, so the bar itself is only the four pages
-            HStack(spacing: 8) {
-                Image(nsImage: Theme.appMark)
-                    .resizable().frame(width: 28, height: 28).accessibilityHidden(true)
-                Text("Silica").font(.system(size: 17, weight: .semibold))
-            }
-            .padding(.leading, 84)
-            .offset(y: 10)   // the bar has 28 pt above it and 8 below: this puts the name on the bar's own centre line
-        }
-        .overlay(alignment: .trailing) {
-            AccountMenu()
-                .padding(.trailing, 28)
-                .offset(y: 10)   // same centre line as the bar and the logo
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Theme.stroke).frame(height: 1).opacity(state.tab == .play ? 0.5 : 1)
         }
     }
 
     private func navItem(_ tab: Tab) -> some View {
         let selected = state.tab == tab
         return Button { state.tab = tab } label: {
-            PillControlLabel(title: tab.rawValue, symbol: tab.symbol, selected: selected)
+            Text(tab.rawValue)
+                .font(.system(size: 13.5, weight: selected ? .semibold : .medium))
+                .foregroundStyle(selected ? Color.primary : Color.secondary)
+                .padding(.horizontal, 11).padding(.vertical, 7)
+                .contentShape(Rectangle())
                 .overlay(alignment: .bottom) {
                     if selected {
-                        Rectangle().fill(Theme.accent).frame(height: 2)
+                        Rectangle().fill(Theme.accent).frame(width: 5, height: 5)
+                            .offset(y: 1)
                             .matchedGeometryEffect(id: "underline", in: selection)
                     }
                 }

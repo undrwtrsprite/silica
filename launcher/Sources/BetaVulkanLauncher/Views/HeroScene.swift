@@ -40,13 +40,70 @@ struct HeroScene: View {
         return v - floor(v)
     }
 
+    private static let bayer: [Int] = [
+        0, 8, 2, 10,
+        12, 4, 14, 6,
+        3, 11, 1, 9,
+        15, 7, 13, 5
+    ]
+
+    private func drawDitheredSky(_ ctx: inout GraphicsContext, _ size: CGSize, _ t: Double, _ skyTop: RGB, _ skyBottom: RGB, _ night: Double, _ pxShift: Double) {
+        let px = 4
+        let pw = max(96, Int(ceil(size.width / CGFloat(px))))
+        let ph = max(48, Int(ceil(size.height * 0.78 / CGFloat(px))))
+        var bytes = [UInt8](repeating: 0, count: pw * ph * 4)
+
+        for y in 0..<ph {
+            let ny = Double(y) / Double(ph)
+            let bRow = (y & 3) * 4
+            let sky = skyTop.mix(skyBottom, ny)
+            for x in 0..<pw {
+                let nx = Double(x) / Double(pw)
+                let b = (Double(Self.bayer[bRow + (x & 3)]) + 0.5) / 16.0
+                // subtle Bayer dithered sky banding + night/dusk emerald aurora ribbon
+                let bandMix = min(1.0, max(0.0, floor((ny * 6.0) + b) / 6.0))
+                let c = skyTop.mix(skyBottom, bandMix)
+                var r = c.r * 255.0, g = c.g * 255.0, bl = c.b * 255.0
+
+                if night > 0.04 {
+                    let w1 = 0.54 + 0.12 * sin(nx * 5.0 + t * 0.35 + pxShift * 0.8) + 0.04 * cos(nx * 9.5 - t * 0.25)
+                    let d1 = exp(-pow((ny - w1) / 0.16, 2))
+                    let w2 = 0.68 + 0.09 * cos(nx * 4.2 - t * 0.28 - pxShift * 0.5)
+                    let d2 = exp(-pow((ny - w2) / 0.14, 2))
+                    let aur1 = min(1.0, floor(d1 * night * 4.0 + b) / 4.0)
+                    let aur2 = min(1.0, floor(d2 * night * 3.0 + b) / 3.0)
+                    r += aur1 * 48.0 + aur2 * 64.0
+                    g += aur1 * 124.0 + aur2 * 56.0
+                    bl += aur1 * 72.0 + aur2 * 24.0
+                }
+
+                let idx = (y * pw + x) * 4
+                bytes[idx] = UInt8(min(255, max(0, Int(r))))
+                bytes[idx + 1] = UInt8(min(255, max(0, Int(g))))
+                bytes[idx + 2] = UInt8(min(255, max(0, Int(bl))))
+                bytes[idx + 3] = 255
+            }
+        }
+
+        let data = Data(bytes)
+        if let provider = CGDataProvider(data: data as CFData),
+           let cgImage = CGImage(
+            width: pw, height: ph, bitsPerComponent: 8, bitsPerPixel: 32,
+            bytesPerRow: pw * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+            provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent
+           ) {
+            ctx.draw(Image(decorative: cgImage, scale: 1), in: CGRect(x: 0, y: 0, width: size.width, height: size.height * 0.78))
+        }
+    }
+
     private func sky(_ e: Double) -> (top: RGB, bottom: RGB) {
         let keys: [(Double, RGB, RGB)] = [
-            (-1.00, RGB(0.015, 0.02, 0.07), RGB(0.04, 0.05, 0.15)),
-            (-0.20, RGB(0.06, 0.06, 0.19), RGB(0.26, 0.14, 0.31)),
-            (0.00, RGB(0.22, 0.19, 0.44), RGB(0.98, 0.50, 0.30)),
-            (0.22, RGB(0.31, 0.50, 0.87), RGB(0.99, 0.77, 0.58)),
-            (1.00, RGB(0.22, 0.48, 0.93), RGB(0.69, 0.86, 1.00)),
+            (-1.00, RGB(0.020, 0.028, 0.043), RGB(0.039, 0.051, 0.067)),
+            (-0.20, RGB(0.039, 0.065, 0.082), RGB(0.086, 0.212, 0.195)),
+            (0.00, RGB(0.10, 0.16, 0.24), RGB(0.91, 0.56, 0.31)),
+            (0.22, RGB(0.24, 0.45, 0.78), RGB(0.95, 0.76, 0.56)),
+            (1.00, RGB(0.22, 0.48, 0.90), RGB(0.66, 0.85, 0.98)),
         ]
         for i in 1..<keys.count where e <= keys[i].0 {
             let a = keys[i - 1], b = keys[i]
@@ -101,11 +158,12 @@ struct HeroScene: View {
         eased.y += (Double(pointer.y) - eased.y) * 0.10
         let px = eased.x - 0.5, py = eased.y - 0.5
 
-        // sky
-        ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .linearGradient(Gradient(colors: [skyTop.color, skyBottom.color]), startPoint: .zero, endPoint: CGPoint(x: 0, y: h * 0.78)))
+        // sky (ordered Bayer-dithered bands + emerald aurora ribbons at dusk/night)
+        ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(skyBottom.color))
+        let night = 1 - day
+        drawDitheredSky(&ctx, size, t, skyTop, skyBottom, night, px)
 
         // stars
-        let night = 1 - day
         if night > 0.02 {
             for i in 0..<90 {
                 let sx = Self.hash(i, 3) * w - px * 8, sy = Self.hash(i, 9) * h * 0.55

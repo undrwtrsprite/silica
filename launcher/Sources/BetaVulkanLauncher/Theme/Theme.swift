@@ -14,23 +14,23 @@ enum Theme {
         Color(nsColor: NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light })
     }
 
-    static let bg = dyn(NSColor(white: 0.96, alpha: 1), NSColor(white: 0.08, alpha: 1))
-    static let sidebar = dyn(NSColor(white: 0.99, alpha: 1), NSColor(white: 0.115, alpha: 1))
-    static let card = dyn(.white, NSColor(white: 0.125, alpha: 1))
-    static let cardHigh = dyn(NSColor(white: 0.94, alpha: 1), NSColor(white: 0.16, alpha: 1))
-    static let stroke = dyn(NSColor(white: 0, alpha: 0.07), NSColor(white: 1, alpha: 0.07))
-    static let text = Color.primary
-    static let dim = Color.secondary
+    static let bg = dyn(NSColor(white: 0.96, alpha: 1), NSColor(red: 0.039, green: 0.051, blue: 0.067, alpha: 1))       // #0a0d11
+    static let sidebar = dyn(NSColor(white: 0.99, alpha: 1), NSColor(red: 0.051, green: 0.067, blue: 0.086, alpha: 1))  // #0d1116
+    static let card = dyn(.white, NSColor(red: 0.067, green: 0.082, blue: 0.102, alpha: 1))                             // ~rgba(255,255,255,.035) over bg
+    static let cardHigh = dyn(NSColor(white: 0.94, alpha: 1), NSColor(red: 0.094, green: 0.114, blue: 0.137, alpha: 1)) // ~rgba(255,255,255,.065) over bg
+    static let stroke = dyn(NSColor(white: 0, alpha: 0.08), NSColor(white: 1, alpha: 0.08))
+    static let text = dyn(NSColor(white: 0.08, alpha: 1), NSColor(red: 0.933, green: 0.945, blue: 0.957, alpha: 1))     // #eef1f4
+    static let dim = dyn(NSColor(white: 0.42, alpha: 1), NSColor(red: 0.604, green: 0.647, blue: 0.690, alpha: 1))      // #9aa5b0
 
-    static let tint = Color(red: 0.09, green: 0.70, blue: 0.66)        // glass teal
-    static let tintDeep = Color(red: 0.10, green: 0.46, blue: 0.84)    // glass blue
-    static let sand = Color(red: 0.95, green: 0.74, blue: 0.38)
-    static let good = Color(red: 0.26, green: 0.78, blue: 0.52)
+    static let tint = Color(red: 0.310, green: 0.561, blue: 0.839)      // #4f8fd6 (water blue)
+    static let tintDeep = Color(red: 0.24, green: 0.45, blue: 0.72)
+    static let sand = Color(red: 0.886, green: 0.663, blue: 0.294)      // #e2a94b (amber)
+    static let good = Color(red: 0.482, green: 0.788, blue: 0.435)      // #7bc96f (accent)
     static let bad = Color(red: 0.95, green: 0.34, blue: 0.32)
 
-    static let accent = dyn(NSColor(red: 0.20, green: 0.34, blue: 0.16, alpha: 1),
-                            NSColor(red: 0.77, green: 0.88, blue: 0.63, alpha: 1))
-    static let onAccent = dyn(.white, NSColor(red: 0.10, green: 0.14, blue: 0.09, alpha: 1))
+    static let accent = dyn(NSColor(red: 0.17, green: 0.49, blue: 0.19, alpha: 1),
+                            NSColor(red: 0.482, green: 0.788, blue: 0.435, alpha: 1))                                    // #7bc96f
+    static let onAccent = dyn(.white, NSColor(red: 0.043, green: 0.090, blue: 0.027, alpha: 1))                          // #0b1707
 }
 
 enum LauncherMotion {
@@ -43,10 +43,29 @@ enum LauncherMotion {
 }
 
 extension View {
-    /// The standard surface: a rounded card with a hairline edge.
-    func surface(radius: CGFloat = 10, fill: Color = Theme.card) -> some View {
+    /// The standard surface: a rounded card with a hairline edge matching website `--r-card: 18px`.
+    func surface(radius: CGFloat = 18, fill: Color = Theme.card) -> some View {
         background(fill, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Theme.stroke, lineWidth: 1))
+    }
+}
+
+/// Website-matching three-square green eyebrow kicker.
+struct Eyebrow: View {
+    let text: String
+    var uppercase = false
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 3) {
+                Rectangle().fill(Theme.accent).frame(width: 7, height: 7)
+                Rectangle().fill(Theme.accent.opacity(0.45)).frame(width: 7, height: 7)
+                Rectangle().fill(Theme.accent.opacity(0.18)).frame(width: 7, height: 7)
+            }
+            Text(uppercase ? text.uppercased() : text)
+                .font(.system(size: uppercase ? 10.5 : 13, weight: .semibold, design: uppercase ? .monospaced : .default))
+                .tracking(uppercase ? 0.8 : 0)
+                .foregroundStyle(Theme.accent)
+        }
     }
 }
 
@@ -74,9 +93,18 @@ struct PrimaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.system(size: large ? 17 : 14, weight: .semibold, design: .default))
             .foregroundStyle(Theme.onAccent)
-            .padding(.horizontal, large ? 20 : 14).padding(.vertical, large ? 11 : 8)
-            .background(Theme.accent.opacity(hover || configuration.isPressed ? 0.84 : 1),
-                        in: RoundedRectangle(cornerRadius: 7))
+            .padding(.horizontal, large ? 24 : 16).padding(.vertical, large ? 13 : 9)
+            .background {
+                RoundedRectangle(cornerRadius: large ? 12 : 10, style: .continuous)
+                    .fill(Theme.accent.opacity(hover || configuration.isPressed ? 0.88 : 1))
+                    .overlay(alignment: .bottom) {
+                        RoundedRectangle(cornerRadius: large ? 12 : 10, style: .continuous)
+                            .fill(Color.black.opacity(0.16))
+                            .frame(height: 3)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: large ? 12 : 10, style: .continuous))
+            }
+            .shadow(color: hover ? Theme.accent.opacity(0.38) : .clear, radius: 14, y: 5)
             .opacity(enabled ? 1 : 0.45)
             .scaleEffect(!reduceMotion && configuration.isPressed ? 0.98 : 1)
             .animation(reduceMotion ? nil : LauncherMotion.press, value: configuration.isPressed)
@@ -97,7 +125,8 @@ struct SecondaryButtonStyle: ButtonStyle {
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(tint)
             .padding(.horizontal, 16).padding(.vertical, 8)
-            .background(tint.opacity(hover || configuration.isPressed ? 0.16 : 0.09), in: RoundedRectangle(cornerRadius: 7))
+            .background(tint.opacity(hover || configuration.isPressed ? 0.14 : 0.075), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.stroke, lineWidth: 1))
             .opacity(enabled ? 1 : 0.45)
             .scaleEffect(!reduceMotion && configuration.isPressed ? 0.98 : 1)
             .animation(reduceMotion ? nil : LauncherMotion.press, value: configuration.isPressed)
@@ -144,8 +173,9 @@ struct PageHeader: View {
     let title: String
     let subtitle: String
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.system(size: 30, weight: .bold, design: .default))
+        VStack(alignment: .leading, spacing: 6) {
+            Eyebrow(text: title)
+            Text(title).font(.system(size: 32, weight: .bold, design: .default)).tracking(-0.8)
             Text(subtitle).font(.system(size: 14)).foregroundStyle(.secondary)
         }
     }

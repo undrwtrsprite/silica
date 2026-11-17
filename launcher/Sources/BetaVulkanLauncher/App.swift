@@ -29,6 +29,7 @@ struct BetaVulkanLauncherApp: App {
                 .task {
                     if state.settings.checkForUpdates != false { await state.updates.check(quiet: true) }
                 }
+                .preferredColorScheme(.dark)
                 .frame(minWidth: 940, minHeight: 600)
         }
         .defaultSize(width: 1080, height: 700)

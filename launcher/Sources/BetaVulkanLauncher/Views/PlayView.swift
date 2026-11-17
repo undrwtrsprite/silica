@@ -28,25 +28,38 @@ struct PlayView: View {
         .onAppear { state.refreshWorlds() }
     }
 
-    private var bannerHeight: CGFloat { min(820, max(460, viewportHeight * 0.74)) }
+    private var bannerHeight: CGFloat { min(700, max(370, viewportHeight * 0.62)) }
 
-    /// The title band. The animated scene is drawn by RootView across the whole window, behind this.
+    /// Website-matching hero band over the Bayer-dithered voxel landscape.
     private var banner: some View {
         HStack(alignment: .bottom, spacing: 24) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Minecraft Beta 1.7.3")
-                    .font(.system(size: 46, weight: .heavy))
-                    .tracking(-2.5)
-                    .accessibilityAddTraits(.isHeader)
-                Text("NATIVE ON APPLE SILICON · VULKAN")
-                    .font(.system(size: 11, weight: .bold)).tracking(1.2)
-                    .foregroundStyle(.white.opacity(0.7))
+            VStack(alignment: .leading, spacing: 10) {
+                Eyebrow(text: "The Beta launcher for Mac")
+                VStack(alignment: .leading, spacing: -4) {
+                    Text("Minecraft Beta,")
+                    Text("finally native.").foregroundStyle(Theme.accent)
+                }
+                .font(.system(size: 46, weight: .bold))
+                .tracking(-2.0)
+                .accessibilityAddTraits(.isHeader)
+                Text("Beta 1.7.3 on Apple Silicon. Vulkan rendering, real-block distant terrain, no Rosetta.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white.opacity(0.78))
             }
-            Spacer(minLength: 0)
-            playButton
+            Spacer(minLength: 16)
+            VStack(alignment: .trailing, spacing: 10) {
+                playButton
+                HStack(spacing: 14) {
+                    Label("Apple Silicon", systemImage: "cpu")
+                    Label("Vulkan 1.2", systemImage: "bolt.fill")
+                    Label("macOS 14+", systemImage: "laptopcomputer")
+                }
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.58))
+            }
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 28).padding(.bottom, 26)
+        .padding(.horizontal, 28).padding(.bottom, 24)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: bannerHeight, alignment: .bottomLeading)
         .environment(\.colorScheme, .dark)
@@ -99,7 +112,7 @@ struct PlayView: View {
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.stroke.opacity(2)))
+        .surface(radius: 18)
     }
 
     private func launchChoice<Value: Equatable>(
@@ -241,8 +254,8 @@ private struct WorldTile: View {
                 Spacer(minLength: 0)
             }
             .padding(12).frame(maxWidth: .infinity)
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.stroke.opacity(2)))
-            .overlay(alignment: .bottom) { Rectangle().fill(Theme.accent).frame(width: 40, height: 2).opacity(hover ? 1 : 0) }
+            .surface(radius: 18)
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(hover ? Theme.accent.opacity(0.5) : .clear, lineWidth: 1))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

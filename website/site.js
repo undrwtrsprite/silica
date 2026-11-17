@@ -381,11 +381,11 @@
         const ta = $('.tile', byId[a]).getBoundingClientRect(), tb = $('.tile', byId[b]).getBoundingClientRect();
         const x1 = ta.right - tr.left, y1c = ta.top + ta.height / 2 - tr.top, x2 = tb.left - tr.left, y2 = tb.top + tb.height / 2 - tr.top;
         const y1 = Math.abs(y2 - y1c) > 4 ? y1c + Math.sign(y2 - y1c) * 9 : y1c, mid = x1 + (x2 - x1) * .5;   // wires leaving the same tile fan out instead of stacking
-        const st = byId[b].dataset.state, cls = st === 'done' || st === 'now' ? 'on' : st === 'exp' ? 'exp' : '';
+        const st = byId[b].dataset.state, cls = st === 'done' || st === 'almost' || st === 'now' ? 'on' : st === 'exp' ? 'exp' : '';
         return `<path class="w ${cls}" d="M${x1.toFixed(1)} ${y1.toFixed(1)}H${mid.toFixed(1)}V${y2.toFixed(1)}H${x2.toFixed(1)}"/>`;
       }).join('');
     };
-    const chipClass = { done: 'done', now: 'now', exp: 'exp', next: 'next', later: 'next' };
+    const chipClass = { done: 'done', almost: 'almost', now: 'now', exp: 'exp', next: 'next', later: 'next' };
     const select = b => {
       btns.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
       $('#d-chip').textContent = b.dataset.status; $('#d-chip').className = 'chip ' + chipClass[b.dataset.state];
@@ -393,7 +393,7 @@
       detail.classList.remove('swap'); void detail.offsetWidth; if (!still) detail.classList.add('swap');
     };
     btns.forEach(b => b.addEventListener('click', () => select(b)));
-    const first = byId.frames; if (first) select(first);
+    const first = byId.lods || byId.frames || btns[0]; if (first) select(first);
     wires();
     addEventListener('resize', wires);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(wires);

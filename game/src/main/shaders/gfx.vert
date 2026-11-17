@@ -27,6 +27,7 @@ layout(set = 0, binding = 0) uniform Params {
 layout(location = 0) out vec2 vUV;
 layout(location = 1) out mediump vec4 vColor;
 layout(location = 2) out highp float vFogDist;
+layout(location = 3) flat out vec2 vTileBase;
 
 void main() {
     vec4 pos4 = vec4(inPos, 1.0);
@@ -37,6 +38,12 @@ void main() {
     bool persp = u.normal.w > 0.5;   // set by the renderer from the projection matrix (inferring it from the combined matrix breaks for scaled models such as the hand)
     gl_Position = vec4(p.xy, persp ? p.z : (p.w - p.z) * 0.5, p.w);
     vUV = inUV;
+    if (u.ambient.a > 0.5) {
+        vec2 tileIdx = clamp(floor(inNormal.xy * (127.0 / 8.0) + 0.5), 0.0, 15.0);
+        vTileBase = tileIdx * (1.0 / 16.0);
+    } else {
+        vTileBase = vec2(-1.0);
+    }
 
     mediump vec4 c = u.flags.y > 0.5 ? inColor : u.color;
     bool doLight = SPEC_LIGHT < 0 ? (u.flags.z > 0.5) : (SPEC_LIGHT != 0);

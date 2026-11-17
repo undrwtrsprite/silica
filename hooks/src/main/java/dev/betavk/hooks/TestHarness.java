@@ -184,6 +184,15 @@ final class TestHarness {
             boolean fpsBefore = Opts.showFps;
             vs.actionPerformed(show);
             check("Show FPS toggles", Opts.showFps != fpsBefore);
+            net.minecraft.src.GuiButton bgBtn = null;
+            for (Object o : vs.controlList) if (o instanceof net.minecraft.src.GuiButton b && b.id == 307) bgBtn = b;
+            check("Video Settings has Better Grass button", bgBtn != null);
+            if (bgBtn != null) {
+                vs.actionPerformed(bgBtn);
+                check("Better Grass cycles to Fast: " + Opts.betterGrass, Opts.betterGrass == 1);
+                vs.actionPerformed(bgBtn);
+                check("Better Grass cycles to Fancy: " + Opts.betterGrass, Opts.betterGrass == 2);
+            }
             StringBuilder labels = new StringBuilder();
             gs.guiScale = 0;
             for (int i = 0; i < 6; i++) {
@@ -249,10 +258,12 @@ final class TestHarness {
                 Opts.renderChunks = 0;
                 Opts.continuousMusic = false;
                 Opts.lodQuality = 1;
+                Opts.betterGrass = 0;
                 Settings.load(gs);
-                check("Continuous Music, renderChunks, and LOD settings persist and reload",
+                check("Continuous Music, renderChunks, betterGrass, and LOD settings persist and reload",
                         txt.contains("continuousMusic:true") && txt.contains("lodEnabled:true") && txt.contains("lodQuality:2")
-                                && Opts.continuousMusic && Opts.renderChunks == 20 && Opts.lodQuality == 2);
+                                && txt.contains("betterGrass:2") && Opts.continuousMusic && Opts.renderChunks == 20
+                                && Opts.lodQuality == 2 && Opts.betterGrass == 2);
                 check("options.txt has showFps, maxFps, masterVolume, autosaveMinutes:1 and worldBackups:3", txt.contains("showFps:") && txt.contains("maxFps:") && txt.contains("masterVolume:0.2") && txt.contains("autosaveMinutes:1") && txt.contains("worldBackups:3"));
             } catch (Exception e) {
                 check("options.txt readable", false);
@@ -1002,6 +1013,10 @@ final class TestHarness {
                 historyChat.keyTyped('\0', 208);
                 check("Command history navigates both ways and restores the draft",
                         latest && older && newer && historyChat.message.equals("draft"));
+                mc.lineIsCommand("/fly 4");
+                check("Fly command enables flight with custom speed", Commands.isFlying(mc) && Math.abs(Commands.flySpeed() - 4.0F) < 0.001F);
+                mc.lineIsCommand("/fly off");
+                check("Fly off disables flight cleanly", !Commands.isFlying(mc));
                 mc.displayGuiScreen(null);
                 mc.theWorld.saveWorld(true, null);
                 check("last world remembered: " + Opts.lastWorld + " (expect wtest2)", "wtest2".equals(Opts.lastWorld));
@@ -1438,7 +1453,27 @@ final class TestHarness {
         }
     }
 
+    private static void quickPlay(Minecraft mc) {
+        if (frame > 5) return;
+        frame++;
+        if (frame == 5) {
+            mc.playerController = new net.minecraft.src.PlayerControllerSP(mc);
+            Opts.lodEnabled = true;
+            if (Opts.lodChunks <= 0) Opts.lodChunks = 64;
+            mc.gameSettings.difficulty = 0;
+            mc.startWorld("lodplay", "LOD Test World", 1337L);
+            if (!Commands.enabled(mc)) Commands.toggle(mc);
+            mc.displayGuiScreen(null);
+            mc.inGameHasFocus = true;
+            mc.ingameGUI.addChatMessage("Cheats & LODs enabled. Try /fly, /fly <speed>, or /fly speed <0.1-20>.");
+        }
+    }
+
     static void frame(Minecraft mc) {
+        if ("play".equals(System.getProperty("betavk.test"))) {
+            quickPlay(mc);
+            return;
+        }
         if ("join".equals(System.getProperty("betavk.test"))) {
             join(mc);
             return;

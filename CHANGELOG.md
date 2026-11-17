@@ -4,6 +4,13 @@
 
 Every migrated or rewritten class is listed below alongside release history.
 
+## v0.2.1 — Sharp Textured LODs, Disk Cache, Better Grass & Flight
+
+- **True-textured tiled LODs (`gfx.vert`, `gfx.frag`, `VulkanRenderer`):** Hardware-tiled terrain atlas sampling with mip-clamped borders gives distant greedy-merged terrain crisp 1:1 block textures alongside full border tree canopies (`SurfCell`) and coarse cliff grass/snow splitting.
+- **Persistent `.lod` disk cache (`LodDiskCache`, `LodChunkSource`, `LodEngine`):** Saves compressed region-bucketed LOD terrain inside `saves/<world>/lod/`, keeps explored distant LODs in view via bidirectional quadtree cover + background streaming, avoids reload storms with block-data change hashing, and auto-evicts far chunks under flight to prevent OOM.
+- **Better Grass (`Opts`, `VideoScreen`, `mesh/Hooks`, `LodMesher`):** Added a `Better Grass` toggle (`Off`, `Fast`, `Fancy`) in Video Settings that drapes grass textures down side faces on sloped terrain across both live chunks and distant LODs.
+- **Flight command (`Commands`, `CommandSuggestions`, `PatchSet`):** Added `/fly [on|off|speed <0.1-20>|<0.1-20>]` for high-speed world testing and building, suppressing fall damage and post-flight step sound spam.
+
 ## v0.2.0 — Minimal UI, Bayer Dither & Instances
 
 - **Ground-up launcher redesign:** Replaced the sidebar layout with a lighter website-matched top-bar workspace (`#11151b` / `#191f27`), subtle 4×4 Bayer-dithered motion (`DitherAurora`, `DitherHorizonStage`), and deterministic world seed previews (`WorldDitherMap`).

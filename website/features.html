@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"></noscript>
-<link rel="stylesheet" href="silica.css">
+<link rel="stylesheet" href="silica.css?v=5">
 <script>document.documentElement.classList.add('js')</script>
 <script type="module">
   import { inject } from "https://cdn.jsdelivr.net/npm/@vercel/analytics@2.0.1/dist/index.mjs";
@@ -70,7 +70,7 @@
   </nav>
   <div class="bar-actions">
     <a class="gh-link" href="https://github.com/undrwtrsprite/silica" aria-label="Silica on GitHub"><svg class="ico fill" aria-hidden="true"><use href="#i-gh"/></svg><span>GitHub</span></a>
-    <a class="btn primary sm" href="https://github.com/undrwtrsprite/silica/releases/download/v0.2.0/Silica-0.2.0.dmg" download>Download</a>
+    <a class="btn primary sm" href="https://github.com/undrwtrsprite/silica/releases/download/v0.2.1/Silica-0.2.1.dmg" download>Download</a>
   </div>
 </header>
 
@@ -141,7 +141,7 @@
         <div class="fcard card"><span class="fi"><svg class="ico" aria-hidden="true"><use href="#i-ctl"/></svg></span><h3>Controls</h3><p>Sneak toggle, zoom key.</p></div>
         <div class="fcard card"><span class="fi"><svg class="ico" aria-hidden="true"><use href="#i-snd"/></svg></span><h3>Sound</h3><p>Volume sliders, directional captions.</p></div>
         <div class="fcard card"><span class="fi"><svg class="ico" aria-hidden="true"><use href="#i-dbg"/></svg></span><h3>Debug</h3><p>Fuller F3, optional cheats with Tab completion.</p></div>
-        <div class="fcard card exp"><span class="fi"><svg class="ico" aria-hidden="true"><use href="#i-mod"/></svg></span><h3>Mods<span class="tag">experimental</span></h3><p>Jar compatibility checks.</p></div>
+        <div class="fcard card"><span class="fi"><svg class="ico" aria-hidden="true"><use href="#i-chunks"/></svg></span><h3>Better grass</h3><p>Off, Fast, or Fancy in Video Settings across live chunks and distant LODs.</p></div>
       </div>
     </div>
   </section>
@@ -162,8 +162,8 @@
             <tr><th scope="row">World backups, import/export</th><td class="old"><svg class="ico" aria-hidden="true"><use href="#i-no"/></svg><span class="sr">No</span></td><td class="new"><svg class="ico" aria-hidden="true"><use href="#i-ok"/></svg><span class="sr">Yes</span></td></tr>
             <tr><th scope="row">Sneak toggle &amp; zoom key</th><td class="old"><svg class="ico" aria-hidden="true"><use href="#i-no"/></svg><span class="sr">No</span></td><td class="new"><svg class="ico" aria-hidden="true"><use href="#i-ok"/></svg><span class="sr">Yes</span></td></tr>
             <tr><th scope="row">Volume sliders &amp; sound captions</th><td class="old"><svg class="ico" aria-hidden="true"><use href="#i-no"/></svg><span class="sr">No</span></td><td class="new"><svg class="ico" aria-hidden="true"><use href="#i-ok"/></svg><span class="sr">Yes</span></td></tr>
-            <tr><th scope="row">Commands with Tab completion</th><td class="old"><svg class="ico" aria-hidden="true"><use href="#i-no"/></svg><span class="sr">No</span></td><td class="new"><span class="cell"><svg class="ico" aria-hidden="true"><use href="#i-ok"/></svg><span class="m">optional</span></span></td></tr>
-            <tr><th scope="row">Mod jar checker</th><td class="old"><svg class="ico" aria-hidden="true"><use href="#i-no"/></svg><span class="sr">No</span></td><td class="new exp"><span class="cell"><svg class="ico" aria-hidden="true"><use href="#i-ok"/></svg><span class="tag">experimental</span></span></td></tr>
+            <tr><th scope="row">Commands &amp; <code>/fly</code> with Tab completion</th><td class="old"><svg class="ico" aria-hidden="true"><use href="#i-no"/></svg><span class="sr">No</span></td><td class="new"><span class="cell"><svg class="ico" aria-hidden="true"><use href="#i-ok"/></svg><span class="m">optional</span></span></td></tr>
+            <tr><th scope="row">Better Grass (Off, Fast, Fancy)</th><td class="old"><svg class="ico" aria-hidden="true"><use href="#i-no"/></svg><span class="sr">No</span></td><td class="new"><svg class="ico" aria-hidden="true"><use href="#i-ok"/></svg><span class="sr">Yes</span></td></tr>
             <tr><th scope="row">Your original jar untouched</th><td class="old"><span class="m">n/a</span></td><td class="new"><svg class="ico" aria-hidden="true"><use href="#i-ok"/></svg><span class="sr">Yes</span></td></tr>
           </tbody>
         </table>
@@ -174,11 +174,11 @@
   <section class="closer" aria-labelledby="closer-title">
     <h2 id="closer-title" data-r>Try it on your worlds.</h2>
     <div class="cta">
-      <a class="btn primary lg" href="https://github.com/undrwtrsprite/silica/releases/download/v0.2.0/Silica-0.2.0.dmg" download><svg class="ico" aria-hidden="true"><use href="#i-down"/></svg>Download for Mac</a>
+      <a class="btn primary lg" href="https://github.com/undrwtrsprite/silica/releases/download/v0.2.1/Silica-0.2.1.dmg" download><svg class="ico" aria-hidden="true"><use href="#i-down"/></svg>Download for Mac</a>
       <a class="btn secondary lg" href="https://github.com/undrwtrsprite/silica"><svg class="ico fill" aria-hidden="true"><use href="#i-gh"/></svg>View on GitHub</a>
     </div>
     <ul class="meta">
-        <li><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg>v0.2.0</li>
+        <li><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg>v0.2.1</li>
         <li><svg class="ico" aria-hidden="true"><use href="#i-file"/></svg>17 MB</li>
         <li><svg class="ico" aria-hidden="true"><use href="#i-laptop"/></svg>macOS 14+</li>
         <li><svg class="ico" aria-hidden="true"><use href="#i-chip"/></svg>Apple Silicon</li>
@@ -200,6 +200,6 @@
   </div>
   <div class="legal"><span>Not affiliated with Mojang or Microsoft. Minecraft is a trademark of Mojang Synergies AB.</span><span>Silica ships no Mojang files.</span></div>
 </footer>
-<script src="site.js?v=4" defer></script>
+<script src="site.js?v=5" defer></script>
 </body>
 </html>

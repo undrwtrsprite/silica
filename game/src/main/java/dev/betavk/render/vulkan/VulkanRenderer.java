@@ -85,7 +85,7 @@ public final class VulkanRenderer implements Renderer {
     private final int[] sp = new int[3];
     private int matrixMode = 0;
     private final float[] color = {1, 1, 1, 1}, normal = {0, 0, 1};
-    private boolean tex2d, blend, depthTest, alphaTest, cull, fog, lighting, light0, light1, polyOffset;
+    private boolean tex2d, blend, depthTest, alphaTest, cull, fog, lighting, light0, light1, polyOffset, tiledAtlas;
     private int blendSrc = 1, blendDst = 0, depthOp = 1, alphaOp = 7, cullMode = 0x405;
     private float alphaRef = 0;
     private boolean depthWrite = true;
@@ -419,6 +419,10 @@ public final class VulkanRenderer implements Renderer {
     }
 
     // ============================== simple state ==============================================
+
+    public void setTiledAtlas(boolean on) {
+        if (tiledAtlas != on) { tiledAtlas = on; paramsDirty = true; }
+    }
 
     @Override public void glColor4f(float r, float g, float b, float a) { if (rec(() -> glColor4f(r, g, b, a))) return; color[0] = r; color[1] = g; color[2] = b; color[3] = a; paramsDirty = true; }
     @Override public void glColor3f(float r, float g, float b) { glColor4f(r, g, b, 1f); }
@@ -1266,7 +1270,7 @@ public final class VulkanRenderer implements Renderer {
         MemoryUtil.memPutFloat(ptr + 240, df0[0]); MemoryUtil.memPutFloat(ptr + 244, df0[1]); MemoryUtil.memPutFloat(ptr + 248, df0[2]); MemoryUtil.memPutFloat(ptr + 252, df0[3]);
         MemoryUtil.memPutFloat(ptr + 256, ld1[0]); MemoryUtil.memPutFloat(ptr + 260, ld1[1]); MemoryUtil.memPutFloat(ptr + 264, ld1[2]); MemoryUtil.memPutFloat(ptr + 268, ld1[3]);
         MemoryUtil.memPutFloat(ptr + 272, df1[0]); MemoryUtil.memPutFloat(ptr + 276, df1[1]); MemoryUtil.memPutFloat(ptr + 280, df1[2]); MemoryUtil.memPutFloat(ptr + 284, df1[3]);
-        MemoryUtil.memPutFloat(ptr + 288, ambient[0]); MemoryUtil.memPutFloat(ptr + 292, ambient[1]); MemoryUtil.memPutFloat(ptr + 296, ambient[2]); MemoryUtil.memPutFloat(ptr + 300, ambient[3]);
+        MemoryUtil.memPutFloat(ptr + 288, ambient[0]); MemoryUtil.memPutFloat(ptr + 292, ambient[1]); MemoryUtil.memPutFloat(ptr + 296, ambient[2]); MemoryUtil.memPutFloat(ptr + 300, tiledAtlas ? 1f : 0f);
         paramsDirty = false;
         lastParamFlags = arrayFlags;
         lastParamOff = off;

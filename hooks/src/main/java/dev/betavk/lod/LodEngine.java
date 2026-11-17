@@ -2,6 +2,7 @@ package dev.betavk.lod;
 
 import dev.betavk.hooks.Opts;
 import dev.betavk.render.Gfx;
+import dev.betavk.render.vulkan.VulkanRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.src.Chunk;
 import net.minecraft.src.EntityLiving;
@@ -14,7 +15,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -31,19 +31,23 @@ public final class LodEngine {
     }
 
     private static final int WORKERS = Integer.getInteger("betavk.lodworkers",
-            Math.max(2, Math.min(4, Runtime.getRuntime().availableProcessors() / 2)));
-    private static final int UPLOAD_BUDGET_INTS = Integer.getInteger("betavk.lodbudget", 300_000);
+            Math.max(2, Math.min(6, Runtime.getRuntime().availableProcessors() - 2)));
+    private static final int UPLOAD_BUDGET_INTS = Integer.getInteger("betavk.lodbudget", 800_000);
+    private static final long MAX_CACHE_BYTES = (long) Integer.getInteger("betavk.lodcachemb", 96) << 20;
+    private static final int GPU_EVICT_FRAMES = 900;
+    private static final int DATA_QUEUE_CAP = 2048;
 
     private record Job(boolean mesh, LodNode node, int prio, int epoch, int version) {
     }
 
-    private record BuiltMesh(LodNode node, int epoch, int version, int lightSub, boolean fancy, int nbMask, LodMesher.Mesh mesh) {
+    private record BuiltMesh(LodNode node, int epoch, int version, int lightSub, boolean fancy, int betterGrass, int nbMask, LodMesher.Mesh mesh) {
     }
 
     private static final ConcurrentHashMap<Long, LodNode> nodes = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<Long, LodNode> readyNodes = new ConcurrentHashMap<>();
     private static final Set<Long> selectedKeys = new HashSet<>();
     private static final List<LodNode> selectedList = new ArrayList<>();
+    private static final List<LodNode> pendingMesh = new ArrayList<>();
     private static final List<LodNode> visible = new ArrayList<>();
     private static final List<LodNode> visibleTrans = new ArrayList<>();
     private static final List<Integer> pendingDelete = new ArrayList<>();
@@ -57,6 +61,7 @@ public final class LodEngine {
     private static boolean workersStarted;
     private static int frameNo;
     private static int lastRealChunks = -1, lastLodChunks = -1;
+    private static int lastCamCX = Integer.MIN_VALUE, lastCamCZ = Integer.MIN_VALUE;
     public static int drawnLastFrame;
     private static final Frustrum sharedFrustum = new Frustrum();
 
@@ -114,6 +119,7 @@ public final class LodEngine {
         done.clear();
         selectedKeys.clear();
         selectedList.clear();
+        pendingMesh.clear();
         visible.clear();
         visibleTrans.clear();
         buildLocks.clear();
@@ -126,20 +132,34 @@ public final class LodEngine {
         LodChunkSource.reset(w);
         activeWorld = w;
         worldSeed = w == null ? 0L : w.getRandomSeed();
+        LodDiskCache.reset(LodChunkSource.saveDirectory(), worldSeed);
         lastRealChunks = -1;
         lastLodChunks = -1;
     }
 
-    /** Game thread: a chunk was edited or saved — capture it and rebuild affected L0..L4 nodes. */
+    /** Game thread: a chunk was explicitly edited or saved — capture it if changed and rebuild L0..L4 nodes. */
     public static void onChunkEdited(World w, Chunk c) {
         if (w == null || c == null || w != activeWorld || w.worldProvider.isNether) return;
         if (!Opts.lodEnabled || Opts.lodChunks <= 0) return;
-        LodChunkSource.captureChunk(c);
-        invalidateChunk(c.xPosition, c.zPosition);
+        if (!LodChunkSource.captureIfChanged(c)) return;
+        invalidateChunk(c.xPosition, c.zPosition, 4);
+    }
+
+    /** Game thread: minor live block change inside render distance — skip unchanged blocks and only refresh L0..L2. */
+    public static void onBlockEdited(World w, Chunk c) {
+        if (w == null || c == null || w != activeWorld || w.worldProvider.isNether) return;
+        if (!Opts.lodEnabled || Opts.lodChunks <= 0) return;
+        if (!LodChunkSource.captureIfChanged(c)) return;
+        invalidateChunk(c.xPosition, c.zPosition, 2);
     }
 
     public static void invalidateChunk(int cx, int cz) {
-        for (int lvl = 0; lvl <= 4; lvl++) {
+        invalidateChunk(cx, cz, 4);
+    }
+
+    private static void invalidateChunk(int cx, int cz, int maxLevel) {
+        LodDiskCache.invalidateChunk(cx, cz, maxLevel);
+        for (int lvl = 0; lvl <= maxLevel; lvl++) {
             int shift = lvl <= 1 ? 0 : (lvl - 1);
             LodNode n = nodes.get(key(lvl, cx >> shift, cz >> shift));
             if (n != null) {
@@ -155,7 +175,7 @@ public final class LodEngine {
         for (int i = 0; i < WORKERS; i++) {
             Thread t = new Thread(LodEngine::workerLoop, "LOD builder " + i);
             t.setDaemon(true);
-            t.setPriority(Thread.MIN_PRIORITY);
+            t.setPriority(Thread.NORM_PRIORITY - 1);
             t.start();
         }
     }
@@ -245,8 +265,9 @@ public final class LodEngine {
                     float[] table = w.worldProvider.lightBrightnessTable;
                     int skySub = w.skylightSubtracted;
                     boolean fancy = Minecraft.isFancyGraphicsEnabled();
+                    int bg = Opts.betterGrass;
                     LodMesher.Mesh m = LodMesher.mesh(node, nb, table, skySub, fancy, scratch);
-                    done.add(new BuiltMesh(node, j.epoch, node.version, skySub, fancy, nbMask, m));
+                    done.add(new BuiltMesh(node, j.epoch, node.version, skySub, fancy, bg, nbMask, m));
                 } else {
                     ensureData(wg, node.level, node.gx, node.gz, j.epoch);
                 }
@@ -271,45 +292,67 @@ public final class LodEngine {
             if (n == null) return null;
             if (n.dataReady && !n.dataDirty) return n;
 
-            if (level <= 1) {
-                LodChunkSource.ChunkSnap snap = LodChunkSource.fetch(gx, gz, wg);
-                LodDownsampler.fromChunk(snap, n);
-            } else {
-                LodNode[] ch = new LodNode[4];
-                int cLvl = level - 1;
-                for (int dz = 0; dz < 2; dz++) {
-                    for (int dx = 0; dx < 2; dx++) {
-                        int cgx = (gx << 1) + dx, cgz = (gz << 1) + dz;
-                        long ck = key(cLvl, cgx, cgz);
-                        LodNode child = readyNodes.get(ck);
-                        if (child == null) {
-                            child = new LodNode(cLvl, cgx, cgz);
-                            // Transient child if not tracked in active quadtree
-                            if (cLvl == 1) {
-                                LodDownsampler.fromChunk(LodChunkSource.fetch(cgx, cgz, wg), child);
-                            } else {
-                                child = buildTransient(wg, cLvl, cgx, cgz, ep);
+            boolean loadedFromDisk = !n.dataDirty && LodDiskCache.load(n);
+            if (!loadedFromDisk) {
+                if (level <= 1) {
+                    LodChunkSource.ChunkSnap snap = LodChunkSource.fetch(gx, gz, wg);
+                    LodDownsampler.fromChunk(snap, n);
+                } else if (level >= 3 && !LodChunkSource.hasAnySavedChunk(gx * n.span, gz * n.span, n.span)) {
+                    buildCoarseProcedural(wg, n, ep);
+                } else {
+                    LodNode[] ch = new LodNode[4];
+                    int cLvl = level - 1;
+                    for (int dz = 0; dz < 2; dz++) {
+                        for (int dx = 0; dx < 2; dx++) {
+                            int cgx = (gx << 1) + dx, cgz = (gz << 1) + dz;
+                            long ck = key(cLvl, cgx, cgz);
+                            LodNode child = readyNodes.get(ck);
+                            if (child == null) {
+                                child = new LodNode(cLvl, cgx, cgz);
+                                // Transient child if not tracked in active quadtree
+                                if (cLvl == 1) {
+                                    LodDownsampler.fromChunk(LodChunkSource.fetch(cgx, cgz, wg), child);
+                                } else {
+                                    child = buildTransient(wg, cLvl, cgx, cgz, ep);
+                                }
+                            } else if (!child.dataReady || child.dataDirty) {
+                                if (cLvl == 1) {
+                                    LodDownsampler.fromChunk(LodChunkSource.fetch(cgx, cgz, wg), child);
+                                    child.dataDirty = false;
+                                    readyNodes.put(ck, child);
+                                    LodDiskCache.saveAsync(child);
+                                } else {
+                                    child = ensureData(wg, cLvl, cgx, cgz, ep);
+                                }
                             }
-                        } else if (!child.dataReady || child.dataDirty) {
-                            if (cLvl == 1) {
-                                LodDownsampler.fromChunk(LodChunkSource.fetch(cgx, cgz, wg), child);
-                                child.dataDirty = false;
-                                readyNodes.put(ck, child);
-                            } else {
-                                child = ensureData(wg, cLvl, cgx, cgz, ep);
-                            }
+                            ch[(dz << 1) | dx] = child;
                         }
-                        ch[(dz << 1) | dx] = child;
                     }
+                    if (ep != epoch) return null;
+                    LodDownsampler.mipNode(n, ch);
                 }
-                if (ep != epoch) return null;
-                LodDownsampler.mipNode(n, ch);
             }
+            if (ep != epoch) return null;
             n.dataDirty = false;
             readyNodes.put(k, n);
+            if (!loadedFromDisk) LodDiskCache.saveAsync(n);
         }
         buildLocks.remove(k);
         return n;
+    }
+
+    private static void buildCoarseProcedural(LodChunkSource.WorkerGen wg, LodNode out, int ep) {
+        int span = out.span;
+        int cx0 = out.gx * span;
+        int cz0 = out.gz * span;
+        for (int dz = 0; dz < span; dz++) {
+            for (int dx = 0; dx < span; dx++) {
+                if (ep != epoch) return;
+                LodChunkSource.ChunkSnap snap = LodChunkSource.fetch(cx0 + dx, cz0 + dz, wg, false);
+                LodDownsampler.fromChunkCoarse(snap, out, dx, dz);
+            }
+        }
+        out.dataReady = true;
     }
 
     private static LodNode buildTransient(LodChunkSource.WorkerGen wg, int level, int gx, int gz, int ep) {
@@ -318,6 +361,11 @@ public final class LodEngine {
             LodNode n = new LodNode(1, gx, gz);
             LodDownsampler.fromChunk(LodChunkSource.fetch(gx, gz, wg), n);
             return n;
+        }
+        if (level >= 3 && !LodChunkSource.hasAnySavedChunk(gx * (1 << (level - 1)), gz * (1 << (level - 1)), 1 << (level - 1))) {
+            LodNode out = new LodNode(level, gx, gz);
+            buildCoarseProcedural(wg, out, ep);
+            return out;
         }
         LodNode[] ch = new LodNode[4];
         for (int dz = 0; dz < 2; dz++) {
@@ -359,6 +407,114 @@ public final class LodEngine {
         return groundInit || anyInit;
     }
 
+    private static boolean isNodeBaked(int level, int gx, int gz) {
+        LodNode n = nodes.get(key(level, gx, gz));
+        return n != null && n.dataReady && n.opaqueList >= 0;
+    }
+
+    private static LodNode trackNode(int level, int gx, int gz, double d) {
+        long k = key(level, gx, gz);
+        selectedKeys.add(k);
+        LodNode node = nodes.get(k);
+        if (node == null) {
+            node = new LodNode(level, gx, gz);
+            nodes.put(k, node);
+        }
+        node.lastSeenFrame = frameNo;
+        if ((!node.dataReady || node.dataDirty) && !node.queuedData && jobs.size() < DATA_QUEUE_CAP) {
+            node.queuedData = true;
+            jobs.add(new Job(false, node, (int) d + level * 8, epoch, node.version));
+        }
+        return node;
+    }
+
+    private static boolean hasReadyCover(RenderGlobal rg, int level, int gx, int gz, int camCX, int camCZ, int innerSafe,
+                                         double camX, double camZ, double maxBlocks, int[] outMaxDist) {
+        double size = level == 0 ? 16.0 : 16.0 * (1 << (level - 1));
+        double minX = gx * size, minZ = gz * size;
+        double dx = Math.max(Math.max(minX - camX, camX - (minX + size)), 0.0);
+        double dz = Math.max(Math.max(minZ - camZ, camZ - (minZ + size)), 0.0);
+        double d = Math.hypot(dx, dz);
+        if (d > maxBlocks) return true;
+        if (level == 1) {
+            int cheb = Math.max(Math.abs(gx - camCX), Math.abs(gz - camCZ));
+            if (cheb <= innerSafe || isRealChunkCovered(rg, gx, gz)) return true;
+            int targetLvl = (outMaxDist[0] > 0 && d < outMaxDist[0]) ? 0 : 1;
+            return isNodeBaked(targetLvl, gx, gz);
+        }
+        if (d < outMaxDist[level - 1]) {
+            for (int cz = 0; cz < 2; cz++) {
+                for (int cx = 0; cx < 2; cx++) {
+                    if (!hasReadyCover(rg, level - 1, (gx << 1) + cx, (gz << 1) + cz, camCX, camCZ, innerSafe, camX, camZ, maxBlocks, outMaxDist)) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+        return isNodeBaked(level, gx, gz);
+    }
+
+    private static void queueBackgroundSubtree(RenderGlobal rg, int level, int gx, int gz, int camCX, int camCZ, int innerSafe,
+                                               double camX, double camZ, double maxBlocks, int[] outMaxDist) {
+        double size = level == 0 ? 16.0 : 16.0 * (1 << (level - 1));
+        double minX = gx * size, minZ = gz * size;
+        double dx = Math.max(Math.max(minX - camX, camX - (minX + size)), 0.0);
+        double dz = Math.max(Math.max(minZ - camZ, camZ - (minZ + size)), 0.0);
+        double d = Math.hypot(dx, dz);
+        if (d > maxBlocks) return;
+        if (level > 1 && d < outMaxDist[level - 1]) {
+            for (int cz = 0; cz < 2; cz++) {
+                for (int cx = 0; cx < 2; cx++) {
+                    queueBackgroundSubtree(rg, level - 1, (gx << 1) + cx, (gz << 1) + cz, camCX, camCZ, innerSafe, camX, camZ, maxBlocks, outMaxDist);
+                }
+            }
+            return;
+        }
+        int chosen = level;
+        if (level == 1) {
+            int cheb = Math.max(Math.abs(gx - camCX), Math.abs(gz - camCZ));
+            if (cheb <= innerSafe || isRealChunkCovered(rg, gx, gz)) return;
+            if (outMaxDist[0] > 0 && d < outMaxDist[0]) chosen = 0;
+        }
+        LodNode n = trackNode(chosen, gx, gz, d);
+        if (n.dataReady && n.opaqueList < 0) pendingMesh.add(n);
+    }
+
+    private static boolean canCoverBaked(RenderGlobal rg, int level, int gx, int gz, int camCX, int camCZ, int innerSafe) {
+        if (level == 1) {
+            int cheb = Math.max(Math.abs(gx - camCX), Math.abs(gz - camCZ));
+            if (cheb <= innerSafe || isRealChunkCovered(rg, gx, gz)) return true;
+            return isNodeBaked(1, gx, gz) || isNodeBaked(0, gx, gz);
+        }
+        if (isNodeBaked(level, gx, gz)) return true;
+        for (int cz = 0; cz < 2; cz++) {
+            for (int cx = 0; cx < 2; cx++) {
+                if (!canCoverBaked(rg, level - 1, (gx << 1) + cx, (gz << 1) + cz, camCX, camCZ, innerSafe)) return false;
+            }
+        }
+        return true;
+    }
+
+    private static void emitBakedCover(RenderGlobal rg, int level, int gx, int gz, int camCX, int camCZ, int innerSafe, double d) {
+        if (level == 1) {
+            int cheb = Math.max(Math.abs(gx - camCX), Math.abs(gz - camCZ));
+            if (cheb <= innerSafe || isRealChunkCovered(rg, gx, gz)) return;
+            int pick = isNodeBaked(1, gx, gz) ? 1 : 0;
+            selectedList.add(trackNode(pick, gx, gz, d));
+            return;
+        }
+        if (isNodeBaked(level, gx, gz)) {
+            selectedList.add(trackNode(level, gx, gz, d));
+            return;
+        }
+        for (int cz = 0; cz < 2; cz++) {
+            for (int cx = 0; cx < 2; cx++) {
+                emitBakedCover(rg, level - 1, (gx << 1) + cx, (gz << 1) + cz, camCX, camCZ, innerSafe, d);
+            }
+        }
+    }
+
     private static void selectNode(RenderGlobal rg, int level, int gx, int gz, int camCX, int camCZ, int innerSafe,
                                    double camX, double camZ, double maxBlocks, int[] outMaxDist) {
         double size = level == 0 ? 16.0 : 16.0 * (1 << (level - 1));
@@ -368,8 +524,30 @@ public final class LodEngine {
         double d = Math.hypot(dx, dz);
         if (d > maxBlocks) return;
 
-        // Subdivide into finer level if closer than child's range threshold
+        // Subdivide into finer level if closer than child's range threshold, holding a ready parent as seamless fallback.
         if (level > 1 && d < outMaxDist[level - 1]) {
+            LodNode parent = nodes.get(key(level, gx, gz));
+            if (parent != null && parent.dataReady && parent.opaqueList >= 0) {
+                boolean ready = true;
+                for (int cz = 0; cz < 2 && ready; cz++) {
+                    for (int cx = 0; cx < 2; cx++) {
+                        if (!hasReadyCover(rg, level - 1, (gx << 1) + cx, (gz << 1) + cz, camCX, camCZ, innerSafe, camX, camZ, maxBlocks, outMaxDist)) {
+                            ready = false;
+                            break;
+                        }
+                    }
+                }
+                if (!ready) {
+                    trackNode(level, gx, gz, d);
+                    selectedList.add(parent);
+                    for (int cz = 0; cz < 2; cz++) {
+                        for (int cx = 0; cx < 2; cx++) {
+                            queueBackgroundSubtree(rg, level - 1, (gx << 1) + cx, (gz << 1) + cz, camCX, camCZ, innerSafe, camX, camZ, maxBlocks, outMaxDist);
+                        }
+                    }
+                    return;
+                }
+            }
             for (int cz = 0; cz < 2; cz++) {
                 for (int cx = 0; cx < 2; cx++) {
                     selectNode(rg, level - 1, (gx << 1) + cx, (gz << 1) + cz, camCX, camCZ, innerSafe, camX, camZ, maxBlocks, outMaxDist);
@@ -378,28 +556,50 @@ public final class LodEngine {
             return;
         }
 
-        // At 1x1-chunk span: enforce inner real-chunk exclusion & covered-border exclusion, then pick L0 (1x1x1) or L1 (2x1x2).
+        // At 1x1-chunk span: pre-warm near-edge real chunks before they unload, and smoothly transition L0 <-> L1.
         int chosenLevel = level;
         if (level == 1) {
             int cheb = Math.max(Math.abs(gx - camCX), Math.abs(gz - camCZ));
-            if (cheb <= innerSafe || isRealChunkCovered(rg, gx, gz)) return;
-            if (outMaxDist[0] > 0 && d < outMaxDist[0]) chosenLevel = 0;
+            int target = (outMaxDist[0] > 0 && d < outMaxDist[0]) ? 0 : 1;
+            if (cheb <= innerSafe || isRealChunkCovered(rg, gx, gz)) {
+                if (cheb >= Math.max(1, innerSafe - 3)) {
+                    LodNode warm = trackNode(target, gx, gz, d);
+                    if (warm.dataReady && warm.opaqueList < 0) pendingMesh.add(warm);
+                }
+                return;
+            }
+            int alt = 1 - target;
+            if (!isNodeBaked(target, gx, gz) && isNodeBaked(alt, gx, gz)) {
+                LodNode want = trackNode(target, gx, gz, d);
+                if (want.dataReady && want.opaqueList < 0) pendingMesh.add(want);
+                selectedList.add(trackNode(alt, gx, gz, d));
+                return;
+            }
+            chosenLevel = target;
+        } else if (!isNodeBaked(level, gx, gz)) {
+            // Flying/walking away (child -> parent): keep drawing baked children of any fine level until coarse parent finishes baking.
+            boolean allCh = true;
+            for (int cz = 0; cz < 2 && allCh; cz++) {
+                for (int cx = 0; cx < 2; cx++) {
+                    if (!canCoverBaked(rg, level - 1, (gx << 1) + cx, (gz << 1) + cz, camCX, camCZ, innerSafe)) {
+                        allCh = false;
+                        break;
+                    }
+                }
+            }
+            if (allCh) {
+                LodNode want = trackNode(level, gx, gz, d);
+                if (want.dataReady && want.opaqueList < 0) pendingMesh.add(want);
+                for (int cz = 0; cz < 2; cz++) {
+                    for (int cx = 0; cx < 2; cx++) {
+                        emitBakedCover(rg, level - 1, (gx << 1) + cx, (gz << 1) + cz, camCX, camCZ, innerSafe, d);
+                    }
+                }
+                return;
+            }
         }
 
-        long k = key(chosenLevel, gx, gz);
-        selectedKeys.add(k);
-        LodNode node = nodes.get(k);
-        if (node == null) {
-            node = new LodNode(chosenLevel, gx, gz);
-            nodes.put(k, node);
-        }
-        node.lastSeenFrame = frameNo;
-        selectedList.add(node);
-
-        if ((!node.dataReady || node.dataDirty) && !node.queuedData && jobs.size() < 256) {
-            node.queuedData = true;
-            jobs.add(new Job(false, node, (int) d + chosenLevel * 8, epoch, node.version));
-        }
+        selectedList.add(trackNode(chosenLevel, gx, gz, d));
     }
 
     private static void flushUploads() {
@@ -423,6 +623,7 @@ public final class LodEngine {
             n.bakedVersion = r.version;
             n.bakedLightSub = r.lightSub;
             n.bakedFancy = r.fancy;
+            n.bakedBetterGrass = r.betterGrass;
             n.bakedNeighborMask = r.nbMask;
             budget -= r.mesh.opaque.length + r.mesh.trans.length + 500;
         }
@@ -435,14 +636,15 @@ public final class LodEngine {
         double maxBlocks = lod * 16.0;
 
         int q = Opts.lodQuality;
-        int l0Cut = q == 2 ? (int) (realBlocks + 128.0) : (q == 1 ? (int) (realBlocks + 80.0) : 0);
-        int l1Cut = (int) Math.max(realBlocks * 1.5 + 160.0, realBlocks + (q == 2 ? 352.0 : (q == 1 ? 288.0 : 224.0)));
-        int l2Cut = (int) (realBlocks * 1.5 + (q == 2 ? 640.0 : 512.0));
-        int l3Cut = (int) (realBlocks * 1.5 + (q == 2 ? 1200.0 : 1024.0));
+        int l0Cut = q == 2 ? (int) (realBlocks + 64.0) : (q == 1 ? (int) (realBlocks + 32.0) : 0);
+        int l1Cut = (int) Math.max(realBlocks * 1.5 + 160.0, realBlocks + (q == 2 ? 320.0 : (q == 1 ? 256.0 : 192.0)));
+        int l2Cut = (int) (realBlocks * 1.5 + (q == 2 ? 640.0 : 480.0));
+        int l3Cut = (int) (realBlocks * 1.5 + (q == 2 ? 1200.0 : 960.0));
         int[] cutoffs = {l0Cut, l1Cut, l2Cut, l3Cut, (int) maxBlocks};
 
         selectedKeys.clear();
         selectedList.clear();
+        pendingMesh.clear();
         int camCX = (int) Math.floor(camX) >> 4;
         int camCZ = (int) Math.floor(camZ) >> 4;
         int innerSafe = Math.max(1, real - 2);
@@ -456,19 +658,47 @@ public final class LodEngine {
             }
         }
 
-        // Prune stale nodes out of range
+        // Release GPU display lists once out of view for ~GPU_EVICT_FRAMES, and trim CPU voxels only above MAX_CACHE_BYTES
+        // (preferring heavy L0 nodes first; everything stays in compressed disk cache under saves/<world>/lod/).
         if (frameNo % 120 == 0 || real != lastRealChunks || lod != lastLodChunks) {
             lastRealChunks = real;
             lastLodChunks = lod;
-            Iterator<Map.Entry<Long, LodNode>> it = nodes.entrySet().iterator();
-            while (it.hasNext()) {
-                LodNode n = it.next().getValue();
+            long cacheBytes = 0L;
+            for (LodNode n : nodes.values()) {
+                cacheBytes += (long) n.vox.length * 4L;
                 if (selectedKeys.contains(key(n.level, n.gx, n.gz))) continue;
-                if (frameNo - n.lastSeenFrame < 300) continue;
-                if (n.opaqueList >= 0) pendingDelete.add(n.opaqueList);
-                if (n.transList >= 0) pendingDelete.add(n.transList);
-                readyNodes.remove(key(n.level, n.gx, n.gz));
-                it.remove();
+                if (frameNo - n.lastSeenFrame < GPU_EVICT_FRAMES) continue;
+                if (n.opaqueList >= 0) {
+                    pendingDelete.add(n.opaqueList);
+                    n.opaqueList = -1;
+                }
+                if (n.transList >= 0) {
+                    pendingDelete.add(n.transList);
+                    n.transList = -1;
+                }
+                n.bakedVersion = -1;
+            }
+            if (cacheBytes > MAX_CACHE_BYTES) {
+                List<LodNode> evict = new ArrayList<>();
+                for (LodNode n : nodes.values()) {
+                    if (!selectedKeys.contains(key(n.level, n.gx, n.gz)) && frameNo - n.lastSeenFrame >= 240) {
+                        evict.add(n);
+                    }
+                }
+                // Evict heavy L0 nodes first, then oldest unused nodes across L1..L4
+                evict.sort((a, b) -> {
+                    int lvlCmp = Integer.compare(a.level == 0 ? 0 : 1, b.level == 0 ? 0 : 1);
+                    return lvlCmp != 0 ? lvlCmp : Integer.compare(a.lastSeenFrame, b.lastSeenFrame);
+                });
+                for (int i = 0, sz = evict.size(); i < sz && cacheBytes > MAX_CACHE_BYTES; i++) {
+                    LodNode n = evict.get(i);
+                    long k = key(n.level, n.gx, n.gz);
+                    if (n.opaqueList >= 0) pendingDelete.add(n.opaqueList);
+                    if (n.transList >= 0) pendingDelete.add(n.transList);
+                    readyNodes.remove(k);
+                    nodes.remove(k);
+                    cacheBytes -= (long) n.vox.length * 4L;
+                }
             }
         }
     }
@@ -489,20 +719,24 @@ public final class LodEngine {
         double camY = ent.lastTickPosY + (ent.posY - ent.lastTickPosY) * pt;
         double camZ = ent.lastTickPosZ + (ent.posZ - ent.lastTickPosZ) * pt;
 
+        int camCX = (int) Math.floor(camX) >> 4;
+        int camCZ = (int) Math.floor(camZ) >> 4;
         frameNo++;
         if (frameNo == 1 || frameNo % 8 == 0
+                || camCX != lastCamCX || camCZ != lastCamCZ
                 || Opts.effectiveChunks(mc.gameSettings) != lastRealChunks
                 || Opts.effectiveLodChunks(mc.gameSettings) != lastLodChunks) {
+            lastCamCX = camCX;
+            lastCamCZ = camCZ;
             updateQuadtree(mc, camX, camZ);
         }
 
         sharedFrustum.setPosition(camX, camY, camZ);
         RenderGlobal rg = mc.renderGlobal;
-        int camCX = (int) Math.floor(camX) >> 4;
-        int camCZ = (int) Math.floor(camZ) >> 4;
         int innerSafe = Math.max(1, Opts.effectiveChunks(mc.gameSettings) - 2);
         int skySub = mc.theWorld.skylightSubtracted;
         boolean fancy = mc.gameSettings.fancyGraphics;
+        int betterGrass = Opts.betterGrass;
 
         int meshQueued = 0;
         for (int i = 0, sz = selectedList.size(); i < sz; i++) {
@@ -522,8 +756,9 @@ public final class LodEngine {
             boolean needsMesh = n.bakedVersion != n.version
                     || n.bakedLightSub != skySub
                     || n.bakedFancy != fancy
+                    || n.bakedBetterGrass != betterGrass
                     || (nbMask & ~n.bakedNeighborMask) != 0;
-            if (needsMesh && !n.queuedMesh && meshQueued < 24 && jobs.size() < 256) {
+            if (needsMesh && !n.queuedMesh && meshQueued < 64 && jobs.size() < 512 && done.size() < 128) {
                 n.queuedMesh = true;
                 double cx = ox + size * 0.5 - camX, cz = oz + size * 0.5 - camZ;
                 int dist = (int) Math.hypot(cx, cz);
@@ -535,20 +770,24 @@ public final class LodEngine {
             if (n.transList >= 0) visibleTrans.add(n);
         }
 
+        for (int i = 0, psz = pendingMesh.size(); i < psz && meshQueued < 64 && jobs.size() < 512 && done.size() < 128; i++) {
+            LodNode n = pendingMesh.get(i);
+            if (!n.dataReady || n.queuedMesh || n.opaqueList >= 0) continue;
+            double size = n.span * 16.0;
+            double cx = n.gx * size + size * 0.5 - camX, cz = n.gz * size + size * 0.5 - camZ;
+            int dist = (int) Math.hypot(cx, cz);
+            n.queuedMesh = true;
+            jobs.add(new Job(true, n, dist - 40000, epoch, n.version));
+            meshQueued++;
+        }
+
         if (visible.isEmpty()) {
             drawnLastFrame = 0;
             return;
         }
         int sz = visible.size();
         drawnLastFrame = sz;
-        for (int i = 0; i < sz; i++) {
-            LodNode n = visible.get(i);
-            double size = n.span * 16.0;
-            Gfx.glPushMatrix();
-            Gfx.glTranslatef((float) (n.gx * size - camX), (float) (-camY), (float) (n.gz * size - camZ));
-            Gfx.glCallList(n.opaqueList);
-            Gfx.glPopMatrix();
-        }
+        drawNodes(visible, false, camX, camY, camZ);
     }
 
     public static boolean hasPass1() {
@@ -561,14 +800,31 @@ public final class LodEngine {
         double camX = ent.lastTickPosX + (ent.posX - ent.lastTickPosX) * pt;
         double camY = ent.lastTickPosY + (ent.posY - ent.lastTickPosY) * pt;
         double camZ = ent.lastTickPosZ + (ent.posZ - ent.lastTickPosZ) * pt;
+        drawNodes(visibleTrans, true, camX, camY, camZ);
+    }
 
-        for (int i = 0, sz = visibleTrans.size(); i < sz; i++) {
-            LodNode n = visibleTrans.get(i);
-            double size = n.span * 16.0;
-            Gfx.glPushMatrix();
-            Gfx.glTranslatef((float) (n.gx * size - camX), (float) (-camY), (float) (n.gz * size - camZ));
-            Gfx.glCallList(n.transList);
-            Gfx.glPopMatrix();
+    private static void drawNodes(List<LodNode> list, boolean pass1, double camX, double camY, double camZ) {
+        VulkanRenderer vk = Gfx.get() instanceof VulkanRenderer v ? v : null;
+        if (vk != null) {
+            vk.setTiledAtlas(true);
+        } else {
+            Gfx.glDisable(Gfx.GL_TEXTURE_2D);
+        }
+        try {
+            for (int i = 0, sz = list.size(); i < sz; i++) {
+                LodNode n = list.get(i);
+                double size = n.span * 16.0;
+                Gfx.glPushMatrix();
+                Gfx.glTranslatef((float) (n.gx * size - camX), (float) (-camY), (float) (n.gz * size - camZ));
+                Gfx.glCallList(pass1 ? n.transList : n.opaqueList);
+                Gfx.glPopMatrix();
+            }
+        } finally {
+            if (vk != null) {
+                vk.setTiledAtlas(false);
+            } else {
+                Gfx.glEnable(Gfx.GL_TEXTURE_2D);
+            }
         }
     }
 }

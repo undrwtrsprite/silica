@@ -7,6 +7,7 @@ layout(constant_id = 3) const int SPEC_TEX = -1;
 layout(location = 0) in vec2 vUV;
 layout(location = 1) in mediump vec4 vColor;
 layout(location = 2) in highp float vFogDist;
+layout(location = 3) flat in vec2 vTileBase;
 
 layout(set = 0, binding = 0) uniform Params {
     mat4 mvp;
@@ -30,7 +31,22 @@ layout(location = 0) out mediump vec4 outColor;
 void main() {
     mediump vec4 c = vColor;
     bool hasTex = SPEC_TEX < 0 ? (u.flags.x > 0.5) : (SPEC_TEX != 0);
-    if (hasTex) c *= texture(tex, vUV);
+    if (hasTex) {
+        if (vTileBase.x >= 0.0) {
+            highp vec2 texSz = vec2(textureSize(tex, 0));
+            highp vec2 dux = dFdx(vUV * (1.0 / 16.0));
+            highp vec2 duy = dFdy(vUV * (1.0 / 16.0));
+            highp float maxTilePx = max(1.0, max(texSz.x, texSz.y) / 16.0);
+            highp float rho = max(length(dux * texSz), length(duy * texSz));
+            highp float maxRho = maxTilePx * 0.9;
+            highp float gScale = rho > maxRho ? (maxRho / rho) : 1.0;
+            highp float pad = min(0.49, (0.5 * clamp(rho, 1.0, maxRho)) / maxTilePx);
+            highp vec2 tileUV = vTileBase + clamp(fract(vUV), pad, 1.0 - pad) * (1.0 / 16.0);
+            c *= textureGrad(tex, tileUV, dux * gScale, duy * gScale);
+        } else {
+            c *= texture(tex, vUV);
+        }
+    }
 
     if (SPEC_ALPHA && (SPEC_ALPHA_OP >= 0 || u.alpha.z > 0.5)) {
         int op = SPEC_ALPHA_OP >= 0 ? SPEC_ALPHA_OP : int(u.alpha.x + 0.5);

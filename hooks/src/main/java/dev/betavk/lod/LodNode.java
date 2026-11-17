@@ -33,6 +33,7 @@ public final class LodNode {
     int bakedVersion = -1;
     int bakedLightSub = -1;
     boolean bakedFancy;
+    int bakedBetterGrass = -1;
     int bakedNeighborMask = -1;
 
     public LodNode(int level, int gx, int gz) {

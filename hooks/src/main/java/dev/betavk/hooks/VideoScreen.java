@@ -18,7 +18,7 @@ public final class VideoScreen {
 
     private static final EnumOptions[] VANILLA = {EnumOptions.GRAPHICS, EnumOptions.RENDER_DISTANCE, EnumOptions.AMBIENT_OCCLUSION, EnumOptions.FRAMERATE_LIMIT,
             EnumOptions.ANAGLYPH, EnumOptions.VIEW_BOBBING, EnumOptions.GUI_SCALE, EnumOptions.ADVANCED_OPENGL};
-    private static final int FOV = 301, FPS_CAP = 302, RENDER_DIST = 303, SHOW_FPS = 304, FULLSCREEN = 305, LOD_SETTINGS = 306;
+    private static final int FOV = 301, FPS_CAP = 302, RENDER_DIST = 303, SHOW_FPS = 304, FULLSCREEN = 305, LOD_SETTINGS = 306, BETTER_GRASS = 307;
     private static final int MIN_CHUNKS = 2, MAX_CHUNKS = 32;
     private static int appliedChunks = -1;
 
@@ -52,6 +52,14 @@ public final class VideoScreen {
 
     private static String fullscreenLabel(GuiVideoSettings gs) {
         return "Fullscreen: " + (gs.mc.fullscreen ? "ON" : "OFF");
+    }
+
+    private static String betterGrassLabel() {
+        return switch (Opts.betterGrass) {
+            case 1 -> "Better Grass: Fast";
+            case 2 -> "Better Grass: Fancy";
+            default -> "Better Grass: OFF";
+        };
     }
 
     /** replaceBody of GuiVideoSettings.initGui. */
@@ -90,7 +98,9 @@ public final class VideoScreen {
         n++;
         gs.controlList.add(new GuiButton(LOD_SETTINGS, slotX(gs, n), slotY(gs, n), 150, 20, lodBtnLabel()));
         n++;
-        gs.controlList.add(new GuiButton(200, gs.width / 2 - 100, gs.height / 6 + 24 * ((n + 1) >> 1) + 12, tr.translateKey("gui.done")));
+        gs.controlList.add(new GuiButton(BETTER_GRASS, slotX(gs, n), slotY(gs, n), 150, 20, betterGrassLabel()));
+        n++;
+        gs.controlList.add(new GuiButton(200, gs.width / 2 - 100, gs.height / 6 - 6 + 24 * ((n + 1) >> 1) + 8, tr.translateKey("gui.done")));
     }
 
     private static int slotX(GuiVideoSettings gs, int n) {
@@ -98,7 +108,7 @@ public final class VideoScreen {
     }
 
     private static int slotY(GuiVideoSettings gs, int n) {
-        return gs.height / 6 + 24 * (n >> 1);
+        return gs.height / 6 - 6 + 24 * (n >> 1);
     }
 
     /** replaceBody of GuiVideoSettings.actionPerformed. */
@@ -113,6 +123,10 @@ public final class VideoScreen {
         switch (b.id) {
             case SHOW_FPS -> Opts.showFps = !Opts.showFps;
             case FULLSCREEN -> gs.mc.toggleFullscreen();
+            case BETTER_GRASS -> {
+                Opts.betterGrass = (Opts.betterGrass + 1) % 3;
+                if (gs.mc.theWorld != null && gs.mc.renderGlobal != null) gs.mc.renderGlobal.loadRenderers();
+            }
             case LOD_SETTINGS -> {
                 gs.mc.displayGuiScreen(new LodOptionsScreen(gs, opts));
                 return;

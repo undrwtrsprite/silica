@@ -1,11 +1,15 @@
 package dev.betavk.lod;
 
+import dev.betavk.render.Backends;
 import dev.betavk.render.Gfx;
 import net.minecraft.src.Block;
 import net.minecraft.src.ColorizerFoliage;
 import net.minecraft.src.ColorizerGrass;
 import net.minecraft.src.Tessellator;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
@@ -13,10 +17,10 @@ import java.nio.IntBuffer;
 import java.util.Arrays;
 
 /**
- * Greedy-merged, zero-bleed real-block mesher for LodNodes.
+ * Greedy-merged, hardware-tiled real-textured mesher for LodNodes (Vulkan) with flat-shaded fallback (OpenGL).
  * Outputs Beta's exact 8-int packed vertex layout (x, y, z, u, v, rgba, normal, pad) without GL_LIGHTING,
- * using the world's current skylightSubtracted & lightBrightnessTable, biome foliage/grass colors, snowy grass
- * sides, Fancy/Fast leaf textures, and exact height water/snow surfaces.
+ * using full greedy merging with 1:1 block-meter UVs wrapped per atlas tile in the Vulkan fragment shader so
+ * textures and leaves never stretch even when zooming in.
  */
 public final class LodMesher {
     private LodMesher() {
@@ -47,7 +51,7 @@ public final class LodMesher {
 
         void pushQuad(boolean trans, float x0, float y0, float z0, float x1, float y1, float z1,
                       float x2, float y2, float z2, float x3, float y3, float z3,
-                      float u0, float v0, float u1, float v1, int rgba, boolean asQuads) {
+                      float u0, float v0, float u1, float v1, int rgba, int nrmPacked, boolean asQuads) {
             int verts = asQuads ? 4 : 6;
             int need = verts * 8;
             int[] buf;
@@ -64,28 +68,28 @@ public final class LodMesher {
                 opaqueInts += need;
             }
             if (asQuads) {
-                putVert(buf, n, x0, y0, z0, u0, v0, rgba);
-                putVert(buf, n + 8, x1, y1, z1, u1, v0, rgba);
-                putVert(buf, n + 16, x2, y2, z2, u1, v1, rgba);
-                putVert(buf, n + 24, x3, y3, z3, u0, v1, rgba);
+                putVert(buf, n, x0, y0, z0, u0, v0, rgba, nrmPacked);
+                putVert(buf, n + 8, x1, y1, z1, u1, v0, rgba, nrmPacked);
+                putVert(buf, n + 16, x2, y2, z2, u1, v1, rgba, nrmPacked);
+                putVert(buf, n + 24, x3, y3, z3, u0, v1, rgba, nrmPacked);
             } else {
-                putVert(buf, n, x0, y0, z0, u0, v0, rgba);
-                putVert(buf, n + 8, x1, y1, z1, u1, v0, rgba);
-                putVert(buf, n + 16, x2, y2, z2, u1, v1, rgba);
-                putVert(buf, n + 24, x0, y0, z0, u0, v0, rgba);
-                putVert(buf, n + 32, x2, y2, z2, u1, v1, rgba);
-                putVert(buf, n + 40, x3, y3, z3, u0, v1, rgba);
+                putVert(buf, n, x0, y0, z0, u0, v0, rgba, nrmPacked);
+                putVert(buf, n + 8, x1, y1, z1, u1, v0, rgba, nrmPacked);
+                putVert(buf, n + 16, x2, y2, z2, u1, v1, rgba, nrmPacked);
+                putVert(buf, n + 24, x0, y0, z0, u0, v0, rgba, nrmPacked);
+                putVert(buf, n + 32, x2, y2, z2, u1, v1, rgba, nrmPacked);
+                putVert(buf, n + 40, x3, y3, z3, u0, v1, rgba, nrmPacked);
             }
         }
 
-        private static void putVert(int[] buf, int off, float x, float y, float z, float u, float v, int rgba) {
+        private static void putVert(int[] buf, int off, float x, float y, float z, float u, float v, int rgba, int nrmPacked) {
             buf[off] = Float.floatToRawIntBits(x);
             buf[off + 1] = Float.floatToRawIntBits(y);
             buf[off + 2] = Float.floatToRawIntBits(z);
             buf[off + 3] = Float.floatToRawIntBits(u);
             buf[off + 4] = Float.floatToRawIntBits(v);
             buf[off + 5] = rgba;
-            buf[off + 6] = 0;
+            buf[off + 6] = nrmPacked;
             buf[off + 7] = 0;
         }
     }
@@ -94,8 +98,64 @@ public final class LodMesher {
     private static final int[] DY = {-1, 1, 0, 0, 0, 0};
     private static final int[] DZ = {0, 0, -1, 1, 0, 0};
     private static final float[] SHADE = {0.50F, 1.00F, 0.80F, 0.80F, 0.60F, 0.60F};
-    private static final float UV_TILE = 1.0F / 16.0F;
-    private static final float UV_EPS = 0.5F / 256.0F;
+    private static volatile int[] tileAvgArgb;
+
+    private static int tileAvgArgb(int tile) {
+        if (tile < 0 || tile >= 256) return 0xFF909090;
+        int[] tbl = tileAvgArgb;
+        if (tbl == null) {
+            tbl = loadTileAverages();
+            tileAvgArgb = tbl;
+        }
+        return tbl[tile];
+    }
+
+    private static synchronized int[] loadTileAverages() {
+        if (tileAvgArgb != null) return tileAvgArgb;
+        int[] out = new int[256];
+        Arrays.fill(out, 0xFF909090);
+        try (InputStream in = LodMesher.class.getResourceAsStream("/terrain.png")) {
+            if (in == null) return out;
+            BufferedImage img = ImageIO.read(in);
+            if (img == null) return out;
+            int w = img.getWidth();
+            int h = img.getHeight();
+            int tw = w / 16;
+            int th = h / 16;
+            if (tw <= 0 || th <= 0) return out;
+            int total = tw * th;
+            for (int t = 0; t < 256; t++) {
+                int ox = (t & 15) * tw;
+                int oy = (t >>> 4) * th;
+                long rSum = 0, gSum = 0, bSum = 0, aSum = 0;
+                int vis = 0;
+                for (int y = 0; y < th; y++) {
+                    for (int x = 0; x < tw; x++) {
+                        int argb = img.getRGB(ox + x, oy + y);
+                        int a = (argb >>> 24) & 255;
+                        aSum += a;
+                        if (a > 20) {
+                            rSum += (argb >>> 16) & 255;
+                            gSum += (argb >>> 8) & 255;
+                            bSum += argb & 255;
+                            vis++;
+                        }
+                    }
+                }
+                int avgA = (int) (aSum / total);
+                if (vis == 0) {
+                    out[t] = (avgA << 24) | 0x909090;
+                } else {
+                    int r = (int) (rSum / vis);
+                    int g = (int) (gSum / vis);
+                    int b = (int) (bSum / vis);
+                    out[t] = (avgA << 24) | (r << 16) | (g << 8) | b;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
 
     private static int neighbor(LodNode node, LodNode[] nb, int vx, int vy, int vz) {
         int dim = node.dim;
@@ -123,17 +183,39 @@ public final class LodMesher {
         return b != null && b.isOpaqueCube();
     }
 
-    private static boolean hides(int selfId, int nId, boolean fancy) {
+    private static boolean hides(int selfId, int nId, boolean fancy, boolean textured, int level) {
         if (nId == 0 || nId == 78) return false;
         if (isOpaqueSolid(nId)) return true;
-        if (nId == 18) return !fancy && selfId != 78;
+        if (nId == 18) {
+            if (textured && fancy && level <= 1) return false;
+            return selfId != 78;
+        }
         if (isWater(selfId) && nId == 79) return true;   // ice hides water directly beneath it (matches BlockFluid)
         if (isWater(nId)) return isWater(selfId);
         return nId == selfId;   // ice / glass
     }
 
-    private static int packRgba(int r, int g, int b) {
-        return 0xFF000000 | ((b & 255) << 16) | ((g & 255) << 8) | (r & 255);
+    private static int packTileNormal(int tile) {
+        int tx = (tile & 15) * 8;
+        int ty = ((tile >>> 4) & 15) * 8;
+        return (tx & 255) | ((ty & 255) << 8) | (0x7F << 16);
+    }
+
+    private static void emitBoxFace(Scratch s, int d, boolean trans, float x0, float y0, float z0,
+                                    float x1, float y1, float z1, float uSpan, float vSpan,
+                                    int col, int nrmPacked, boolean asQuads) {
+        switch (d) {
+            case 1 -> s.pushQuad(trans, x0, y1, z0, x0, y1, z1, x1, y1, z1, x1, y1, z0, 0.0F, 0.0F, uSpan, vSpan, col, nrmPacked, asQuads);
+            case 0 -> s.pushQuad(trans, x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, 0.0F, 0.0F, uSpan, vSpan, col, nrmPacked, asQuads);
+            case 5 -> s.pushQuad(trans, x1, y1, z0, x1, y1, z1, x1, y0, z1, x1, y0, z0, 0.0F, 0.0F, uSpan, vSpan, col, nrmPacked, asQuads);
+            case 4 -> s.pushQuad(trans, x0, y1, z1, x0, y1, z0, x0, y0, z0, x0, y0, z1, 0.0F, 0.0F, uSpan, vSpan, col, nrmPacked, asQuads);
+            case 3 -> s.pushQuad(trans, x1, y1, z1, x0, y1, z1, x0, y0, z1, x1, y0, z1, 0.0F, 0.0F, uSpan, vSpan, col, nrmPacked, asQuads);
+            default -> s.pushQuad(trans, x0, y1, z0, x1, y1, z0, x1, y0, z0, x0, y0, z0, 0.0F, 0.0F, uSpan, vSpan, col, nrmPacked, asQuads);
+        }
+    }
+
+    private static int packRgba(int r, int g, int b, int a) {
+        return ((a & 255) << 24) | ((b & 255) << 16) | ((g & 255) << 8) | (r & 255);
     }
 
     private static int tintRgb(int id, int meta, short colTint, int side, boolean grassSlope) {
@@ -153,10 +235,11 @@ public final class LodMesher {
     public static Mesh mesh(LodNode node, LodNode[] nb, float[] lightTable, int skySub, boolean fancy, Scratch s) {
         s.reset();
         boolean asQuads = !Tessellator.convertQuadsToTriangles;
+        boolean textured = Backends.vulkan();
         int h = node.h;
         int dim = node.dim;
         float sx = node.scaleXZ, sy = node.scaleY;
-        int maxMerge = node.level == 0 ? 16 : (node.level == 1 ? 4 : 8);
+        int maxMerge = 16;
 
         for (int d = 0; d < 6; d++) {
             int dx = DX[d], dy = DY[d], dz = DZ[d];
@@ -192,7 +275,7 @@ public final class LodMesher {
                         int aboveCell = vy + 1 < h ? node.get(vx, vy + 1, vz) : 0;
                         int aboveId = LodNode.id(aboveCell);
                         if (d == 1 && id != 78 && aboveId == 78) continue;
-                        if (hides(id, nId, fancy) && !(id == 78 && d == 1)) continue;
+                        if (hides(id, nId, fancy, textured, node.level) && !(id == 78 && d == 1)) continue;
                         if (id == 2 && (aboveId == 78 || aboveId == 80)) aboveSnow = true;
 
                         boolean water = isWater(id);
@@ -200,15 +283,28 @@ public final class LodMesher {
                         boolean trans = water || iceGlass;
                         int meta = LodNode.meta(cell);
                         int lightV = !isOpaqueSolid(nId) ? nv : cell;
+                        int baseSky = LodNode.sky(lightV);
+                        if (baseSky < 6 && !isOpaqueSolid(nId) && vy * node.scaleY >= 40) baseSky = 6;
                         int blk = Math.max(LodNode.blk(lightV), Block.lightValue[id]);
-                        int eff = Math.max(0, Math.min(15, Math.max(LodNode.sky(lightV) - skySub, blk)));
+                        int eff = Math.max(0, Math.min(15, Math.max(baseSky - skySub, blk)));
                         float sh = shade * lightTable[eff];
 
+                        int betterGrass = dev.betavk.hooks.Opts.betterGrass;
                         boolean grassSlope = false;
-                        if (id == 2 && d >= 2 && !aboveSnow && LodNode.isGrassSide(cell)) {
-                            // Keep rolling slopes green; sheer cliffs (air below neighbor) stay dirt.
-                            if (vy == 0 || LodNode.id(neighbor(node, nb, vx + dx, vy - 1, vz + dz)) != 0) {
-                                grassSlope = true;
+                        boolean snowSlope = false;
+                        if (id == 2 && d >= 2) {
+                            if (betterGrass == 1) {
+                                if (aboveSnow) snowSlope = true;
+                                else grassSlope = true;
+                            } else if (betterGrass == 2) {
+                                int belowDiag = vy == 0 ? 2 : LodNode.id(neighbor(node, nb, vx + dx, vy - 1, vz + dz));
+                                if (belowDiag == 2) {
+                                    if (!aboveSnow) grassSlope = true;
+                                    else {
+                                        int frontId = LodNode.id(nv);
+                                        if (frontId == 78 || frontId == 80) snowSlope = true;
+                                    }
+                                }
                             }
                         }
 
@@ -217,9 +313,10 @@ public final class LodMesher {
                             tile = 66;
                         } else if (id == 18) {
                             int t = meta & 3;
-                            tile = fancy ? (t == 1 ? 132 : 52) : (t == 1 ? 133 : 53);
+                            boolean fancyLeaf = textured && fancy && node.level <= 1;
+                            tile = fancyLeaf ? (t == 1 ? 132 : 52) : (t == 1 ? 133 : 53);
                         } else if (id == 2) {
-                            tile = d == 1 ? 0 : d == 0 ? 2 : aboveSnow ? 68 : grassSlope ? 0 : 3;
+                            tile = d == 1 ? 0 : d == 0 ? 2 : snowSlope ? 66 : aboveSnow ? 68 : grassSlope ? 0 : 3;
                         } else {
                             Block b = Block.blocksList[id];
                             if (b == null) continue;
@@ -227,9 +324,22 @@ public final class LodMesher {
                         }
 
                         int rgb = tintRgb(id, meta, node.colTint[(vx << node.dimShift) | vz], d, grassSlope);
-                        int cr = (int) (((rgb >>> 16) & 255) * sh);
-                        int cg = (int) (((rgb >>> 8) & 255) * sh);
-                        int cb = (int) ((rgb & 255) * sh);
+                        int cr, cg, cb, ca;
+                        if (textured) {
+                            ca = 255;
+                            cr = Math.min(255, (int) (((rgb >>> 16) & 255) * sh));
+                            cg = Math.min(255, (int) (((rgb >>> 8) & 255) * sh));
+                            cb = Math.min(255, (int) ((rgb & 255) * sh));
+                        } else {
+                            int tex = tileAvgArgb(tile);
+                            int tr = (tex >>> 16) & 255;
+                            int tg = (tex >>> 8) & 255;
+                            int tb = tex & 255;
+                            ca = trans ? Math.max(48, (tex >>> 24) & 255) : 255;
+                            cr = Math.min(255, (int) ((((rgb >>> 16) & 255) * tr * (1.0F / 255.0F)) * sh));
+                            cg = Math.min(255, (int) ((((rgb >>> 8) & 255) * tg * (1.0F / 255.0F)) * sh));
+                            cb = Math.min(255, (int) (((rgb & 255) * tb * (1.0F / 255.0F)) * sh));
+                        }
 
                         // Top encoding: 0 = full voxel height, 1 = water surface (-0.111m), 2 = snow layer, 3 = half-slab (0.5m)
                         int topMode = 0;
@@ -238,8 +348,8 @@ public final class LodMesher {
                         else if (id == 44 && node.scaleY == 1) topMode = 3;
 
                         int slot = u * vMax + v;
-                        s.faceTile[slot] = ((tile + 1) << 1) | (trans ? 1 : 0);
-                        s.faceColor[slot] = packRgba(cr, cg, cb);
+                        s.faceTile[slot] = textured ? (((tile + 1) << 1) | (trans ? 1 : 0)) : (trans ? 2 : 1);
+                        s.faceColor[slot] = packRgba(cr, cg, cb, ca);
                         s.faceTop[slot] = topMode;
                         anyFace = true;
                     }
@@ -276,12 +386,9 @@ public final class LodMesher {
                             }
                         }
 
-                        boolean trans = (tk & 1) != 0;
-                        int tile = (tk >>> 1) - 1;
-                        float u0 = (tile & 15) * UV_TILE + UV_EPS;
-                        float v0 = (tile >>> 4) * UV_TILE + UV_EPS;
-                        float u1 = u0 + UV_TILE - 2.0F * UV_EPS;
-                        float v1 = v0 + UV_TILE - 2.0F * UV_EPS;
+                        boolean trans = textured ? ((tk & 1) != 0) : (tk == 2);
+                        int tile = textured ? ((tk >>> 1) - 1) : 0;
+                        int nrmPacked = textured ? packTileNormal(tile) : 0;
 
                         float x0, y0, z0, x1, y1, z1;
                         if (horizontalSlice) {
@@ -294,23 +401,22 @@ public final class LodMesher {
                                     : top == 2 ? y0 + Math.min(0.25F * sy, 1.0F)
                                     : top == 3 ? y0 + 0.5F
                                     : (sl + 1) * sy;
-                        } else if (d >= 4) {
-                            x0 = sl * sx;
-                            x1 = (sl + 1) * sx;
-                            z0 = u * sx;
-                            z1 = (u + wSpan) * sx;
-                            y0 = v * sy;
-                            y1 = (v + hSpan) * sy;
-                            if (hSpan == 1) {
-                                if (top == 1) y1 -= 0.1111F;
-                                else if (top == 2) y1 = y0 + Math.min(0.25F * sy, 1.0F);
-                                else if (top == 3) y1 = y0 + 0.5F;
-                            }
+                            float uSpan = d == 1 ? (z1 - z0) : (x1 - x0);
+                            float vSpan = d == 1 ? (x1 - x0) : (z1 - z0);
+                            if (!textured) { uSpan = 0.0F; vSpan = 0.0F; }
+                            emitBoxFace(s, d, trans, x0, y0, z0, x1, y1, z1, uSpan, vSpan, col, nrmPacked, asQuads);
                         } else {
-                            x0 = u * sx;
-                            x1 = (u + wSpan) * sx;
-                            z0 = sl * sx;
-                            z1 = (sl + 1) * sx;
+                            if (d >= 4) {
+                                x0 = sl * sx;
+                                x1 = (sl + 1) * sx;
+                                z0 = u * sx;
+                                z1 = (u + wSpan) * sx;
+                            } else {
+                                x0 = u * sx;
+                                x1 = (u + wSpan) * sx;
+                                z0 = sl * sx;
+                                z1 = (sl + 1) * sx;
+                            }
                             y0 = v * sy;
                             y1 = (v + hSpan) * sy;
                             if (hSpan == 1) {
@@ -318,15 +424,17 @@ public final class LodMesher {
                                 else if (top == 2) y1 = y0 + Math.min(0.25F * sy, 1.0F);
                                 else if (top == 3) y1 = y0 + 0.5F;
                             }
-                        }
-
-                        switch (d) {
-                            case 1 -> s.pushQuad(trans, x0, y1, z0, x0, y1, z1, x1, y1, z1, x1, y1, z0, u0, v0, u1, v1, col, asQuads);
-                            case 0 -> s.pushQuad(trans, x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, u0, v0, u1, v1, col, asQuads);
-                            case 5 -> s.pushQuad(trans, x1, y1, z0, x1, y1, z1, x1, y0, z1, x1, y0, z0, u0, v0, u1, v1, col, asQuads);
-                            case 4 -> s.pushQuad(trans, x0, y1, z1, x0, y1, z0, x0, y0, z0, x0, y0, z1, u0, v0, u1, v1, col, asQuads);
-                            case 3 -> s.pushQuad(trans, x1, y1, z1, x0, y1, z1, x0, y0, z1, x1, y0, z1, u0, v0, u1, v1, col, asQuads);
-                            default -> s.pushQuad(trans, x0, y1, z0, x1, y1, z0, x1, y0, z0, x0, y0, z0, u0, v0, u1, v1, col, asQuads);
+                            float uSpan = d >= 4 ? (z1 - z0) : (x1 - x0);
+                            float vSpan = y1 - y0;
+                            if (!textured) {
+                                emitBoxFace(s, d, trans, x0, y0, z0, x1, y1, z1, 0.0F, 0.0F, col, 0, asQuads);
+                            } else if ((tile == 3 || tile == 68) && vSpan > 1.05F) {
+                                // Coarse grass/snow cliffs get a 1m turf rim on top and tiled dirt below rather than striped grass.
+                                emitBoxFace(s, d, trans, x0, y1 - 1.0F, z0, x1, y1, z1, uSpan, 1.0F, col, nrmPacked, asQuads);
+                                emitBoxFace(s, d, trans, x0, y0, z0, x1, y1 - 1.0F, z1, uSpan, vSpan - 1.0F, col, packTileNormal(2), asQuads);
+                            } else {
+                                emitBoxFace(s, d, trans, x0, y0, z0, x1, y1, z1, uSpan, vSpan, col, nrmPacked, asQuads);
+                            }
                         }
                     }
                 }

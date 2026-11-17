@@ -14,6 +14,7 @@ import net.minecraft.src.WorldChunkManager;
 
 import java.io.DataInputStream;
 import java.io.File;
+import java.util.Arrays;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -43,32 +44,53 @@ public final class LodChunkSource {
         }
     }
 
+    static final class SurfCell {
+        long key = Long.MIN_VALUE;
+        final byte[] topY = new byte[256];
+        final byte[] topId = new byte[256];
+        BiomeGenBase centerBiome;
+    }
+
     static final class WorkerGen {
         final GenWorld genWorld;
         final ChunkProviderGenerate provider;
         final WorldChunkManager manager;
         final Random rng = new Random();
-        final byte[] skyTmp = new byte[32768];
-        final byte[] blkTmp = new byte[32768];
+        final byte[] genBlocks = new byte[32768];
+        final byte[] genData = new byte[16384];
+        final byte[] genSky = new byte[16384];
+        final byte[] genBlk = new byte[16384];
+        final ChunkSnap genSnap = new ChunkSnap(genBlocks, genData, genSky, genBlk);
+        final byte[] surfBlocks = new byte[32768];
+        final SurfCell[] surfCache = new SurfCell[256];
         BiomeGenBase[] biomes;
+        BiomeGenBase[] surfBiomes;
 
         WorkerGen(World real, long seed) {
             this.genWorld = GenWorld.create(real, seed);
             this.provider = new ChunkProviderGenerate(genWorld, seed);
             this.manager = genWorld.manager();
+            for (int i = 0; i < surfCache.length; i++) surfCache[i] = new SurfCell();
         }
     }
 
     private static volatile File saveDir;
     private static final ConcurrentHashMap<Long, ChunkSnap> liveSnaps = new ConcurrentHashMap<>();
-    private static final int MAX_LIVE_SNAPS = 2048;
+    private static final ConcurrentHashMap<Long, Long> chunkHashes = new ConcurrentHashMap<>();
+    private static final int MAX_LIVE_SNAPS = 512;
+    private static final int MAX_CHUNK_HASHES = 8192;
 
     private static long key(int cx, int cz) {
         return ((long) cx << 32) | (cz & 0xFFFFFFFFL);
     }
 
+    static File saveDirectory() {
+        return saveDir;
+    }
+
     public static void reset(World w) {
         liveSnaps.clear();
+        chunkHashes.clear();
         if (w != null && w.saveHandler instanceof SaveHandler sh) {
             saveDir = sh.getSaveDirectory();
         } else {
@@ -76,9 +98,43 @@ public final class LodChunkSource {
         }
     }
 
-    /** Game thread: capture an immutable snapshot of a loaded/edited/saved chunk. */
-    public static void captureChunk(Chunk c) {
-        if (c == null || c.blocks == null || c.blocks.length != 32768) return;
+    private static long blockDataHash(byte[] blocks, byte[] data) {
+        long h = 0xCBF29CE484222325L;
+        for (int i = 0; i < blocks.length; i += 4) {
+            int v = (blocks[i] & 255)
+                    | ((blocks[i + 1] & 255) << 8)
+                    | ((blocks[i + 2] & 255) << 16)
+                    | ((blocks[i + 3] & 255) << 24);
+            h = (h ^ v) * 0x100000001B3L;
+        }
+        if (data != null) {
+            for (int i = 0; i < data.length; i += 4) {
+                int v = (data[i] & 255)
+                        | ((data[i + 1] & 255) << 8)
+                        | ((data[i + 2] & 255) << 16)
+                        | ((data[i + 3] & 255) << 24);
+                h = (h ^ v) * 0x100000001B3L;
+            }
+        }
+        return h;
+    }
+
+    /** Game thread: capture a chunk only when its block/data contents actually differ from the last known snapshot. */
+    public static boolean captureIfChanged(Chunk c) {
+        if (c == null || c.blocks == null || c.blocks.length != 32768) return false;
+        long k = key(c.xPosition, c.zPosition);
+        byte[] dtSrc = c.data != null && c.data.data != null && c.data.data.length == 16384 ? c.data.data : null;
+        long h = blockDataHash(c.blocks, dtSrc);
+        Long prev = chunkHashes.put(k, h);
+        if (prev != null && prev == h) return false;
+        if (chunkHashes.size() > MAX_CHUNK_HASHES) {
+            int drop = MAX_CHUNK_HASHES / 4;
+            var it = chunkHashes.keySet().iterator();
+            while (it.hasNext() && drop-- > 0) {
+                it.next();
+                it.remove();
+            }
+        }
         if (liveSnaps.size() > MAX_LIVE_SNAPS) {
             int drop = MAX_LIVE_SNAPS / 4;
             var it = liveSnaps.keySet().iterator();
@@ -88,10 +144,16 @@ public final class LodChunkSource {
             }
         }
         byte[] bl = c.blocks.clone();
-        byte[] dt = c.data != null && c.data.data != null ? c.data.data.clone() : new byte[16384];
+        byte[] dt = dtSrc != null ? dtSrc.clone() : new byte[16384];
         byte[] sk = c.skylightMap != null && c.skylightMap.data != null ? c.skylightMap.data.clone() : new byte[16384];
         byte[] bk = c.blocklightMap != null && c.blocklightMap.data != null ? c.blocklightMap.data.clone() : new byte[16384];
-        liveSnaps.put(key(c.xPosition, c.zPosition), new ChunkSnap(bl, dt, sk, bk));
+        liveSnaps.put(k, new ChunkSnap(bl, dt, sk, bk));
+        return true;
+    }
+
+    /** Game thread: capture an immutable snapshot of a loaded/edited/saved chunk. */
+    public static void captureChunk(Chunk c) {
+        captureIfChanged(c);
     }
 
     /** Lock-free lookup of a cached live chunk snapshot (returns null if not captured). */
@@ -99,8 +161,36 @@ public final class LodChunkSource {
         return liveSnaps.get(key(cx, cz));
     }
 
+    /** Fast check whether any chunk in [cx0..cx0+span-1] x [cz0..cz0+span-1] exists in live snaps or on disk. */
+    static boolean hasAnySavedChunk(int cx0, int cz0, int span) {
+        if (!liveSnaps.isEmpty()) {
+            for (int dx = 0; dx < span; dx++) {
+                for (int dz = 0; dz < span; dz++) {
+                    if (liveSnaps.containsKey(key(cx0 + dx, cz0 + dz))) return true;
+                }
+            }
+        }
+        File dir = saveDir;
+        if (dir == null) return false;
+        File regDir = new File(dir, "region");
+        if (!regDir.isDirectory()) return false;
+        int rx0 = cx0 >> 5, rx1 = (cx0 + span - 1) >> 5;
+        int rz0 = cz0 >> 5, rz1 = (cz0 + span - 1) >> 5;
+        for (int rx = rx0; rx <= rx1; rx++) {
+            for (int rz = rz0; rz <= rz1; rz++) {
+                if (new File(regDir, "r." + rx + "." + rz + ".mcr").isFile()) return true;
+            }
+        }
+        return false;
+    }
+
     /** Worker thread: resolve chunk (cx, cz) from live edits, McRegion disk, or generator fallback. */
     static ChunkSnap fetch(int cx, int cz, WorkerGen wg) {
+        return fetch(cx, cz, wg, true);
+    }
+
+    /** Worker thread: resolve chunk (cx, cz), optionally including cross-chunk border tree canopies. */
+    static ChunkSnap fetch(int cx, int cz, WorkerGen wg, boolean borderTrees) {
         wg.biomes = wg.manager.loadBlockGeneratorData(wg.biomes, cx * 16, cz * 16, 16, 16);
 
         ChunkSnap snap = liveSnaps.get(key(cx, cz));
@@ -108,7 +198,7 @@ public final class LodChunkSource {
             snap = readRegion(saveDir, cx, cz);
         }
         if (snap == null) {
-            snap = generateFallback(cx, cz, wg);
+            snap = generateFallback(cx, cz, wg, borderTrees);
         } else {
             // Live/disk snapshots carry exact blocks/light; attach exact biome climate from manager.
             ChunkSnap view = new ChunkSnap(snap.blocks, snap.data, snap.skyLight, snap.blockLight);
@@ -147,33 +237,78 @@ public final class LodChunkSource {
             if (data == null || data.length != 16384) data = new byte[16384];
             if (sky == null || sky.length != 16384) sky = new byte[16384];
             if (blk == null || blk.length != 16384) blk = new byte[16384];
+            chunkHashes.putIfAbsent(key(cx, cz), blockDataHash(blocks, data));
             return new ChunkSnap(blocks, data, sky, blk);
         } catch (Throwable ignored) {
             return null;
         }
     }
 
-    private static ChunkSnap generateFallback(int cx, int cz, WorkerGen wg) {
-        byte[] blocks = new byte[32768];
-        byte[] data = new byte[16384];
-        byte[] sky = new byte[16384];
-        byte[] blk = new byte[16384];
+    private static ChunkSnap generateFallback(int cx, int cz, WorkerGen wg, boolean borderTrees) {
+        byte[] blocks = wg.genBlocks;
+        byte[] data = wg.genData;
+        byte[] sky = wg.genSky;
+        byte[] blk = wg.genBlk;
+        Arrays.fill(blocks, (byte) 0);
+        Arrays.fill(data, (byte) 0);
+        Arrays.fill(blk, (byte) 0);
 
         ChunkProviderGenerate p = wg.provider;
         p.rand.setSeed((long) cx * 341873128712L + (long) cz * 132897987541L);
         p.generateTerrain(cx, cz, blocks, wg.biomes, wg.manager.temperature);
         p.replaceBlocksForBiome(cx, cz, blocks, wg.biomes);
-        p.field_902_u.func_867_a(p, wg.genWorld, cx, cz, blocks);
 
-        ChunkSnap snap = new ChunkSnap(blocks, data, sky, blk);
+        ChunkSnap snap = wg.genSnap;
         for (int i = 0; i < 256; i++) {
             snap.temp[i] = (float) wg.manager.temperature[i];
             snap.hum[i] = (float) wg.manager.humidity[i];
         }
-        plantFastTrees(cx, cz, blocks, data, wg);
+        SurfCell selfSurf = storeSurface(cx, cz, blocks, wg.biomes[8 * 16 + 8], wg);
+        plantFastTrees(cx, cz, blocks, data, selfSurf, borderTrees, wg);
         applySnowAndIce(blocks, snap.temp);
-        fillLight(blocks, sky, blk, wg.genWorld.worldProvider.hasNoSky, wg.skyTmp, wg.blkTmp);
+        fillLightFast(blocks, sky, wg.genWorld.worldProvider.hasNoSky);
         return snap;
+    }
+
+    private static SurfCell storeSurface(int cx, int cz, byte[] blocks, BiomeGenBase centerBiome, WorkerGen wg) {
+        long k = key(cx, cz);
+        int slot = ((cx * 73856093) ^ (cz * 19349663)) & 255;
+        SurfCell cell = wg.surfCache[slot];
+        cell.key = k;
+        cell.centerBiome = centerBiome;
+        for (int lx = 0; lx < 16; lx++) {
+            for (int lz = 0; lz < 16; lz++) {
+                int baseIdx = (lx << 11) | (lz << 7);
+                int y = 120;
+                while (y > 40 && blocks[baseIdx | y] == 0) y--;
+                int col = (lx << 4) | lz;
+                cell.topY[col] = (byte) y;
+                cell.topId[col] = blocks[baseIdx | y];
+            }
+        }
+        return cell;
+    }
+
+    private static SurfCell getSurface(int cx, int cz, WorkerGen wg) {
+        long k = key(cx, cz);
+        int slot = ((cx * 73856093) ^ (cz * 19349663)) & 255;
+        SurfCell cell = wg.surfCache[slot];
+        if (cell.key == k) return cell;
+
+        ChunkSnap live = liveSnaps.get(k);
+        if (live != null) {
+            BiomeGenBase b = wg.manager.getBiomeGenAt(cx * 16 + 8, cz * 16 + 8);
+            return storeSurface(cx, cz, live.blocks, b, wg);
+        }
+
+        byte[] sb = wg.surfBlocks;
+        Arrays.fill(sb, (byte) 0);
+        wg.surfBiomes = wg.manager.loadBlockGeneratorData(wg.surfBiomes, cx * 16, cz * 16, 16, 16);
+        ChunkProviderGenerate p = wg.provider;
+        p.rand.setSeed((long) cx * 341873128712L + (long) cz * 132897987541L);
+        p.generateTerrain(cx, cz, sb, wg.surfBiomes, wg.manager.temperature);
+        p.replaceBlocksForBiome(cx, cz, sb, wg.surfBiomes);
+        return storeSurface(cx, cz, sb, wg.surfBiomes[8 * 16 + 8], wg);
     }
 
     private static void setNibble(byte[] arr, int idx, int val) {
@@ -182,10 +317,28 @@ public final class LodChunkSource {
         else arr[bi] = (byte) ((arr[bi] & 0x0F) | ((val & 15) << 4));
     }
 
-    private static void plantFastTrees(int cx, int cz, byte[] blocks, byte[] data, WorkerGen wg) {
-        BiomeGenBase center = wg.biomes[8 * 16 + 8];
-        if (center == BiomeGenBase.desert || center == BiomeGenBase.iceDesert || center == BiomeGenBase.tundra) return;
+    private static void plantFastTrees(int cx, int cz, byte[] blocks, byte[] data, SurfCell selfSurf, boolean borderTrees, WorkerGen wg) {
+        plantChunkTreesInto(cx, cz, cx, cz, blocks, data, selfSurf, wg);
+        if (!borderTrees) return;
 
+        for (int dcx = -1; dcx <= 1; dcx++) {
+            for (int dcz = -1; dcz <= 1; dcz++) {
+                if (dcx == 0 && dcz == 0) continue;
+                int tcx = cx + dcx, tcz = cz + dcz;
+                long k = key(tcx, tcz);
+                int slot = ((tcx * 73856093) ^ (tcz * 19349663)) & 255;
+                SurfCell nb = wg.surfCache[slot].key == k ? wg.surfCache[slot] : null;
+                BiomeGenBase center = nb != null ? nb.centerBiome : wg.manager.getBiomeGenAt(tcx * 16 + 8, tcz * 16 + 8);
+                if (center == BiomeGenBase.desert || center == BiomeGenBase.iceDesert || center == BiomeGenBase.tundra) continue;
+                int count = computeTreeCount(tcx, tcz, center, wg);
+                if (count <= 0) continue;
+                if (nb == null) nb = getSurface(tcx, tcz, wg);
+                plantChunkTreesInto(tcx, tcz, cx, cz, blocks, data, nb, wg);
+            }
+        }
+    }
+
+    private static int computeTreeCount(int cx, int cz, BiomeGenBase center, WorkerGen wg) {
         Random rng = wg.rng;
         rng.setSeed((long) cx * 0x4F9939F508L ^ (long) cz * 0x1EF1565BD5L ^ wg.genWorld.getRandomSeed());
         double d = wg.provider.mobSpawnerNoise.func_806_a(cx * 8.0, cz * 8.0);
@@ -196,16 +349,29 @@ public final class LodChunkSource {
         else if (center == BiomeGenBase.taiga) count += base + 5;
         else if (center == BiomeGenBase.savanna || center == BiomeGenBase.plains) count = rng.nextInt(5) == 0 ? 1 : 0;
         else count += base;
+        return count;
+    }
 
+    private static void plantChunkTreesInto(int treeCX, int treeCZ, int targetCX, int targetCZ,
+                                            byte[] blocks, byte[] data, SurfCell surf, WorkerGen wg) {
+        BiomeGenBase center = surf.centerBiome;
+        if (center == BiomeGenBase.desert || center == BiomeGenBase.iceDesert || center == BiomeGenBase.tundra) return;
+        int count = computeTreeCount(treeCX, treeCZ, center, wg);
+        if (count <= 0) return;
+
+        Random rng = wg.rng;
+        boolean sameChunk = (treeCX == targetCX && treeCZ == targetCZ);
+        int offX = (treeCX - targetCX) << 4;
+        int offZ = (treeCZ - targetCZ) << 4;
         boolean birchAllowed = center == BiomeGenBase.forest;
         boolean pine = center == BiomeGenBase.taiga;
+
         for (int t = 0; t < count; t++) {
             int lx = rng.nextInt(16);
             int lz = rng.nextInt(16);
-            int baseIdx = (lx << 11) | (lz << 7);
-            int y = 120;
-            while (y > 40 && blocks[baseIdx | y] == 0) y--;
-            int gId = blocks[baseIdx | y] & 255;
+            int col = (lx << 4) | lz;
+            int y = surf.topY[col] & 255;
+            int gId = surf.topId[col] & 255;
             if (gId != 2 && gId != 3) continue;
             int top = y + 1;
             int height = 4 + rng.nextInt(3);
@@ -213,24 +379,30 @@ public final class LodChunkSource {
 
             int logMeta = pine ? 1 : (birchAllowed && rng.nextInt(5) == 0 ? 2 : 0);
             int leafMeta = pine ? 1 : (logMeta == 2 ? 2 : 0);
+            int tx = lx + offX;
+            int tz = lz + offZ;
 
             if (pine) {
                 int th = height + 2;
                 if (top + th + 1 >= 127) continue;
-                for (int dy = 0; dy < th; dy++) {
-                    int idx = baseIdx | (top + dy);
-                    blocks[idx] = 17;
-                    setNibble(data, idx, 1);
-                }
                 int maxR = 2 + rng.nextInt(2);
+                if (!sameChunk && (tx + maxR < 0 || tx - maxR >= 16 || tz + maxR < 0 || tz - maxR >= 16)) continue;
+                if (sameChunk) {
+                    int baseIdx = (lx << 11) | (lz << 7);
+                    for (int dy = 0; dy < th; dy++) {
+                        int idx = baseIdx | (top + dy);
+                        blocks[idx] = 17;
+                        setNibble(data, idx, 1);
+                    }
+                }
                 for (int dy = 2; dy <= th + 1; dy++) {
                     int r = dy == th + 1 ? 0 : Math.max(1, maxR - ((dy - 2) / 2));
                     int ly = top + dy;
                     for (int oz = -r; oz <= r; oz++) {
-                        int az = lz + oz;
+                        int az = tz + oz;
                         if (az < 0 || az >= 16) continue;
                         for (int ox = -r; ox <= r; ox++) {
-                            int ax = lx + ox;
+                            int ax = tx + ox;
                             if (ax < 0 || ax >= 16) continue;
                             if (Math.abs(ox) == r && Math.abs(oz) == r && r > 0) continue;
                             int idx = (ax << 11) | (az << 7) | ly;
@@ -242,21 +414,25 @@ public final class LodChunkSource {
                     }
                 }
             } else {
-                for (int dy = 0; dy < height; dy++) {
-                    int idx = baseIdx | (top + dy);
-                    blocks[idx] = 17;
-                    setNibble(data, idx, logMeta);
+                if (sameChunk) {
+                    int baseIdx = (lx << 11) | (lz << 7);
+                    for (int dy = 0; dy < height; dy++) {
+                        int idx = baseIdx | (top + dy);
+                        blocks[idx] = 17;
+                        setNibble(data, idx, logMeta);
+                    }
                 }
+                boolean touches = sameChunk || !(tx + 2 < 0 || tx - 2 >= 16 || tz + 2 < 0 || tz - 2 >= 16);
                 for (int ly = top + height - 3; ly <= top + height; ly++) {
                     int dy = ly - (top + height);
                     int r = 1 - dy / 2;
                     for (int oz = -r; oz <= r; oz++) {
-                        int az = lz + oz;
-                        if (az < 0 || az >= 16) continue;
+                        int az = tz + oz;
                         for (int ox = -r; ox <= r; ox++) {
-                            int ax = lx + ox;
-                            if (ax < 0 || ax >= 16) continue;
-                            if (Math.abs(ox) == r && Math.abs(oz) == r && (rng.nextInt(2) == 0 || dy == 0)) continue;
+                            boolean cornerSkip = Math.abs(ox) == r && Math.abs(oz) == r && (rng.nextInt(2) == 0 || dy == 0);
+                            if (cornerSkip || !touches) continue;
+                            int ax = tx + ox;
+                            if (ax < 0 || ax >= 16 || az < 0 || az >= 16) continue;
                             int idx = (ax << 11) | (az << 7) | ly;
                             if (blocks[idx] == 0) {
                                 blocks[idx] = 18;
@@ -292,63 +468,32 @@ public final class LodChunkSource {
         }
     }
 
-    private static void fillLight(byte[] blocks, byte[] sky, byte[] blk, boolean hasNoSky, byte[] st, byte[] bt) {
-        boolean anyEmit = false;
+    private static void fillLightFast(byte[] blocks, byte[] sky, boolean hasNoSky) {
+        if (hasNoSky) {
+            Arrays.fill(sky, (byte) 0);
+            return;
+        }
+        int[] opTable = Block.lightOpacity;
         for (int lx = 0; lx < 16; lx++) {
             for (int lz = 0; lz < 16; lz++) {
                 int base = (lx << 11) | (lz << 7);
-                int level = hasNoSky ? 0 : 15;
-                for (int y = 127; y >= 0; y--) {
-                    int idx = base | y;
-                    int id = blocks[idx] & 255;
-                    int op = Block.lightOpacity[id];
-                    if (op >= 255) level = 0;
-                    else if (level > 0) level = Math.max(0, level - op);
-                    st[idx] = (byte) level;
-                    int emit = Block.lightValue[id];
-                    bt[idx] = (byte) emit;
-                    if (emit > 0) anyEmit = true;
-                }
-            }
-        }
-        // Soften cave mouths, tree shade, and cliff overhangs with 2 bounded cardinal light sweeps.
-        if (!hasNoSky) spreadLight(blocks, st, 2);
-        if (anyEmit) spreadLight(blocks, bt, 2);
+                int level = 15;
+                for (int y = 127; y >= 1; y -= 2) {
+                    int idxOdd = base | y;
+                    int idOdd = blocks[idxOdd] & 255;
+                    int opOdd = opTable[idOdd];
+                    if (opOdd >= 255) level = 0;
+                    else if (level > 0 && opOdd > 0) level = Math.max(0, level - opOdd);
+                    int sOdd = level;
 
-        for (int i = 0; i < 16384; i++) {
-            int j = i << 1;
-            sky[i] = (byte) ((st[j] & 15) | ((st[j + 1] & 15) << 4));
-            if (anyEmit) blk[i] = (byte) ((bt[j] & 15) | ((bt[j + 1] & 15) << 4));
-        }
-    }
+                    int idxEven = idxOdd - 1;
+                    int idEven = blocks[idxEven] & 255;
+                    int opEven = opTable[idEven];
+                    if (opEven >= 255) level = 0;
+                    else if (level > 0 && opEven > 0) level = Math.max(0, level - opEven);
+                    int sEven = level;
 
-    private static void spreadLight(byte[] blocks, byte[] light, int passes) {
-        for (int p = 0; p < passes; p++) {
-            for (int x = 0; x < 16; x++) {
-                for (int z = 0; z < 16; z++) {
-                    int base = (x << 11) | (z << 7);
-                    for (int y = 32; y < 127; y++) {
-                        int idx = base | y;
-                        int cur = light[idx] & 255;
-                        int step = Math.max(1, Block.lightOpacity[blocks[idx] & 255]);
-                        if (step >= 255) continue;
-                        int n = cur;
-                        if (x > 0) n = Math.max(n, (light[idx - 2048] & 255) - step);
-                        if (x < 15) n = Math.max(n, (light[idx + 2048] & 255) - step);
-                        if (z > 0) n = Math.max(n, (light[idx - 128] & 255) - step);
-                        if (z < 15) n = Math.max(n, (light[idx + 128] & 255) - step);
-                        n = Math.max(n, (light[idx - 1] & 255) - step);
-                        n = Math.max(n, (light[idx + 1] & 255) - step);
-                        if (n > cur) light[idx] = (byte) n;
-                    }
-                    for (int y = 126; y >= 32; y--) {
-                        int idx = base | y;
-                        int cur = light[idx] & 255;
-                        int step = Math.max(1, Block.lightOpacity[blocks[idx] & 255]);
-                        if (step >= 255) continue;
-                        int n = Math.max(cur, (light[idx + 1] & 255) - step);
-                        if (n > cur) light[idx] = (byte) n;
-                    }
+                    sky[idxEven >>> 1] = (byte) ((sEven & 15) | ((sOdd & 15) << 4));
                 }
             }
         }

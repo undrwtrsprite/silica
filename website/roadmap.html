@@ -4,25 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0a0d11">
-<meta name="description" content="Where Silica is going: the roadmap as an achievement tree. Faster frames, mod support, other Betas and Alphas.">
+<meta name="description" content="Where Silica is going: Better performance, Better grass, LODs, Beta fixes, Silica's own mod library, modern texture packs, and one unified system for Alpha to Beta.">
 <title>Roadmap: Silica</title>
 <link rel="canonical" href="https://silicalauncher.xyz/roadmap">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Silica">
 <meta property="og:title" content="Roadmap: Silica">
-<meta property="og:description" content="Where Silica is going: the roadmap as an achievement tree. Faster frames, mod support, other Betas and Alphas.">
+<meta property="og:description" content="Where Silica is going: LODs, Better grass, Beta fixes, our own mod library, modern texture support, and one unified system from Alpha to Beta.">
 <meta property="og:url" content="https://silicalauncher.xyz/roadmap">
 <meta property="og:image" content="https://silicalauncher.xyz/assets/shot-lod.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Roadmap: Silica">
-<meta name="twitter:description" content="Where Silica is going: faster frames, mod support, and other Beta/Alpha versions.">
+<meta name="twitter:description" content="Where Silica is going: LODs, Better grass, Beta fixes, our own mod library, modern texture support, and unified Alpha–Beta support.">
 <meta name="twitter:image" content="https://silicalauncher.xyz/assets/shot-lod.jpg">
 <link rel="icon" href="assets/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"></noscript>
-<link rel="stylesheet" href="silica.css">
+<link rel="stylesheet" href="silica.css?v=5">
 <script>document.documentElement.classList.add('js')</script>
 <script type="module">
   import { inject } from "https://cdn.jsdelivr.net/npm/@vercel/analytics@2.0.1/dist/index.mjs";
@@ -55,6 +55,9 @@
   <symbol id="i-snd" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z M16.5 9a4 4 0 010 6 M18.5 6.5a7.5 7.5 0 010 11"/></symbol>
   <symbol id="i-dbg" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="1.5"/><path d="M7.5 10l3 2.5-3 2.5M12.5 15h4"/></symbol>
   <symbol id="i-mod" viewBox="0 0 24 24"><path d="M5 8l7-4 7 4v8l-7 4-7-4z M9 12l2.2 2.2L15.5 10"/></symbol>
+  <symbol id="i-grass" viewBox="0 0 24 24"><path d="M4 19h16M7 19c0-5-1.5-9-3-12 2.5 2 4 5.5 4.5 9.5M12 19c0-6.5.5-11 2-14-1.5 4-1.5 8.5-1 14M17 19c0-4.5 1.2-8 3-10.5-2.2 1.8-3.6 5-4 8.5"/></symbol>
+  <symbol id="i-tex" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a4.5 4.5 0 00-5.9 5.9L4 17l3 3 4.8-4.8a4.5 4.5 0 005.9-5.9l-2.6 2.6-2-2 2.6-2.6z"/></symbol>
 </svg>
 <a class="skip" href="#main">Skip to content</a>
 <header class="masthead">
@@ -70,7 +73,7 @@
   </nav>
   <div class="bar-actions">
     <a class="gh-link" href="https://github.com/undrwtrsprite/silica" aria-label="Silica on GitHub"><svg class="ico fill" aria-hidden="true"><use href="#i-gh"/></svg><span>GitHub</span></a>
-    <a class="btn primary sm" href="https://github.com/undrwtrsprite/silica/releases/download/v0.2.0/Silica-0.2.0.dmg" download>Download</a>
+    <a class="btn primary sm" href="https://github.com/undrwtrsprite/silica/releases/download/v0.2.1/Silica-0.2.1.dmg" download>Download</a>
   </div>
 </header>
 
@@ -78,32 +81,48 @@
   <section class="dusk-hero" aria-labelledby="h1">
     <canvas class="dusk" aria-hidden="true"></canvas>
     <div class="inner rise">
-      <span class="kicker"><b>Roadmap</b> / Now, next and how to help</span>
+      <span class="kicker"><b>Roadmap</b> / Now, next and direction</span>
       <h1 id="h1">Where Silica <span class="hl">is going.</span></h1>
-      <p class="lede">No dates. Everything is either done, in progress, next or later. Pick anything on the map to see what it means.</p>
+      <p class="lede">No dates. Click any node to see what is done, almost done, in progress, or planned next — and why legacy jar mods gave way to our own engine.</p>
     </div>
   </section>
 
   <section class="block" id="tree" aria-labelledby="tree-title" style="padding-top:clamp(56px,8vw,110px)">
     <div class="inner">
       <div class="split-head">
-        <div><span class="kicker"><b>01</b> / The tree</span><h2 id="tree-title">Unlock the next version.</h2></div>
+        <div><span class="kicker"><b>01</b> / The tree</span><h2 id="tree-title">The Silica progression tree.</h2></div>
         <ul class="legend" aria-label="Legend">
-          <li><i class="done"></i>Done</li><li><i class="now"></i>In progress</li><li><i class="exp"></i>Experimental</li><li><i class="next"></i>Next</li><li><i class="later"></i>Later</li>
+          <li><i class="done"></i>Done</li><li><i class="almost"></i>Almost done</li><li><i class="now"></i>In progress</li><li><i class="next"></i>Not started</li>
         </ul>
       </div>
       <div class="tree-wrap card" data-r>
-        <div class="tree" id="treegrid" data-edges='[["beta", "frames"], ["frames", "present"], ["beta", "mods"], ["mods", "rendermods"], ["beta", "betas"], ["betas", "alphas"]]'>
+        <div class="tree" id="treegrid" data-edges='[["beta", "perf"], ["perf", "fixes"], ["beta", "grass"], ["perf", "lods"], ["lods", "textures"], ["beta", "modlib"], ["modlib", "bugfixmod"], ["beta", "unified"]]'>
           <svg class="wires" aria-hidden="true"></svg>
-          <span class="lane" style="grid-row:1;grid-column:1">Speed</span><span class="lane" style="grid-row:2;grid-column:1">Mods</span><span class="lane" style="grid-row:3;grid-column:1">Versions</span>
-          <button type="button" class="nbtn done" data-id="beta" data-state="done" data-status="Ready" style="grid-row:2;grid-column:2" aria-pressed="false" data-plain="Beta 1.7.3 runs natively on Apple Silicon with Vulkan, real-block distant terrain, a better inventory and world tools." data-tech="The game runs from your own copy of the jar, remapped and patched at launch by Silica. The original jar is never touched."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-chunks"/></svg></span><span class="nt">Beta 1.7.3</span></button><button type="button" class="nbtn now" data-id="frames" data-state="now" data-status="In progress" style="grid-row:1;grid-column:3" aria-pressed="true" data-plain="Keeping frames smooth when you push the render distance and the real-block LODs a long way out." data-tech="LODs build progressively as a five-tier real-block quadtree, and the 2–32 chunk slider scales fog, far clip and chunk prefetching. Longer multi-minute runs still settle lower as the chip warms up."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-chip"/></svg></span><span class="nt">Steady frames at long distance</span></button><button type="button" class="nbtn now" data-id="present" data-state="now" data-status="Investigating" style="grid-row:1;grid-column:4" aria-pressed="false" data-plain="Silica already draws far more frames than a screen can show. The next gain is showing them more evenly." data-tech="The game thread currently waits for a Metal drawable inside the queue submit, a fixed cost of roughly 2.4 ms a frame. Pacing the start of each frame is the next thing being tested."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-laptop"/></svg></span><span class="nt">Smoother frame presentation</span></button><button type="button" class="nbtn exp" data-id="mods" data-state="exp" data-status="Experimental" style="grid-row:2;grid-column:3" aria-pressed="false" data-plain="Add a modded Beta 1.7.3 jar and Silica checks it before you play. Your jar is never changed." data-tech="The checker compares the jar with the clean one, dry-runs every Silica patch against it and reports green, yellow or red. It is experimental: no overlay or conflict merging yet, and no in-game smoke test."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-mod"/></svg></span><span class="nt">Basic mod support</span></button><button type="button" class="nbtn later" data-id="rendermods" data-state="later" data-status="Later" style="grid-row:2;grid-column:4" aria-pressed="false" data-plain="These may not work yet. Silica tells you before you play." data-tech="Not tested with real ModLoader or rendering mods. The checker flags direct GL calls that Silica's platform layer lacks."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-flask"/></svg></span><span class="nt">Mods that change how the game draws</span></button><button type="button" class="nbtn next" data-id="betas" data-state="next" data-status="Next" style="grid-row:3;grid-column:3" aria-pressed="false" data-plain="More Beta versions in the same launcher." data-tech="The version ID, mappings, storage paths and preparation are specific to b1.7.3 today, so the launcher needs a version layer first."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg></span><span class="nt">Other Beta versions</span></button><button type="button" class="nbtn next" data-id="alphas" data-state="next" data-status="Next" style="grid-row:3;grid-column:4" aria-pressed="false" data-plain="Alphas in the same launcher too." data-tech="Planned alongside the other Betas."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-list"/></svg></span><span class="nt">Alpha versions</span></button>
+          <span class="lane" style="grid-row:1;grid-column:1">Engine</span><span class="lane" style="grid-row:2;grid-column:1">Visuals</span><span class="lane" style="grid-row:3;grid-column:1">Modding</span><span class="lane" style="grid-row:4;grid-column:1">Versions</span>
+
+          <button type="button" class="nbtn done" data-id="beta" data-state="done" data-status="Ready" style="grid-row:1;grid-column:2" aria-pressed="false" data-plain="Beta 1.7.3 runs natively on Apple Silicon with Vulkan, instance isolation, world tools, and full QoL controls." data-tech="The game runs from your own Mojang jar, remapped and patched at launch via ASM. Your original jar is never touched."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-chunks"/></svg></span><span class="nt">Beta 1.7.3</span></button>
+          <button type="button" class="nbtn done" data-id="perf" data-state="done" data-status="Done" style="grid-row:1;grid-column:3" aria-pressed="false" data-plain="Native Vulkan rendering, multithreaded chunk workers, hoisted noise, direct lighting, and fast dirty-chunk bucketing." data-tech="Cuts frame spikes across Apple Silicon and scales cleanly up to 32 real chunks while keeping McRegion saves vanilla-compatible."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-chip"/></svg></span><span class="nt">Better performance</span></button>
+          <button type="button" class="nbtn now" data-id="fixes" data-state="now" data-status="In progress" style="grid-row:1;grid-column:4" aria-pressed="false" data-plain="Smoothing out frame pacing, edge-case engine rough spots, and active Beta runtime fixes." data-tech="Inspecting Metal drawable acquire synchronization, chunk unload edge cases, and thermal settling on sustained runs."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-wrench"/></svg></span><span class="nt">Beta fixes</span></button>
+
+          <button type="button" class="nbtn done" data-id="grass" data-state="done" data-status="Done" style="grid-row:2;grid-column:3" aria-pressed="false" data-plain="Classic Better Grass support right in Video Settings (Off, Fast, and Fancy) across both live chunks and distant LOD cliffs." data-tech="Grass block side faces sample neighboring lower grass blocks and sync directly into Vulkan vertex colors and LOD downsampling."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-grass"/></svg></span><span class="nt">Better grass</span></button>
+          <button type="button" class="nbtn almost" data-id="lods" data-state="almost" data-status="Almost done" style="grid-row:2;grid-column:4" aria-pressed="true" data-plain="True-textured 5-tier real-block distant terrain out to +128 extra chunks with persistent .lod disk caching and border trees." data-tech="Uses tiled Vulkan terrain shaders, quantized world coordinates, gzip region caches per world, and background quadtree promotion. Polishing final edge seams and distant blending next."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-chunks"/></svg></span><span class="nt">LODs</span></button>
+          <button type="button" class="nbtn next" data-id="textures" data-state="next" data-status="Not started" style="grid-row:2;grid-column:5" aria-pressed="false" data-plain="Modern Minecraft-style resource pack loading, high-resolution textures, animations, and custom atlas stitching without legacy patchers." data-tech="Replaces fixed 16x16 terrain/item atlas assumptions with modern per-tile streaming and pack metadata layering."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-tex"/></svg></span><span class="nt">Better texture support</span></button>
+
+          <button type="button" class="nbtn next" data-id="modlib" data-state="next" data-status="Not started" style="grid-row:3;grid-column:3" aria-pressed="false" data-plain="A clean, first-party mod API designed for Silica. Legacy Beta jar mod support has been retired as Silica becomes its own engine." data-tech="Heavy bytecode rewrites, Vulkan abstractions, and our chunk/LOD pipeline make third-party class-overwriting jars fragile. Silica's own mod library will let extensions hook safely into Silica instead."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-mod"/></svg></span><span class="nt">Our own mod library</span></button>
+          <button type="button" class="nbtn later" data-id="bugfixmod" data-state="later" data-status="Not started" style="grid-row:3;grid-column:4" aria-pressed="false" data-plain="Fixes for quirks and bugs in vanilla Beta 1.7.3, shipped as an optional module inside our own mod library so purists can leave vanilla untouched." data-tech="Addresses long-standing vanilla quirks (lighting bugs, hitbox/boat oddities, block updates) as opt-in toggleable mods rather than forced engine edits."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-bug"/></svg></span><span class="nt">Beta bugfix mod</span></button>
+
+          <button type="button" class="nbtn next" data-id="unified" data-state="next" data-status="Not started" style="grid-row:4;grid-column:3" aria-pressed="false" data-plain="One singular patch and mapping architecture so every Silica feature works seamlessly from Alpha through every Beta release." data-tech="Replaces version-specific hooks tied solely to Beta 1.7.3 with capability-driven Version Profiles, unified obfuscation adapters, and shared Vulkan/LOD bridges."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg></span><span class="nt">Unified Alpha–Beta system</span></button>
         </div>
         <aside class="detail" id="detail" aria-live="polite">
-          <span class="chip now" id="d-chip">In progress</span>
-          <h3 id="d-title">Steady frames at long distance</h3>
-          <p id="d-plain">Keeping frames smooth when you push the render distance and the real-block LODs a long way out.</p>
-          <details class="under"><summary>Under the hood</summary><p id="d-tech">LODs build progressively as a five-tier real-block quadtree, and the 2–32 chunk slider scales fog, far clip and chunk prefetching. Longer multi-minute runs still settle lower as the chip warms up.</p></details>
-          <a class="textlink" href="https://github.com/undrwtrsprite/silica/issues">Follow along on GitHub <svg class="ico" aria-hidden="true"><use href="#i-right"/></svg></a>
+          <div class="detail-head">
+            <span class="chip almost" id="d-chip">Almost done</span>
+            <h3 id="d-title">LODs</h3>
+            <p id="d-plain">True-textured 5-tier real-block distant terrain out to +128 extra chunks with persistent .lod disk caching and border trees.</p>
+            <a class="textlink" href="https://github.com/undrwtrsprite/silica/issues">Follow along on GitHub <svg class="ico" aria-hidden="true"><use href="#i-right"/></svg></a>
+          </div>
+          <div class="detail-side">
+            <details class="under" open><summary>Under the hood</summary><p id="d-tech">Uses tiled Vulkan terrain shaders, quantized world coordinates, gzip region caches per world, and background quadtree promotion. Polishing final edge seams and distant blending next.</p></details>
+          </div>
         </aside>
       </div>
     </div>
@@ -111,13 +130,13 @@
 
   <section class="block" id="versions" aria-labelledby="versions-title" style="padding-top:0">
     <div class="inner">
-      <span class="kicker"><b>02</b> / Versions</span>
-      <h2 id="versions-title">One launcher, every version.</h2>
+      <span class="kicker"><b>02</b> / Direction</span>
+      <h2 id="versions-title">Becoming its own engine.</h2>
       <ol class="rail-track" data-reveal>
-        <li class="stop ready" style="--i:0"><span class="node"><svg class="ico" aria-hidden="true"><use href="#i-ok"/></svg></span><h3>Beta 1.7.3</h3><span class="st">Ready</span></li>
-        <li class="stop soon" style="--i:1"><span class="node"></span><h3>Other Betas</h3><span class="st">Soon</span></li>
-        <li class="stop soon" style="--i:2"><span class="node"></span><h3>Alphas</h3><span class="st">Soon</span></li>
-        <li class="stop exp" style="--i:3"><span class="node"><svg class="ico" aria-hidden="true"><use href="#i-flask"/></svg></span><h3>Mods</h3><span class="st">Experimental</span></li>
+        <li class="stop ready" style="--i:0"><span class="node"><svg class="ico" aria-hidden="true"><use href="#i-ok"/></svg></span><h3>Beta 1.7.3</h3><span class="st">Ready · Done</span></li>
+        <li class="stop soon" style="--i:1"><span class="node"></span><h3>Alpha – Beta</h3><span class="st">Unified system · Not started</span></li>
+        <li class="stop soon" style="--i:2"><span class="node"></span><h3>Silica mod library</h3><span class="st">Not started</span></li>
+        <li class="stop gone" style="--i:3"><span class="node"><svg class="ico" aria-hidden="true"><use href="#i-no"/></svg></span><h3>Legacy jar mods</h3><span class="st">Gone · Replaced by own API</span></li>
       </ol>
     </div>
   </section>
@@ -126,7 +145,7 @@
     <div class="inner">
       <div class="split-head"><div><span class="kicker"><b>03</b> / Shipped</span><h2 id="shipped-title">What already landed.</h2><p class="sect-sub">The latest releases, straight from GitHub.</p></div><a class="textlink" href="https://github.com/undrwtrsprite/silica/releases">All releases <svg class="ico" aria-hidden="true"><use href="#i-right"/></svg></a></div>
       <div class="log" id="releases">
-        <a class="rel card latest" href="https://github.com/undrwtrsprite/silica/releases/tag/v0.2.0"><span class="tag">v0.2.0</span><span class="when">&nbsp;</span><span class="dls"></span><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a><a class="rel card" href="https://github.com/undrwtrsprite/silica/releases/tag/v0.1.11"><span class="tag">v0.1.11</span><span class="when">&nbsp;</span><span class="dls"></span><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a><a class="rel card" href="https://github.com/undrwtrsprite/silica/releases/tag/v0.1.10"><span class="tag">v0.1.10</span><span class="when">&nbsp;</span><span class="dls"></span><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a><a class="rel card" href="https://github.com/undrwtrsprite/silica/releases/tag/v0.1.9"><span class="tag">v0.1.9</span><span class="when">&nbsp;</span><span class="dls"></span><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a><a class="rel card" href="https://github.com/undrwtrsprite/silica/releases/tag/v0.1.8"><span class="tag">v0.1.8</span><span class="when">&nbsp;</span><span class="dls"></span><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a><a class="rel card" href="https://github.com/undrwtrsprite/silica/releases/tag/v0.1.7"><span class="tag">v0.1.7</span><span class="when">&nbsp;</span><span class="dls"></span><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <a class="rel card latest" href="https://github.com/undrwtrsprite/silica/releases/tag/v0.2.1"><span class="tag">v0.2.1</span><span class="when">&nbsp;</span><span class="dls"></span><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a><a class="rel card" href="https://github.com/undrwtrsprite/silica/releases/tag/v0.2.0"><span class="tag">v0.2.0</span><span class="when">&nbsp;</span><span class="dls"></span><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a><a class="rel card" href="https://github.com/undrwtrsprite/silica/releases/tag/v0.1.11"><span class="tag">v0.1.11</span><span class="when">&nbsp;</span><span class="dls"></span><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a><a class="rel card" href="https://github.com/undrwtrsprite/silica/releases/tag/v0.1.10"><span class="tag">v0.1.10</span><span class="when">&nbsp;</span><span class="dls"></span><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a><a class="rel card" href="https://github.com/undrwtrsprite/silica/releases/tag/v0.1.9"><span class="tag">v0.1.9</span><span class="when">&nbsp;</span><span class="dls"></span><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a><a class="rel card" href="https://github.com/undrwtrsprite/silica/releases/tag/v0.1.8"><span class="tag">v0.1.8</span><span class="when">&nbsp;</span><span class="dls"></span><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
       </div>
     </div>
   </section>
@@ -145,11 +164,11 @@
   <section class="closer" aria-labelledby="closer-title">
     <h2 id="closer-title" data-r>Come along.</h2>
     <div class="cta">
-      <a class="btn primary lg" href="https://github.com/undrwtrsprite/silica/releases/download/v0.2.0/Silica-0.2.0.dmg" download><svg class="ico" aria-hidden="true"><use href="#i-down"/></svg>Download for Mac</a>
+      <a class="btn primary lg" href="https://github.com/undrwtrsprite/silica/releases/download/v0.2.1/Silica-0.2.1.dmg" download><svg class="ico" aria-hidden="true"><use href="#i-down"/></svg>Download for Mac</a>
       <a class="btn secondary lg" href="https://github.com/undrwtrsprite/silica"><svg class="ico fill" aria-hidden="true"><use href="#i-gh"/></svg>View on GitHub</a>
     </div>
     <ul class="meta">
-        <li><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg>v0.2.0</li>
+        <li><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg>v0.2.1</li>
         <li><svg class="ico" aria-hidden="true"><use href="#i-file"/></svg>17 MB</li>
         <li><svg class="ico" aria-hidden="true"><use href="#i-laptop"/></svg>macOS 14+</li>
         <li><svg class="ico" aria-hidden="true"><use href="#i-chip"/></svg>Apple Silicon</li>
@@ -171,6 +190,6 @@
   </div>
   <div class="legal"><span>Not affiliated with Mojang or Microsoft. Minecraft is a trademark of Mojang Synergies AB.</span><span>Silica ships no Mojang files.</span></div>
 </footer>
-<script src="site.js?v=4" defer></script>
+<script src="site.js?v=5" defer></script>
 </body>
 </html>

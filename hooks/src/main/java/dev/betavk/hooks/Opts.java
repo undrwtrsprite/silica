@@ -17,6 +17,7 @@ public final class Opts {
     public static float master = 1.0F, ambient = 1.0F;   // volume multipliers; music and sound effects are the game's own musicVolume and soundVolume
     public static boolean continuousMusic;
     public static boolean toggleSneak, soundCaptions;
+    public static int betterGrass = Math.max(0, Math.min(2, Integer.getInteger("betavk.bettergrass", 0)));       // 0 = Off, 1 = Fast, 2 = Fancy
     public static int autosaveMinutes;  // 0 = only the game's own saving
     public static int backups;          // 0 = no backup when a world is opened, else how many to keep
     public static String lastWorld = "";

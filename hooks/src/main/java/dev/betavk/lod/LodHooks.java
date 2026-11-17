@@ -37,11 +37,14 @@ public final class LodHooks {
         }
     }
 
-    /** Track player/world block updates cleanly when real WorldRenderer rebuilds or world saves. */
+    /** Track player/world block edits cleanly once a chunk is populated (ignoring unpopulated chunkgen/lighting storms). */
     public static void onBlockMarked(RenderGlobal rg, int x, int y, int z) {
         World w = rg.mc != null ? rg.mc.theWorld : null;
         if (w != null && dev.betavk.hooks.Opts.lodChunks > 0) {
-            LodEngine.onChunkEdited(w, w.getChunkFromChunkCoords(x >> 4, z >> 4));
+            net.minecraft.src.Chunk c = w.getChunkFromChunkCoords(x >> 4, z >> 4);
+            if (c != null && c.isTerrainPopulated) {
+                LodEngine.onBlockEdited(w, c);
+            }
         }
     }
 }

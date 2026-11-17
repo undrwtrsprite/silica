@@ -11,7 +11,9 @@ import java.util.WeakHashMap;
 /** Suggestions for the single-player slash commands, shown above the chat input. */
 public final class CommandSuggestions {
     private static final int TAB = 15, UP = 200, DOWN = 208;
-    private static final List<String> ROOT = List.of("/help", "/seed", "/time ", "/give ", "/weather ");
+    private static final List<String> ROOT = List.of("/help", "/seed", "/fly ", "/time ", "/give ", "/weather ");
+    private static final List<String> FLY = List.of("/fly on", "/fly off", "/fly speed ", "/fly 2", "/fly 5", "/fly 10");
+    private static final List<String> FLY_SPEED = List.of("/fly speed 1", "/fly speed 2", "/fly speed 5", "/fly speed 10", "/fly speed 20");
     private static final List<String> WEATHER = Commands.WEATHER_TYPES.stream().map(type -> "/weather " + type).toList();
     private static final Map<GuiChat, Integer> selections = new WeakHashMap<>();
     private static final List<String> history = new ArrayList<>();
@@ -37,6 +39,8 @@ public final class CommandSuggestions {
         String input = chat.message.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
         List<String> candidates;
         if (!input.contains(" ")) candidates = ROOT;
+        else if (input.startsWith("/fly speed ")) candidates = FLY_SPEED;
+        else if (input.startsWith("/fly ")) candidates = FLY;
         else if (input.startsWith("/time set ")) candidates = List.of("/time set day", "/time set night");
         else if (input.startsWith("/time ")) candidates = List.of("/time set ");
         else if (input.startsWith("/weather ")) candidates = WEATHER;

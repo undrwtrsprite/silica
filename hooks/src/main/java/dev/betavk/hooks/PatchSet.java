@@ -72,7 +72,11 @@ public final class PatchSet implements dev.betavk.agent.PatchSet {
         r.on(SRC + "Chunk").redirectStaticWrite("getBlockLightValue", "(IIII)I", SRC + "Chunk", "isLit", mh, "markLit");
         r.on(SRC + "RenderBlocks")
                 .redirectStaticRead("renderBlockReed", "(L" + SRC + "Block;III)Z", SRC + "Block", "tallGrass", mh, "tallGrass")
-                .redirectStaticRead("renderStandardBlockWithColorMultiplier", "(L" + SRC + "Block;IIIFFF)Z", SRC + "Block", "grass", mh, "grass");
+                .redirectStaticRead("renderStandardBlockWithColorMultiplier", "(L" + SRC + "Block;IIIFFF)Z", SRC + "Block", "grass", mh, "grass")
+                .atStartCancelable("renderEastFace", "(L" + SRC + "Block;DDDI)V", mh, "betterEastFace")
+                .atStartCancelable("renderWestFace", "(L" + SRC + "Block;DDDI)V", mh, "betterWestFace")
+                .atStartCancelable("renderNorthFace", "(L" + SRC + "Block;DDDI)V", mh, "betterNorthFace")
+                .atStartCancelable("renderSouthFace", "(L" + SRC + "Block;DDDI)V", mh, "betterSouthFace");
         r.on(SRC + "BlockLeavesBase")
                 .replaceBody("shouldSideBeRendered", "(L" + SRC + "IBlockAccess;IIII)Z", mh, "shouldLeafSideBeRendered");
 
@@ -175,6 +179,8 @@ public final class PatchSet implements dev.betavk.agent.PatchSet {
         r.on(mcc).atEnd("setIngameFocus", "()V", "dev/betavk/hooks/Keys", "focus");
 
         String commands = "dev/betavk/hooks/Commands";
+        r.on(SRC + "EntityLiving").atStartCancelable("moveEntityWithHeading", "(FF)V", commands, "flyMove");
+        r.on(SRC + "EntityPlayer").atStartCancelable("fall", "(F)V", commands, "ignoreFall");
         r.on(mcc)
                 .redirectCallNth("runTick", "()V", mcc, "isMultiplayerWorld", "()Z", false, 0, commands, "canOpenChat")
                 .replaceBody("lineIsCommand", "(Ljava/lang/String;)Z", commands, "run");

@@ -16,7 +16,9 @@ public final class Unloader {
     private Unloader() {
     }
 
-    public static final boolean ENABLED = "true".equals(System.getProperty("betavk.unload", "false"));
+    public static final String PROP = System.getProperty("betavk.unload");
+    public static final boolean ENABLED = "true".equals(PROP);
+    private static final boolean DISABLED = "false".equals(PROP);
     private static final int MARGIN = Integer.getInteger("betavk.unload.margin", 10);
     public static long unloaded, passes, passNanos, passMaxNanos;
     public static int lastRadius, lastLoaded;
@@ -29,7 +31,8 @@ public final class Unloader {
     /** Called every game tick (from WorldHooks.tick). Saving a chunk costs a fraction of a millisecond on the game thread, so only a few go per tick (the game's own
      *  unload takes them from the drop set, 100 at a time, and would otherwise do a whole backlog in one frame); the scan for far chunks is a cheap loop. */
     public static void tick(Minecraft mc) {
-        if (!ENABLED) return;
+        if (DISABLED) return;
+        if (!ENABLED && !dev.betavk.hooks.Opts.lodEnabled && !dev.betavk.hooks.Commands.isFlying(mc)) return;
         ChunkProvider cp = Populate.active;
         if (cp == null || mc.theWorld == null || mc.thePlayer == null || !Populate.isFor(cp, mc.theWorld)) return;
         long t0 = System.nanoTime();

@@ -58,6 +58,7 @@ public final class Settings {
                         case "continuousMusic" -> Opts.continuousMusic = Boolean.parseBoolean(kv[1]);
                         case "toggleSneak" -> Opts.toggleSneak = Boolean.parseBoolean(kv[1]);
                         case "soundCaptions" -> Opts.soundCaptions = Boolean.parseBoolean(kv[1]);
+                        case "betterGrass" -> Opts.betterGrass = Math.max(0, Math.min(2, Integer.parseInt(kv[1])));
                         case "autosaveMinutes" -> Opts.autosaveMinutes = Math.max(0, Integer.parseInt(kv[1]));
                         case "worldBackups" -> Opts.backups = Math.max(0, Integer.parseInt(kv[1]));
                         case "lastWorld" -> Opts.lastWorld = kv[1];
@@ -85,7 +86,7 @@ public final class Settings {
         try {
             List<String> lines = f.isFile() ? Files.readAllLines(f.toPath(), StandardCharsets.UTF_8) : new java.util.ArrayList<>();
             lines.removeIf(l -> l.startsWith("fov:") || l.startsWith("renderChunks:") || l.startsWith("lodEnabled:") || l.startsWith("lodChunks:") || l.startsWith("lodQuality:") || l.startsWith("showFps:") || l.startsWith("maxFps:") || l.startsWith("masterVolume:") || l.startsWith("ambientVolume:")
-                    || l.startsWith("continuousMusic:") || l.startsWith("toggleSneak:") || l.startsWith("soundCaptions:")
+                    || l.startsWith("continuousMusic:") || l.startsWith("toggleSneak:") || l.startsWith("soundCaptions:") || l.startsWith("betterGrass:")
                     || l.startsWith("autosaveMinutes:") || l.startsWith("worldBackups:") || l.startsWith("lastWorld:") || l.startsWith("worldSort:"));
             lines.add("fov:" + Opts.fov);
             if (Opts.renderChunks >= 2) lines.add("renderChunks:" + Opts.renderChunks);
@@ -99,6 +100,7 @@ public final class Settings {
             lines.add("continuousMusic:" + Opts.continuousMusic);
             lines.add("toggleSneak:" + Opts.toggleSneak);
             lines.add("soundCaptions:" + Opts.soundCaptions);
+            lines.add("betterGrass:" + Opts.betterGrass);
             lines.add("autosaveMinutes:" + Opts.autosaveMinutes);
             lines.add("worldBackups:" + Opts.backups);
             if (!Opts.lastWorld.isEmpty()) lines.add("lastWorld:" + Opts.lastWorld);

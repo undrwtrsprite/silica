@@ -16,6 +16,7 @@ public final class LodDownsampler {
     private static final int KIND_SNOW = 3;
     private static final int KIND_NATURAL = 4;
     private static final int KIND_STRUCTURE = 5;
+    private static final int KIND_TRUNK = 6;
 
     private static final byte[] KIND = new byte[256];
 
@@ -24,6 +25,7 @@ public final class LodDownsampler {
             Block b = Block.blocksList[id];
             if (b == null) continue;
             if (id == 18) KIND[id] = KIND_LEAVES;
+            else if (id == 17) KIND[id] = KIND_TRUNK;
             else if (id == 8 || id == 9) KIND[id] = KIND_WATER;
             else if (id == 78) KIND[id] = KIND_SNOW;
             else if (id == 6 || id == 31 || id == 32 || id == 37 || id == 38 || id == 39 || id == 40
@@ -31,7 +33,7 @@ public final class LodDownsampler {
                     || id == 70 || id == 72 || id == 75 || id == 76 || id == 77 || id == 83 || id == 93 || id == 94) {
                 KIND[id] = KIND_SKIP;
             } else if (id == 1 || id == 2 || id == 3 || id == 7 || id == 10 || id == 11 || id == 12
-                    || id == 13 || id == 17 || id == 24 || id == 79 || id == 80 || id == 82 || id == 87 || id == 88) {
+                    || id == 13 || id == 24 || id == 79 || id == 80 || id == 82 || id == 87 || id == 88) {
                 KIND[id] = KIND_NATURAL;
             } else if (b.isOpaqueCube() || id == 20 || id == 44 || id == 53 || id == 67 || id == 81 || id == 59) {
                 KIND[id] = KIND_STRUCTURE;
@@ -73,8 +75,8 @@ public final class LodDownsampler {
                 out.colTint[(vx << 3) | vz] = LodNode.packTint(tSum * 0.25, hSum * 0.25);
 
                 for (int y = 0; y < 128; y++) {
-                    int leafCnt = 0, waterCnt = 0, snowCnt = 0, natCnt = 0, manCnt = 0;
-                    int leafSample = 0, waterSample = 0, snowSample = 0, natSample = 0, manSample = 0;
+                    int leafCnt = 0, trunkCnt = 0, waterCnt = 0, snowCnt = 0, natCnt = 0, manCnt = 0;
+                    int leafSample = 0, trunkSample = 0, waterSample = 0, snowSample = 0, natSample = 0, manSample = 0;
                     int skyMax = 0, blkMax = 0;
                     boolean hasAirAbove = false;
 
@@ -100,6 +102,7 @@ public final class LodDownsampler {
                                     natCnt++;
                                     if ((natSample & 255) != 2 || id == 2) natSample = sample;
                                 }
+                                case KIND_TRUNK -> { trunkCnt++; trunkSample = sample; }
                                 case KIND_LEAVES -> { leafCnt++; leafSample = sample; }
                                 case KIND_WATER -> { waterCnt++; waterSample = sample; }
                                 case KIND_SNOW -> { snowCnt++; snowSample = sample; }
@@ -111,9 +114,11 @@ public final class LodDownsampler {
                     int win = 0;
                     int flags = 0;
                     if (manCnt >= 1) win = manSample;
-                    else if (natCnt >= 2 || (natCnt == 1 && (natCnt + leafCnt + waterCnt) >= 2)) {
+                    else if (natCnt >= 2 || (natCnt == 1 && (natCnt + trunkCnt + leafCnt + waterCnt) >= 2)) {
                         win = natSample;
                         if ((win & 255) == 2 && hasAirAbove) flags |= LodNode.FLAG_GRASS_SIDE;
+                    } else if (trunkCnt >= 1) {
+                        win = trunkSample;
                     } else if (waterCnt >= 2) {
                         win = waterSample;
                         if (y + 1 < 128) {
@@ -126,7 +131,7 @@ public final class LodDownsampler {
                             }
                             if (aboveWater) flags |= LodNode.FLAG_WATER_FULL;
                         }
-                    } else if (leafCnt >= 2) {
+                    } else if (leafCnt >= 1) {
                         win = leafSample;
                     } else if (snowCnt >= 2) {
                         win = snowSample;
@@ -232,9 +237,117 @@ public final class LodDownsampler {
         dst.dataReady = true;
     }
 
+    /** Directly downsamples one chunk snapshot into an L3 (scaleXZ=8, scaleY=4) or L4 (scaleXZ=16, scaleY=4) node. */
+    public static void fromChunkCoarse(LodChunkSource.ChunkSnap c, LodNode out, int chunkDx, int chunkDz) {
+        byte[] blocks = c.blocks;
+        byte[] meta = c.data;
+        byte[] sky = c.skyLight;
+        byte[] blk = c.blockLight;
+        float[] temp = c.temp;
+        float[] hum = c.hum;
+
+        int perChunkXZ = 16 / out.scaleXZ;
+        int stepXZ = Math.max(1, out.scaleXZ / 4);
+        int baseVx = chunkDx * perChunkXZ;
+        int baseVz = chunkDz * perChunkXZ;
+        int h = out.h;
+        int scaleY = out.scaleY;
+
+        for (int sx = 0; sx < perChunkXZ; sx++) {
+            int bx0 = sx * out.scaleXZ;
+            int vx = baseVx + sx;
+            for (int sz = 0; sz < perChunkXZ; sz++) {
+                int bz0 = sz * out.scaleXZ;
+                int vz = baseVz + sz;
+                double tSum = 0, hSum = 0;
+                int cSamples = 0;
+                for (int dz = 0; dz < out.scaleXZ; dz += stepXZ) {
+                    for (int dx = 0; dx < out.scaleXZ; dx += stepXZ) {
+                        int ti = ((bx0 + dx) << 4) | (bz0 + dz);
+                        tSum += temp[ti];
+                        hSum += hum[ti];
+                        cSamples++;
+                    }
+                }
+                out.colTint[(vx << out.dimShift) | vz] = LodNode.packTint(tSum / cSamples, hSum / cSamples);
+
+                for (int vy = 0; vy < h; vy++) {
+                    int y0 = vy * scaleY;
+                    int leafCnt = 0, trunkCnt = 0, waterCnt = 0, snowCnt = 0, natCnt = 0, manCnt = 0;
+                    int leafSample = 0, trunkSample = 0, waterSample = 0, snowSample = 0, natSample = 0, manSample = 0;
+                    int skyMax = 0, blkMax = 0;
+                    boolean hasAirAbove = false;
+
+                    for (int dz = 0; dz < out.scaleXZ; dz += stepXZ) {
+                        int xBase = bx0;
+                        int z = bz0 + dz;
+                        for (int dx = 0; dx < out.scaleXZ; dx += stepXZ) {
+                            int col = ((xBase + dx) << 11) | (z << 7);
+                            for (int dy = 0; dy < scaleY; dy++) {
+                                int y = y0 + dy;
+                                int idx = col | y;
+                                int id = blocks[idx] & 255;
+                                int s = nibble(sky, idx);
+                                int bl = nibble(blk, idx);
+                                if (s > skyMax) skyMax = s;
+                                if (bl > blkMax) blkMax = bl;
+                                if (y + 1 >= 128 || KIND[blocks[idx + 1] & 255] == KIND_SKIP) hasAirAbove = true;
+
+                                int k = KIND[id];
+                                if (k == KIND_SKIP) continue;
+                                int m = nibble(meta, idx);
+                                int sample = (id & 0xFF) | (m << 8);
+                                switch (k) {
+                                    case KIND_STRUCTURE -> { manCnt++; manSample = sample; }
+                                    case KIND_NATURAL -> {
+                                        natCnt++;
+                                        if ((natSample & 255) != 2 || id == 2) natSample = sample;
+                                    }
+                                    case KIND_TRUNK -> { trunkCnt++; trunkSample = sample; }
+                                    case KIND_LEAVES -> { leafCnt++; leafSample = sample; }
+                                    case KIND_WATER -> { waterCnt++; waterSample = sample; }
+                                    case KIND_SNOW -> { snowCnt++; snowSample = sample; }
+                                    default -> { }
+                                }
+                            }
+                        }
+                    }
+
+                    int win = 0;
+                    int flags = 0;
+                    if (manCnt >= 1) win = manSample;
+                    else if (natCnt >= 16) {
+                        win = natSample;
+                        if ((win & 255) == 2 && hasAirAbove) flags |= LodNode.FLAG_GRASS_SIDE;
+                    } else if (waterCnt >= 16) {
+                        win = waterSample;
+                    } else if (trunkCnt >= 4) {
+                        win = trunkSample;
+                    } else if (leafCnt >= 10) {
+                        win = leafSample;
+                    } else if (snowCnt >= 12) {
+                        win = snowSample;
+                    }
+
+                    if (win == 0) out.set(vx, vy, vz, LodNode.pack(0, 0, skyMax, blkMax, 0));
+                    else out.set(vx, vy, vz, LodNode.pack(win & 255, (win >>> 8) & 15, skyMax, blkMax, flags));
+                }
+
+                for (int vy = 0; vy < h - 1; vy++) {
+                    int v = out.get(vx, vy, vz);
+                    int id = LodNode.id(v);
+                    if (id == 8 || id == 9) {
+                        int aboveId = LodNode.id(out.get(vx, vy + 1, vz));
+                        if (aboveId == 8 || aboveId == 9) out.set(vx, vy, vz, v | LodNode.FLAG_WATER_FULL);
+                    }
+                }
+            }
+        }
+    }
+
     private static int mergeCells(int[] src, int count) {
-        int manCnt = 0, natCnt = 0, waterCnt = 0, leafCnt = 0, snowCnt = 0;
-        int manWin = 0, natWin = 0, waterWin = 0, leafWin = 0, snowWin = 0;
+        int manCnt = 0, natCnt = 0, trunkCnt = 0, waterCnt = 0, leafCnt = 0, snowCnt = 0;
+        int manWin = 0, natWin = 0, trunkWin = 0, waterWin = 0, leafWin = 0, snowWin = 0;
         int skyMax = 0, blkMax = 0;
 
         for (int i = 0; i < count; i++) {
@@ -253,6 +366,10 @@ public final class LodDownsampler {
                 case KIND_NATURAL -> {
                     natCnt++;
                     if (LodNode.id(natWin) != 2 || id == 2 || i >= count / 2) natWin = v;
+                }
+                case KIND_TRUNK -> {
+                    trunkCnt++;
+                    trunkWin = v;
                 }
                 case KIND_WATER -> {
                     waterCnt++;
@@ -276,7 +393,8 @@ public final class LodDownsampler {
         if (manCnt >= 1) win = manWin;
         else if (natCnt >= threshold) win = natWin;
         else if (waterCnt >= threshold) win = waterWin;
-        else if (leafCnt >= (count == 8 ? 3 : 2)) win = leafWin;
+        else if (trunkCnt >= 2 || (trunkCnt >= 1 && leafCnt == 0 && count == 8)) win = trunkWin;
+        else if (leafCnt >= (count == 8 ? 2 : 1)) win = leafWin;
         else if (snowCnt >= threshold) win = snowWin;
 
         if (win == 0) return LodNode.pack(0, 0, skyMax, blkMax, 0);

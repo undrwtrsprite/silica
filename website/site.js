@@ -111,6 +111,20 @@
   };
   $$('[data-reveal]').forEach(el => { if (still) { el.classList.add('in'); return; } onView(el, () => { el.classList.add('in'); $$('.count', el).forEach(countUp); }, { threshold: .3 }); });
 
+  // ---------- anonymous live player counter ----------
+  const onlinePill = $('#online-pill'), onlineText = $('#online-text');
+  if (onlinePill && onlineText) {
+    fetch('/api/players')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d || typeof d.online !== 'number' || d.online <= 0) return;
+        const n = d.playing > 0 ? d.playing : d.online;
+        const label = d.playing > 0 ? 'playing now' : 'online in launcher';
+        onlineText.textContent = `${n.toLocaleString('en-US')} ${label}`;
+        onlinePill.hidden = false;
+      }).catch(() => {});
+  }
+
   // ---------- downloads: the real count from GitHub, live ----------
   const dl = $('#dl-count');
   const releasesBox = $('#releases');

@@ -88,6 +88,7 @@ p { max-width: 65ch; }
 .seg.sm button { padding: 6px 12px; font-size: 13px; }
 .meta { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 28px 0 0; padding: 0; color: var(--muted); font-size: 14px; }
 .meta li { display: inline-flex; align-items: center; gap: 7px; }
+.live-dot { width: 7px; height: 7px; border-radius: 99px; background: var(--accent); box-shadow: 0 0 8px rgba(123, 201, 111, .75); }
 .meta .ico { width: 15px; height: 15px; color: var(--dim); }
 .fine { margin-top: 10px; font-size: 14px; color: var(--dim); }
 .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 34px; }

@@ -71,14 +71,14 @@ final class AppState: ObservableObject {
         loadAccounts()
         activateActiveAccount()
         if install.ready && stageReady { Task { [self] in await jars.recheckStale(stageDir: settings.stageDir, java: install.javaPath) } }
-        telemetry.start(enabled: settings.shareAnonymousCount != false, playing: runner.isRunning)
+        telemetry.start(enabled: settings.shareAnonymousCount != false, playing: runner.isRunning, backend: settings.backend.rawValue)
         runner.$isRunning.sink { [weak self] running in
             guard let self else { return }
-            self.telemetry.update(enabled: self.settings.shareAnonymousCount != false, playing: running)
+            self.telemetry.update(enabled: self.settings.shareAnonymousCount != false, playing: running, backend: self.settings.backend.rawValue)
         }.store(in: &telemetryCancellables)
         $settings.sink { [weak self] next in
             guard let self else { return }
-            self.telemetry.update(enabled: next.shareAnonymousCount != false, playing: self.runner.isRunning)
+            self.telemetry.update(enabled: next.shareAnonymousCount != false, playing: self.runner.isRunning, backend: next.backend.rawValue)
         }.store(in: &telemetryCancellables)
     }
 

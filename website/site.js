@@ -1030,6 +1030,165 @@
     });
   }
 
+  // ---------- players hero backdrop: dithered constellation network & ping horizon ----------
+  const plNodes = Array.from({ length: 14 }, (_, i) => ({
+    x: .1 + hash(i * 11.3) * .8, y: .16 + hash(i * 17.9) * .64, ph: hash(i * 6.7) * 6.28
+  }));
+  mountDither($('canvas.players-bg'), (buf, pw, ph, t, mx) => {
+    for (let y = 0; y < ph; y++) {
+      const ny = y / ph;
+      const bRow = BAYER[y & 3];
+      const fadeOut = ny > .82 ? Math.max(0, 1 - (ny - .82) / .18) : 1;
+
+      for (let x = 0; x < pw; x++) {
+        const nx = x / pw;
+        const b = (bRow[x & 3] + .5) / 16;
+
+        let pulse = 0;
+        for (let i = 0; i < 6; i++) {
+          const n = plNodes[i];
+          const d = Math.hypot((nx - n.x - mx * .02) * 1.4, ny - n.y);
+          const ring = Math.max(0, Math.sin(d * 22 - t * 1.4 + n.ph)) * Math.exp(-d * 6.5);
+          pulse += ring * .42;
+        }
+        const arch = Math.exp(-Math.pow((nx - .5) / .45, 2)) * Math.exp(-Math.pow((ny - .56) / .34, 2)) * .32;
+        const val = (pulse + arch) * fadeOut;
+        const q = Math.min(1, Math.floor(val * 5 + b) / 5);
+
+        const idx = (y * pw + x) * 4;
+        buf[idx] = Math.min(255, (10 + q * 46) | 0);
+        buf[idx + 1] = Math.min(255, (13 + q * 134) | 0);
+        buf[idx + 2] = Math.min(255, (17 + q * 86) | 0);
+        buf[idx + 3] = 255;
+      }
+    }
+    plNodes.forEach((n, i) => {
+      const sx = Math.floor((n.x + mx * .02) * pw), sy = Math.floor(n.y * ph);
+      if (sx < 1 || sx >= pw - 1 || sy < 1 || sy >= ph - 1) return;
+      const tw = .4 + .6 * Math.pow(.5 + .5 * Math.sin(t * 1.6 + n.ph), 2);
+      const idx = (sy * pw + sx) * 4;
+      buf[idx] = Math.min(255, buf[idx] + (140 * tw) | 0);
+      buf[idx + 1] = Math.min(255, buf[idx + 1] + (235 * tw) | 0);
+      buf[idx + 2] = Math.min(255, buf[idx + 2] + (165 * tw) | 0);
+    });
+  });
+
+  // ---------- players dashboard: live stats, 24h chart, hardware & version breakdowns ----------
+  const plDash = $('#players-dash');
+  if (plDash) {
+    const els = {
+      on: $('#pl-online'), pl: $('#pl-playing'), dau: $('#pl-dau'),
+      status: $('#pl-status'), chart: $('#pl-chart'), hover: $('#pl-hover'),
+      peak: $('#pl-peak'), backends: $('#pl-backends'), chips: $('#pl-chips'), versions: $('#pl-versions')
+    };
+    let latest = null, hoverIdx = -1;
+
+    const renderBars = (box, map, labels = {}, orderByCount = true) => {
+      const entries = Object.entries(map || {}).filter(([, v]) => v > 0);
+      if (!entries.length) { box.innerHTML = '<p class="pl-empty">Waiting for sessions</p>'; return; }
+      if (orderByCount) entries.sort((a, b) => b[1] - a[1]);
+      const total = entries.reduce((s, [, v]) => s + v, 0);
+      box.innerHTML = entries.map(([k, v]) => {
+        const pct = Math.round((v / total) * 100);
+        return `<div class="pl-brow"><div class="pl-brow-head"><b>${labels[k] || k}</b><span>${v} (${pct}%)</span></div><div class="pl-track"><div class="pl-fill" style="width:${pct}%"></div></div></div>`;
+      }).join('');
+    };
+
+    const drawChart = () => {
+      const c = els.chart;
+      if (!c) return;
+      const ctx = c.getContext('2d');
+      const [W, H] = fitCanvas(c, ctx);
+      const hist = (latest && Array.isArray(latest.history) && latest.history.length) ? latest.history : Array.from({ length: 24 }, (_, i) => ({ hour: Date.now() - (23 - i) * 3600000, online: 0, playing: 0 }));
+      const maxV = Math.max(4, ...hist.map(h => Math.max(h.online || 0, h.playing || 0)));
+      if (els.peak) els.peak.textContent = `24h peak: ${Math.max(0, ...hist.map(h => h.online || 0)).toLocaleString('en-US')}`;
+
+      ctx.clearRect(0, 0, W, H);
+      const padL = 36, padR = 16, padT = 20, padB = 34;
+      const cw = W - padL - padR, ch = H - padT - padB;
+
+      // horizontal gridlines + y labels
+      ctx.font = '500 11px "JetBrains Mono", monospace';
+      for (let i = 0; i <= 4; i++) {
+        const y = Math.round(padT + ch * (1 - i / 4)) + .5;
+        ctx.strokeStyle = 'rgba(255,255,255,.06)';
+        ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+        ctx.fillStyle = 'rgba(122,133,144,.85)';
+        ctx.fillText(String(Math.round(maxV * i / 4)), 6, y + 4);
+      }
+
+      const step = cw / hist.length;
+      const bw = Math.max(6, Math.min(26, step * .62));
+      hist.forEach((h, i) => {
+        const cx = padL + i * step + step * .5;
+        const onH = ((h.online || 0) / maxV) * ch;
+        const plH = ((h.playing || 0) / maxV) * ch;
+        const isHot = i === hoverIdx;
+
+        if (isHot) {
+          ctx.fillStyle = 'rgba(255,255,255,.035)';
+          ctx.fillRect(cx - step * .5, padT, step, ch);
+        }
+        ctx.fillStyle = isHot ? 'rgba(123,201,111,.55)' : 'rgba(123,201,111,.28)';
+        ctx.fillRect(Math.round(cx - bw * .5), Math.round(padT + ch - Math.max(2, onH)), Math.round(bw), Math.max(2, Math.round(onH)));
+        if (plH > 0) {
+          ctx.fillStyle = '#7bc96f';
+          ctx.fillRect(Math.round(cx - bw * .5), Math.round(padT + ch - plH), Math.round(bw), Math.round(plH));
+        }
+
+        if (i === 0 || i === 6 || i === 12 || i === 18 || i === 23) {
+          const dt = new Date(h.hour);
+          const lbl = i === 23 ? 'Now' : dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          ctx.fillStyle = 'rgba(122,133,144,.85)';
+          ctx.fillText(lbl, Math.max(padL, Math.min(W - padR - 36, Math.round(cx - 14))), H - 10);
+        }
+      });
+
+      if (hoverIdx >= 0 && hist[hoverIdx]) {
+        const h = hist[hoverIdx];
+        const lbl = new Date(h.hour).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        els.hover.textContent = `${lbl} · ${h.online} online · ${h.playing} playing`;
+      } else {
+        els.hover.textContent = 'Last 24 hours';
+      }
+    };
+
+    const refresh = () => {
+      fetch('/api/players')
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (!d) return;
+          latest = d;
+          if (els.on) els.on.textContent = (d.online || 0).toLocaleString('en-US');
+          if (els.pl) els.pl.textContent = (d.playing || 0).toLocaleString('en-US');
+          if (els.dau) els.dau.textContent = (d.dau || 0).toLocaleString('en-US');
+          if (els.status) els.status.textContent = d.persisted
+            ? 'Live from Silica launcher telemetry · refreshes every 30s.'
+            : 'In-memory preview mode · connect Upstash Redis on Vercel to persist across regions.';
+          renderBars(els.backends, d.backends, { vulkan: 'Vulkan (MoltenVK)', gl: 'OpenGL 2.1' });
+          renderBars(els.chips, d.chips);
+          renderBars(els.versions, d.versions);
+          drawChart();
+        }).catch(() => {});
+    };
+
+    els.chart?.addEventListener('pointermove', e => {
+      const r = els.chart.getBoundingClientRect();
+      const padL = 36, padR = 16, cw = r.width - padL - padR;
+      const idx = Math.floor(((e.clientX - r.left - padL) / Math.max(1, cw)) * 24);
+      hoverIdx = (idx >= 0 && idx < 24) ? idx : -1;
+      drawChart();
+    });
+    els.chart?.addEventListener('pointerleave', () => { hoverIdx = -1; drawChart(); });
+    addEventListener('resize', drawChart);
+    renderBars(els.backends, {});
+    renderBars(els.chips, {});
+    renderBars(els.versions, {});
+    drawChart();
+    refresh();
+    setInterval(refresh, 30000);
+  }
+
   // ---------- docs sidebar scroll spy ----------
   const docLinks = $$('.docs-side nav a');
   if (docLinks.length) {

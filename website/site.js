@@ -351,7 +351,7 @@
       snow: [[236, 241, 245], [128, 133, 140]], sand: [[219, 203, 143], [204, 186, 126]], water: [[70, 132, 210], [58, 112, 186]],
       log: [[150, 116, 74], [104, 78, 48]], leaves: [[74, 150, 64], [58, 124, 52]]
     };
-    const cols = [];
+    const cols = [], trees = [];
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
       const dx = (x - N / 2 + .5) / (N / 2), dy = (y - N / 2 + .5) / (N / 2), d = Math.hypot(dx, dy);
       if (d > .86 + vnoise2(x * .35, y * .35) * .22) continue;
@@ -359,10 +359,29 @@
       let mat = 'grass';
       if (h <= 2) { h = 2; mat = 'water'; } else if (h === 3) mat = 'sand'; else if (h >= 10) mat = 'snow'; else if (h >= 8) mat = 'stone';
       const bottom = -Math.round(1 + (1 - d) * 7 + hash2(x, y) * 2);
-      const tree = mat === 'grass' && d < .72 && hash2(x + 3, y + 7) > .9;
-      cols.push({ x, y, d, top: h, base: h, bottom, mat, tree, delay: d * 900 + hash2(x, y) * 300, pop: -1e9 });
+      const nearTree = trees.some(tr => Math.abs(tr.x - x) <= 2 && Math.abs(tr.y - y) <= 2);
+      const tree = !nearTree && mat === 'grass' && d < .65 && hash2(x + 3, y + 7) > .87;
+      const col = { x, y, d, top: h, base: h, bottom, mat, tree, delay: d * 900 + hash2(x, y) * 300, pop: -1e9 };
+      cols.push(col);
+      if (tree) trees.push(col);
     }
-    cols.sort((a, b) => (a.x + a.y) - (b.x + b.y) || a.x - b.x);
+    // expand each tree into authentic Minecraft Beta oak voxels (trunk + 3x3x2 canopy + top cross)
+    const treeVoxels = [];
+    trees.forEach(tr => {
+      treeVoxels.push({ x: tr.x, y: tr.y, z0: tr.top, z1: tr.top + 3, mat: 'log', scale: .58, host: tr });
+      for (let lx = -1; lx <= 1; lx++) for (let ly = -1; ly <= 1; ly++) {
+        if (lx === 0 && ly === 0) continue; // trunk core inside lower canopy
+        treeVoxels.push({ x: tr.x + lx, y: tr.y + ly, z0: tr.top + 2, z1: tr.top + 4, mat: 'leaves', scale: 1, host: tr });
+      }
+      treeVoxels.push({ x: tr.x, y: tr.y, z0: tr.top + 3, z1: tr.top + 4, mat: 'leaves', scale: 1, host: tr });
+      [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([lx, ly]) => {
+        treeVoxels.push({ x: tr.x + lx, y: tr.y + ly, z0: tr.top + 4, z1: tr.top + 5, mat: 'leaves', scale: 1, host: tr });
+      });
+    });
+    const drawList = [
+      ...cols.map(c => ({ kind: 'col', x: c.x, y: c.y, z: 0, c })),
+      ...treeVoxels.map(v => ({ kind: 'vox', x: v.x, y: v.y, z: v.z0, v }))
+    ].sort((a, b) => (a.x + a.y) - (b.x + b.y) || a.z - b.z || a.x - b.x);
     let W = 0, H = 0, tw = 0, bh = 0, cx = 0, y0 = 0, t0 = performance.now(), hover = null, placed = 0, vis = false, raf = 0, last = 0;
     const layout = () => {
       [W, H] = fitCanvas(isle, ctx);
@@ -407,16 +426,23 @@
       const g = ctx.createRadialGradient(shx, shy, 0, shx, shy, tw * N * .45);
       g.addColorStop(0, 'rgba(0,0,0,.35)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(shx, shy, tw * N * .45, tw * N * .14, 0, 0, Math.PI * 2); ctx.fill();
       let tops = [];
-      cols.forEach(c => {
-        const p = Math.min(1, Math.max(0, (t - c.delay) / 750)); if (p <= 0) return;
-        const e = 1 - Math.pow(1 - p, 3) + Math.sin(p * Math.PI) * .06, dy = (1 - e) * -H * .5 + bob;
-        const popping = now - c.pop < 320;
-        const shimmer = c.mat === 'water' && !still ? Math.sin(t / 520 + c.x * .8 + c.y * .55) * .08 : 0;
-        const z1 = popping ? c.top - 1 : c.top;
-        let r = prism(c.x, c.y, c.bottom, z1, c.mat, dy, p, 1, shimmer + (hover === c ? .14 : 0));
-        if (popping) { const q = (now - c.pop) / 320, fall = (1 - (1 - Math.pow(1 - q, 3))) * -tw * 1.6; r = prism(c.x, c.y, c.top - 1, c.top, c.mat, dy + fall, 1, 1, hover === c ? .14 : 0); }
-        if (c.tree) { prism(c.x, c.y, c.top, c.top + 3, 'log', dy, p, .38); prism(c.x, c.y, c.top + 3, c.top + 5, 'leaves', dy, p, 1.0); }
-        tops.push([c, r]);
+      drawList.forEach(item => {
+        if (item.kind === 'col') {
+          const c = item.c;
+          const p = Math.min(1, Math.max(0, (t - c.delay) / 750)); if (p <= 0) return;
+          const e = 1 - Math.pow(1 - p, 3) + Math.sin(p * Math.PI) * .06, dy = (1 - e) * -H * .5 + bob;
+          const popping = now - c.pop < 320;
+          const shimmer = c.mat === 'water' && !still ? Math.sin(t / 520 + c.x * .8 + c.y * .55) * .08 : 0;
+          const z1 = popping ? c.top - 1 : c.top;
+          let r = prism(c.x, c.y, c.bottom, z1, c.mat, dy, p, 1, shimmer + (hover === c ? .14 : 0));
+          if (popping) { const q = (now - c.pop) / 320, fall = (1 - (1 - Math.pow(1 - q, 3))) * -tw * 1.6; r = prism(c.x, c.y, c.top - 1, c.top, c.mat, dy + fall, 1, 1, hover === c ? .14 : 0); }
+          tops.push([c, r]);
+        } else {
+          const v = item.v, c = v.host;
+          const p = Math.min(1, Math.max(0, (t - c.delay) / 750)); if (p <= 0) return;
+          const e = 1 - Math.pow(1 - p, 3) + Math.sin(p * Math.PI) * .06, dy = (1 - e) * -H * .5 + bob;
+          prism(v.x, v.y, v.z0, v.z1, v.mat, dy, p, v.scale);
+        }
       });
       if (hover) {
         const hit = tops.find(([c]) => c === hover);
@@ -705,6 +731,79 @@
         put(sx, sy - 1, tw * .5); put(sx, sy + 1, tw * .5);
       }
     });
+  });
+
+  // ---------- home hero backdrop: ultra-subtle twilight horizon mist & sparse stars (never clashes with #island) ----------
+  const homeStars = Array.from({ length: 28 }, (_, i) => ({
+    x: hash(i * 19.7), y: hash(i * 7.9) * .55, ph: hash(i * 4.3) * 6.28, sp: .6 + hash(i * 2.9) * 1.1
+  }));
+  mountDither($('canvas.home-bg'), (buf, pw, ph, t, mx) => {
+    for (let y = 0; y < ph; y++) {
+      const ny = y / ph;
+      const bRow = BAYER[y & 3];
+      const fadeOut = ny > .82 ? Math.max(0, 1 - (ny - .82) / .18) : 1;
+
+      for (let x = 0; x < pw; x++) {
+        const nx = x / pw;
+        const b = (bRow[x & 3] + .5) / 16;
+        // keep right-side behind #island extra calm & dark so the island pops
+        const islandQuiet = 1 - .58 * Math.exp(-Math.pow((nx - .74) / .28, 2)) * Math.exp(-Math.pow((ny - .52) / .35, 2));
+
+        // soft rolling twilight mist band low on the horizon
+        const hWave = .74 + .06 * Math.sin(nx * 3.8 + t * .22 + mx * .4);
+        const mist = Math.exp(-Math.pow((ny - hWave) / .20, 2)) * (.45 + .25 * Math.cos(nx * 2.4 - t * .15));
+        const topGlow = Math.exp(-Math.pow((nx - .75) / .45, 2)) * Math.exp(-Math.pow(ny / .42, 2)) * .28;
+
+        const val = (mist * .42 + topGlow) * islandQuiet * fadeOut;
+        const q = Math.min(1, Math.floor(val * 4 + b) / 4);
+
+        const idx = (y * pw + x) * 4;
+        buf[idx] = Math.min(255, (10 + q * 34) | 0);
+        buf[idx + 1] = Math.min(255, (13 + q * 78) | 0);
+        buf[idx + 2] = Math.min(255, (17 + q * 56) | 0);
+        buf[idx + 3] = 255;
+      }
+    }
+
+    homeStars.forEach(s => {
+      const sx = (Math.floor(s.x * pw) + Math.round(mx * 1.5) + pw) % pw;
+      const sy = Math.floor(s.y * ph);
+      const tw = still ? .6 : .15 + .55 * Math.pow(.5 + .5 * Math.sin(t * s.sp + s.ph), 2);
+      const idx = (sy * pw + sx) * 4;
+      buf[idx] = Math.min(255, buf[idx] + (130 * tw) | 0);
+      buf[idx + 1] = Math.min(255, buf[idx + 1] + (175 * tw) | 0);
+      buf[idx + 2] = Math.min(255, buf[idx + 2] + (155 * tw) | 0);
+    });
+  });
+
+  // ---------- docs hero backdrop: dithered isometric blueprint lattice & emerald coordinate pulse ----------
+  mountDither($('canvas.docs-bg'), (buf, pw, ph, t, mx) => {
+    for (let y = 0; y < ph; y++) {
+      const ny = y / ph;
+      const bRow = BAYER[y & 3];
+      const fadeOut = ny > .82 ? Math.max(0, 1 - (ny - .82) / .18) : 1;
+
+      for (let x = 0; x < pw; x++) {
+        const nx = x / pw;
+        const b = (bRow[x & 3] + .5) / 16;
+
+        // isometric lattice lines + slow diagonal scan
+        const u = (x + y * 2 + mx * 6) / 28;
+        const v = (x - y * 2 + mx * 6) / 28;
+        const grid = (Math.abs(u - Math.round(u)) < .055 || Math.abs(v - Math.round(v)) < .055) ? .34 : 0;
+        const sweep = Math.exp(-Math.pow((nx - ((t * .12) % 1.4 - .2)) / .22, 2)) * .45;
+        const centerGlow = Math.exp(-Math.pow((nx - .5) / .45, 2)) * Math.exp(-Math.pow((ny - .55) / .38, 2)) * .36;
+
+        const val = (grid * (.45 + sweep) + centerGlow * .5) * fadeOut;
+        const q = Math.min(1, Math.floor(val * 4 + b) / 4);
+
+        const idx = (y * pw + x) * 4;
+        buf[idx] = Math.min(255, (10 + q * 44) | 0);
+        buf[idx + 1] = Math.min(255, (13 + q * 108) | 0);
+        buf[idx + 2] = Math.min(255, (17 + q * 74) | 0);
+        buf[idx + 3] = 255;
+      }
+    }
   });
 
   // ---------- render distance map (performance) ----------

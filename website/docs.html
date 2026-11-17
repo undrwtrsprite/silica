@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0d11">
+<meta name="description" content="Silica documentation: getting started, Apple Silicon requirements, distant LOD settings, quality-of-life controls, mod checks, and troubleshooting.">
+<title>Docs: Silica</title>
+<link rel="icon" href="assets/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="silica.css">
+<script>document.documentElement.classList.add('js')</script>
+<script type="module">
+  import { inject } from "https://cdn.jsdelivr.net/npm/@vercel/analytics@2.0.1/dist/index.mjs";
+  inject();
+</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-down" viewBox="0 0 16 16"><path d="M8 2v8M4.5 6.8L8 10.3l3.5-3.5M3 13.5h10"/></symbol>
+  <symbol id="i-right" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4"/></symbol>
+  <symbol id="i-gh" viewBox="0 0 16 16"><path fill="currentColor" stroke="none" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 16 16"><path d="M5 11l6-6M6.5 5H11v4.5"/></symbol>
+  <symbol id="i-laptop" viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="7.5" rx="1"/><path d="M1.5 13h13"/></symbol>
+  <symbol id="i-chip" viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1.2"/><path d="M6.5 1.5v2.5M9.5 1.5v2.5M6.5 12v2.5M9.5 12v2.5M1.5 6.5H4M1.5 9.5H4M12 6.5h2.5M12 9.5h2.5"/></symbol>
+  <symbol id="i-file" viewBox="0 0 16 16"><path d="M4 1.5h5l3 3V14a.5.5 0 01-.5.5h-7.5a.5.5 0 01-.5-.5V2a.5.5 0 01.5-.5z M9 1.5v3h3"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 16 16"><path d="M2 2h5.5l6.5 6.5-5.5 5.5L2 7.5z"/><circle cx="5" cy="5" r=".9"/></symbol>
+  <symbol id="i-book" viewBox="0 0 16 16"><path d="M2.5 3a1 1 0 011-1H13v11H3.5a1 1 0 00-1 1zM2.5 14a1 1 0 011-1H13"/></symbol>
+  <symbol id="i-bug" viewBox="0 0 16 16"><rect x="4.5" y="5" width="7" height="8" rx="3.5"/><path d="M6 5a2 2 0 014 0M2 8h2.5M11.5 8H14M3 12l2-1M13 12l-2-1M3 4.5l2 1.3M13 4.5l-2 1.3M8 6.5V13"/></symbol>
+</svg>
+<a class="skip" href="#main">Skip to content</a>
+<header class="masthead">
+  <a class="brand" href="/"><img src="assets/icon.png" width="34" height="34" alt=""><span>Silica</span></a>
+  <nav aria-label="Main">
+    <a href="/features">Features</a>
+    <a href="/performance">Performance</a>
+    <a href="/roadmap">Roadmap</a>
+    <a href="/docs" aria-current="page">Docs</a>
+    <a href="/download">Download</a>
+    <a href="/download#faq">FAQ</a>
+  </nav>
+  <div class="bar-actions">
+    <a class="gh-link" href="https://github.com/undrwtrsprite/silica" aria-label="Silica on GitHub"><svg class="ico fill" aria-hidden="true"><use href="#i-gh"/></svg><span>GitHub</span></a>
+    <a class="btn primary sm" href="https://github.com/undrwtrsprite/silica/releases/download/v0.1.11/Silica-0.1.11.dmg" download>Download</a>
+  </div>
+</header>
+
+<main id="main">
+  <section class="page-hero solo" aria-labelledby="h1">
+    <canvas class="docs-bg dither-bg" aria-hidden="true"></canvas>
+    <div class="inner">
+      <span class="kicker"><b>Docs</b> / Guide &amp; reference</span>
+      <h1 id="h1">Everything you need <span class="hl">to run Silica.</span></h1>
+      <p class="lede">Setup, render distance and LOD settings, controls, mod checks, and where your saves live.</p>
+      <nav class="docs-nav" aria-label="Documentation sections">
+        <a href="#getting-started">Getting started</a>
+        <a href="#lods">Distant LODs</a>
+        <a href="#controls">Controls &amp; QoL</a>
+        <a href="#worlds">Worlds &amp; backups</a>
+        <a href="#mods">Mod checker</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+      </nav>
+    </div>
+  </section>
+
+  <section class="block" id="getting-started" aria-labelledby="gs-title" style="padding-top:clamp(24px,4vw,48px)">
+    <div class="inner">
+      <div class="split-head"><div><span class="kicker"><b>01</b> / Setup</span><h2 id="gs-title">Getting started</h2><p class="sect-sub">Up and running on Apple Silicon in under a minute.</p></div></div>
+      <div class="docs-grid">
+        <article class="doc-card card" data-r>
+          <h3>Requirements</h3>
+          <ul class="points">
+            <li>Mac with Apple Silicon (M1 or newer)</li>
+            <li>macOS 14 Sonoma or later</li>
+            <li>A Microsoft account that owns Minecraft: Java Edition</li>
+            <li>About 17 MB for the launcher app</li>
+          </ul>
+        </article>
+        <article class="doc-card card" data-r>
+          <h3>First launch</h3>
+          <ol class="doc-steps">
+            <li>Open <code>Silica-0.1.11.dmg</code> and drag Silica into Applications.</li>
+            <li>Sign in with Microsoft — Silica verifies ownership and fetches the clean Beta 1.7.3 client jar from Mojang.</li>
+            <li>Click <b>Play</b>. Silica prepares a patched copy at launch and leaves your original jar untouched.</li>
+          </ol>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="lods" aria-labelledby="lod-title" style="padding-top:0">
+    <div class="inner">
+      <div class="split-head"><div><span class="kicker"><b>02</b> / Graphics</span><h2 id="lod-title">Render distance &amp; distant LODs</h2><p class="sect-sub">Silica replaces the 4 vanilla presets with a 2–32 chunk slider and optional real-block LODs beyond that.</p></div></div>
+      <div class="docs-grid">
+        <article class="doc-card card" data-r>
+          <h3>LOD Settings</h3>
+          <p>Open <b>Options → Video Settings → LOD Settings</b> in-game to configure distant terrain:</p>
+          <ul class="points">
+            <li><b>Enable Distant LODs:</b> Off by default; toggle on for terrain past your render distance.</li>
+            <li><b>LOD Distance:</b> Choose how many chunks of simplified real-block terrain load beyond your real chunks (up to 76 chunks total at 12 + 64).</li>
+            <li><b>Tiered detail:</b> Near LOD rings keep higher surface detail and transition smoothly into coarser tiers further out.</li>
+          </ul>
+        </article>
+        <article class="doc-card card" data-r>
+          <h3>Vulkan &amp; Metal</h3>
+          <p>Silica translates Beta 1.7.3's fixed-function rendering onto Vulkan over MoltenVK/Metal instead of legacy macOS OpenGL.</p>
+          <ul class="points">
+            <li>No Rosetta 2 translation layer required.</li>
+            <li>Linear fog and far clip scale automatically with the 2–32 chunk slider.</li>
+            <li>If you hit thermal throttling on long runs at 32 chunks, lowering real chunks to 12–16 while keeping LODs on recovers headroom.</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="controls" aria-labelledby="ctl-title" style="padding-top:0">
+    <div class="inner">
+      <div class="split-head"><div><span class="kicker"><b>03</b> / In-game</span><h2 id="ctl-title">Controls, inventory &amp; audio</h2></div></div>
+      <div class="docs-grid three">
+        <article class="doc-card card" data-r>
+          <h3>Inventory fixes</h3>
+          <ul class="points">
+            <li><b>Sort button:</b> Groups and compacts chest or player inventory stacks cleanly.</li>
+            <li><b>Drag spread &amp; bulk craft:</b> Drag stacks across slots and Shift-click to craft full stacks.</li>
+            <li><b>Number-key swaps:</b> Hover any slot and press <code>1–9</code> to swap with your hotbar.</li>
+          </ul>
+        </article>
+        <article class="doc-card card" data-r>
+          <h3>Controls &amp; F3</h3>
+          <ul class="points">
+            <li><b>Sneak toggle:</b> Switch between hold and toggle in Controls.</li>
+            <li><b>Zoom key:</b> Smooth FOV zoom while held.</li>
+            <li><b>Debug &amp; cheats:</b> Expanded F3 overlay and optional single-player commands with <code>Tab</code> completion.</li>
+          </ul>
+        </article>
+        <article class="doc-card card" data-r>
+          <h3>Sound &amp; captions</h3>
+          <ul class="points">
+            <li>Separate volume sliders for categories instead of one master toggle.</li>
+            <li>Optional directional sound captions in the lower corner.</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="worlds" aria-labelledby="w-title" style="padding-top:0">
+    <div class="inner">
+      <div class="split-head"><div><span class="kicker"><b>04</b> / Saves</span><h2 id="w-title">Worlds, backups &amp; mods</h2></div></div>
+      <div class="docs-grid" id="mods">
+        <article class="doc-card card" data-r>
+          <h3>World backups &amp; import</h3>
+          <p>Silica keeps Beta 1.7.3 saves compatible with vanilla so you can move worlds freely in either direction.</p>
+          <ul class="points">
+            <li>Create timestamped zip backups directly from the launcher before testing new builds or mods.</li>
+            <li>Import existing Beta 1.7.3 world folders or export any Silica world back out.</li>
+          </ul>
+        </article>
+        <article class="doc-card card" data-r>
+          <h3>Mod jar checker <span class="tag">experimental</span></h3>
+          <p>Point Silica at a modded Beta 1.7.3 jar and it dry-runs its patch set before launch without modifying your file.</p>
+          <ul class="points">
+            <li><b>Green:</b> No conflicting class patches detected.</li>
+            <li><b>Yellow / Red:</b> Overlaps with Silica patches or calls unmapped OpenGL functions.</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="troubleshooting" aria-labelledby="tr-title" style="padding-top:0">
+    <div class="inner">
+      <div class="split-head"><div><span class="kicker"><b>05</b> / Help</span><h2 id="tr-title">Troubleshooting</h2></div></div>
+      <div class="docs-grid">
+        <article class="doc-card card" data-r>
+          <h3>macOS Gatekeeper warning</h3>
+          <p>Silica is ad-hoc signed rather than notarized with an Apple Developer ID. If macOS says the app cannot be opened:</p>
+          <pre class="doc-code"><code>xattr -cr /Applications/Silica.app</code></pre>
+          <p>Or right-click <b>Silica.app → Open</b> once.</p>
+        </article>
+        <article class="doc-card card" data-r>
+          <h3>Developer &amp; benchmark docs</h3>
+          <p>Looking to build Silica from source or run the automated FPS comparison harness?</p>
+          <a class="textlink" href="https://github.com/undrwtrsprite/silica/blob/main/docs/DEVELOPMENT.md" style="margin-top:10px">Read docs/DEVELOPMENT.md on GitHub <svg class="ico" aria-hidden="true"><use href="#i-right"/></svg></a>
+          <a class="textlink" href="https://github.com/undrwtrsprite/silica/issues" style="margin-top:6px">Report an issue <svg class="ico" aria-hidden="true"><use href="#i-right"/></svg></a>
+        </article>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="foot">
+    <div>
+      <a class="brand" href="/"><img src="assets/icon.png" width="28" height="28" alt=""><span>Silica</span></a>
+      <p>The Minecraft Beta launcher for Mac. A passion project, heavily AI-assisted.</p>
+    </div>
+    <div><h4>Silica</h4><ul><li><a href="/features">Features</a></li><li><a href="/performance">Performance</a></li><li><a href="/roadmap">Roadmap</a></li><li><a href="/docs">Docs</a></li><li><a href="/download">Download</a></li><li><a href="/download#faq">FAQ</a></li></ul></div>
+    <div><h4>Project</h4><ul><li><a href="https://github.com/undrwtrsprite/silica">Source</a></li><li><a href="https://github.com/undrwtrsprite/silica/releases">Releases</a></li><li><a href="https://github.com/undrwtrsprite/silica/issues">Issues</a></li><li><a href="https://github.com/undrwtrsprite/silica/blob/main/CHANGELOG.md">Changelog</a></li></ul></div>
+    <div><h4>Legal</h4><ul><li><a href="/privacy">Privacy</a></li><li><a href="/terms">Terms</a></li><li><a href="https://github.com/undrwtrsprite/silica/blob/main/LICENSE">License (GPL-3.0)</a></li></ul></div>
+  </div>
+  <div class="legal"><span>Not affiliated with Mojang or Microsoft. Minecraft is a trademark of Mojang Synergies AB.</span><span>Silica ships no Mojang files.</span></div>
+</footer>
+<script src="site.js" defer></script>
+</body>
+</html>

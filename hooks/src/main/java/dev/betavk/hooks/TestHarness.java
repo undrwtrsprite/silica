@@ -220,10 +220,9 @@ final class TestHarness {
                     }
                 }
                 check("LodOptionsScreen has Enable, Extra Chunks, LOD Detail, and Done", enableBtn != null && extraSlider != null && qualityBtn != null && doneBtn != null);
+                check("LOD starts OFF by default: " + Opts.effectiveLodChunks(gs), !Opts.lodEnabled && Opts.effectiveLodChunks(gs) == 0 && !extraSlider.enabled);
                 lo.actionPerformed(enableBtn);
-                check("LOD toggle turns OFF completely: " + Opts.effectiveLodChunks(gs), !Opts.lodEnabled && Opts.effectiveLodChunks(gs) == 0 && !extraSlider.enabled);
-                lo.actionPerformed(enableBtn);
-                check("LOD toggle turns back ON cleanly", Opts.lodEnabled && extraSlider.enabled);
+                check("LOD toggle turns ON cleanly", Opts.lodEnabled && extraSlider.enabled);
                 extraSlider.mousePressed(mc, extraSlider.xPosition + extraSlider.width - 4, extraSlider.yPosition + 5);
                 extraSlider.mouseReleased(0, 0);
                 check("Extra Chunks slider sets +128 past Render Distance: " + Opts.effectiveLodChunks(gs), Opts.lodChunks == 128 && Opts.effectiveLodChunks(gs) == 148);

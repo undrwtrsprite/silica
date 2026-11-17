@@ -5,6 +5,7 @@ import dev.betavk.platform.Mouse;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.WeakHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.src.Container;
 import net.minecraft.src.ContainerChest;
@@ -232,9 +233,14 @@ public final class InventoryPlus {
         }
     }
 
-    /** Adds the sort buttons the first time the screen is drawn. */
-    static void ensureButtons(GuiContainer g) {
-        for (Object o : g.controlList) if (o instanceof SortButton) return;
+    private record Buttons(int width, int height, List<SortButton> list) {
+    }
+
+    private static final WeakHashMap<GuiContainer, Buttons> BUTTONS = new WeakHashMap<>();
+
+    private static List<SortButton> buttonsFor(GuiContainer g) {
+        Buttons cur = BUTTONS.get(g);
+        if (cur != null && cur.width == g.width && cur.height == g.height) return cur.list;
         InventoryPlayer inv = g.mc.thePlayer.inventory;
         int left = (g.width - g.xSize) / 2, top = (g.height - g.ySize) / 2;
         List<Slot> main = new ArrayList<>(), box = new ArrayList<>();
@@ -246,8 +252,25 @@ public final class InventoryPlus {
                 box.add(s);
             }
         }
-        if (!main.isEmpty()) g.controlList.add(button(930, left, top, main));
-        if (!box.isEmpty()) g.controlList.add(button(931, left, top, box));
+        List<SortButton> out = new ArrayList<>(2);
+        if (!main.isEmpty()) out.add(button(930, left, top, main));
+        if (!box.isEmpty()) out.add(button(931, left, top, box));
+        BUTTONS.put(g, new Buttons(g.width, g.height, out));
+        return out;
+    }
+
+    /** Drawn after the container background so items, held stacks, and item tooltips render cleanly on top. */
+    public static void drawSortButtons(GuiContainer g) {
+        List<SortButton> list = buttonsFor(g);
+        if (list.isEmpty()) return;
+        int mx = Mouse.getX() * g.width / g.mc.displayWidth;
+        int my = g.height - Mouse.getY() * g.height / g.mc.displayHeight - 1;
+        dev.betavk.render.Gfx.glDisable(dev.betavk.render.Gfx.GL_LIGHTING);
+        dev.betavk.render.Gfx.glDisable(dev.betavk.render.Gfx.GL_DEPTH_TEST);
+        for (int i = 0; i < list.size(); i++) {
+            list.get(i).drawButton(g.mc, mx, my);
+        }
+        dev.betavk.render.Gfx.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     private static SortButton button(int id, int left, int top, List<Slot> group) {
@@ -261,8 +284,10 @@ public final class InventoryPlus {
 
     /** The sort button under the mouse, if the click is on one. */
     static boolean sortClicked(GuiContainer g, int mx, int my) {
-        for (Object o : g.controlList) {
-            if (o instanceof SortButton b && mx >= b.xPosition && my >= b.yPosition && mx < b.xPosition + b.width && my < b.yPosition + b.height) {
+        List<SortButton> list = buttonsFor(g);
+        for (int i = 0; i < list.size(); i++) {
+            SortButton b = list.get(i);
+            if (mx >= b.xPosition && my >= b.yPosition && mx < b.xPosition + b.width && my < b.yPosition + b.height) {
                 g.mc.sndManager.playSoundFX("random.click", 1.0F, 1.0F);
                 if (cursorEmpty(g)) sort(g, b.group);
                 return true;

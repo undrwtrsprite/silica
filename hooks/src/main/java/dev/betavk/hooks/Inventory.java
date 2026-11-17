@@ -220,7 +220,6 @@ public final class Inventory {
 
     /** atStart of GuiContainer.drawScreen: follows an active drag. */
     public static void poll(GuiContainer g, int mx, int my, float partial) {
-        InventoryPlus.ensureButtons(g);
         if (dragButton < 0) return;
         if (!Mouse.isButtonDown(dragButton)) {
             finishDrag(g);

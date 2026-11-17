@@ -9,7 +9,7 @@ public final class Opts {
 
     public static float fov = 70.0F;
     public static int renderChunks;      // 0 = follow vanilla gs.renderDistance (0..3); 2..32 = explicit chunk radius
-    public static boolean lodEnabled = true;
+    public static boolean lodEnabled = false;
     public static int lodChunks = 64;    // 8..128 = distant real-block LOD chunks past your selected Render Distance
     public static int lodQuality = 1;    // 0 = Fast (2x1x2), 1 = Balanced (1x1x1 +5c), 2 = High (1x1x1 +8c)
     public static boolean showFps;

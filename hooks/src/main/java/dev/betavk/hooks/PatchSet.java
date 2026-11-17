@@ -126,6 +126,7 @@ public final class PatchSet implements dev.betavk.agent.PatchSet {
         r.on(SRC + "GuiContainer")
                 .atStartCancelable("mouseClicked", "(III)V", inv, "mouseClicked")
                 .atStart("drawScreen", "(IIF)V", inv, "poll")
+                .afterCall("drawScreen", "(IIF)V", SRC + "GuiContainer", "drawGuiContainerBackgroundLayer", "(F)V", "dev/betavk/hooks/InventoryPlus", "drawSortButtons")
                 .atEnd("drawScreen", "(IIF)V", inv, "preview")
                 .atStartCancelable("keyTyped", "(CI)V", "dev/betavk/hooks/InventoryPlus", "key");
         r.on(SRC + "GuiScreen").atStart("handleMouseInput", "()V", "dev/betavk/hooks/InventoryPlus", "wheel");

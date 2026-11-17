@@ -68,12 +68,16 @@
         <h1 id="h1">Beta as you remember it. <span class="hl">Minus the rough edges.</span></h1>
         <p class="lede">Same worlds, same feel. Everything that used to get in the way, fixed.</p>
       </div>
-      <div id="inv" class="inv-wrap" style="display:grid;justify-items:center">
-        <div class="inv">
-          <div class="inv-top"><span>Inventory</span><button type="button" class="inv-sort">Sort</button></div>
-          <div class="inv-grid" role="img" aria-label="An inventory of block stacks that sorts itself into groups"></div>
+      <div class="feat-stage" id="feat-stage">
+        <div class="feat-canvas-wrap">
+          <canvas id="feat-world" role="img" aria-label="An isometric Beta voxel world slice showing real-block distant terrain, warm torchlight, and live world backup snapshots."></canvas>
         </div>
-        <p class="inv-cap">Inventory sorting, one of the in-game fixes. Press Sort, or just watch.</p>
+        <div class="feat-bar" role="group" aria-label="World layers">
+          <button type="button" class="feat-pill" data-mode="lod" aria-pressed="true"><i></i>Distant LODs</button>
+          <button type="button" class="feat-pill" data-mode="light" aria-pressed="true"><i></i>Torch &amp; sky light</button>
+          <button type="button" class="feat-pill" data-mode="backup" aria-pressed="false"><i></i>World backup</button>
+        </div>
+        <p class="feat-cap">Click any block to place a torch, or toggle a layer.</p>
       </div>
     </div>
   </section>

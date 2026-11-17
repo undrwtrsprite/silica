@@ -465,55 +465,246 @@
     else whileVisible(isle, v => { vis = v; if (v && !raf) raf = requestAnimationFrame(loop); });
   }
 
-  // ---------- inventory that sorts itself (features) ----------
-  const inv = $('#inv');
-  if (inv) {
-    const TYPES = [
-      { k: 'grass', c: [112, 186, 86], b: [134, 96, 64] }, { k: 'dirt', c: [134, 96, 64] }, { k: 'stone', c: [128, 133, 140] }, { k: 'cobble', c: [112, 116, 122], blot: 1 },
-      { k: 'planks', c: [176, 136, 80], stripe: 1 }, { k: 'log', c: [104, 78, 48], bark: 1 }, { k: 'sand', c: [219, 203, 143] }, { k: 'glass', c: [190, 224, 238], glass: 1 }
-    ];
-    const sprite = (T, seed) => {
-      const c = document.createElement('canvas'); c.width = c.height = 16; const x = c.getContext('2d');
-      for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) {
-        let col = T.c, k = .85 + hash2(i + seed, j * 3) * .3;
-        if (T.b && j > 4) col = T.b; if (T.b && j === 4 && hash2(i, 9) > .5) col = T.b;
-        if (T.stripe && j % 4 === 3) k *= .7;
-        if (T.bark && i % 4 === 0) k *= .7;
-        if (T.blot && hash2(i >> 1, j >> 1) > .7) k *= .7;
-        if (T.glass) { if (i === 0 || j === 0 || i === 15 || j === 15 || (i === j && i > 3 && i < 9)) { x.fillStyle = 'rgba(255,255,255,.9)'; x.fillRect(i, j, 1, 1); } continue; }
-        x.fillStyle = `rgb(${col[0] * k | 0},${col[1] * k | 0},${col[2] * k | 0})`; x.fillRect(i, j, 1, 1);
+  // ---------- features hero: isometric Beta chunk with LOD ring, torchlight, and backup wave ----------
+  const featStage = $('#feat-stage'), featCanvas = $('#feat-world');
+  if (featStage && featCanvas) {
+    const ctx = featCanvas.getContext('2d');
+    const N = 14, CORE_MIN = 3, CORE_MAX = 10;
+    const state = { lod: true, light: true, backup: false, backupAt: -1e9, hover: null };
+    const torches = new Set(['6,7', '8,5']);
+    const PAL = {
+      grass: ['#6fc35c', '#579a48', '#427637'],
+      dirt: ['#8a6240', '#6d4b30', '#533822'],
+      stone: ['#7b838d', '#606770', '#484e56'],
+      water: ['#4f8fd6', '#3d74b3', '#2e598c'],
+      wood: ['#7d5b36', '#614528', '#49331d'],
+      leaf: ['#58a64a', '#448339', '#326329'],
+      lod: ['#3f6a3c', '#31532f', '#253f24']
+    };
+    const grid = [];
+    for (let x = 0; x < N; x++) {
+      grid[x] = [];
+      for (let z = 0; z < N; z++) {
+        const core = x >= CORE_MIN && x <= CORE_MAX && z >= CORE_MIN && z <= CORE_MAX;
+        const n = vnoise2(x * .26 + 2.1, z * .26 + 5.4);
+        const ridge = Math.max(0, 1 - Math.hypot(x - 5.5, z - 5.2) / 5.5) * 2.6;
+        const river = Math.hypot(x - 9.2, z - 8.6) < 2.3;
+        const h = river ? 2 : Math.max(2, Math.min(6, Math.round(2.1 + n * 2.4 + ridge)));
+        const tree = core && x === 5 && z === 5;
+        grid[x][z] = { core, h, river, tree };
       }
-      return c;
+    }
+    const pills = $$('.feat-pill', featStage);
+    pills.forEach(p => p.addEventListener('click', () => {
+      const m = p.dataset.mode;
+      state[m] = !state[m];
+      p.setAttribute('aria-pressed', String(state[m]));
+      if (m === 'backup' && state.backup) state.backupAt = performance.now();
+      if (still) draw(performance.now());
+    }));
+
+    let W = 0, H = 0, tw = 18, th = 9, bh = 13, ox = 0, oy = 0, lodAnim = 1, lastT = performance.now();
+    const resize = () => {
+      [W, H] = fitCanvas(featCanvas, ctx);
+      tw = Math.max(11, Math.min(20, W / (N * 2.25)));
+      th = tw * .5;
+      bh = tw * .72;
+      ox = W * .5;
+      oy = H * .46;
     };
-    const grid = $('.inv-grid', inv), btn = $('.inv-sort', inv);
-    for (let s = 0; s < 27; s++) { const d = document.createElement('div'); d.className = 'slot'; d.style.transform = `translate(calc(var(--slot) * ${s % 9}), calc(var(--slot) * ${s / 9 | 0}))`; grid.appendChild(d); }
-    const items = [];
-    const counts = [64, 37, 12, 64, 9, 23, 48, 5, 64, 16, 31, 7, 52, 3, 20, 44];
-    counts.forEach((n, i) => {
-      const T = TYPES[(i * 5 + (i >> 2)) % TYPES.length];
-      const d = document.createElement('div'); d.className = 'item';
-      d.appendChild(sprite(T, TYPES.indexOf(T) * 7)); const b = document.createElement('b'); b.textContent = n > 1 ? n : ''; d.appendChild(b);
-      grid.appendChild(d); items.push({ el: d, t: TYPES.indexOf(T), n });
+    resize();
+    addEventListener('resize', () => { resize(); if (still) draw(performance.now()); });
+
+    const iso = (x, z, y) => [
+      ox + (x - z) * tw,
+      oy + (x + z - (N - 1)) * th - y * bh
+    ];
+
+    const shade = (hex, boost, amberMix) => {
+      let r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+      r = Math.min(255, r * boost + 235 * amberMix);
+      g = Math.min(255, g * boost + 168 * amberMix);
+      b = Math.min(255, b * boost + 68 * amberMix);
+      return `rgb(${r | 0},${g | 0},${b | 0})`;
+    };
+
+    const drawBox = (x, z, y, height, pal, boost, amber, alpha = 1) => {
+      const [px, py] = iso(x, z, y);
+      const topY = py - height * bh;
+      ctx.globalAlpha = alpha;
+      // top
+      ctx.fillStyle = shade(pal[0], boost, amber);
+      ctx.beginPath();
+      ctx.moveTo(px, topY - th);
+      ctx.lineTo(px + tw, topY);
+      ctx.lineTo(px, topY + th);
+      ctx.lineTo(px - tw, topY);
+      ctx.closePath();
+      ctx.fill();
+      // left
+      ctx.fillStyle = shade(pal[1], boost * .96, amber * .85);
+      ctx.beginPath();
+      ctx.moveTo(px - tw, topY);
+      ctx.lineTo(px, topY + th);
+      ctx.lineTo(px, py + th);
+      ctx.lineTo(px - tw, py);
+      ctx.closePath();
+      ctx.fill();
+      // right
+      ctx.fillStyle = shade(pal[2], boost * .92, amber * .7);
+      ctx.beginPath();
+      ctx.moveTo(px + tw, topY);
+      ctx.lineTo(px, topY + th);
+      ctx.lineTo(px, py + th);
+      ctx.lineTo(px + tw, py);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    };
+
+    const hitList = [];
+    const motes = Array.from({ length: 18 }, (_, i) => ({
+      x: hash2(i, 1) * N, z: hash2(i, 2) * N, y: 2 + hash2(i, 3) * 4, sp: .25 + hash2(i, 4) * .45, ph: hash2(i, 5) * 6.28
+    }));
+
+    const draw = now => {
+      const dt = Math.min(.05, (now - lastT) / 1000);
+      lastT = now;
+      lodAnim += ((state.lod ? 1 : 0) - lodAnim) * Math.min(1, dt * 8);
+      ctx.clearRect(0, 0, W, H);
+
+      // soft ambient radial glow behind chunk
+      const glow = ctx.createRadialGradient(W * .5, H * .52, 10, W * .5, H * .52, Math.max(W, H) * .48);
+      glow.addColorStop(0, state.light ? 'rgba(123, 201, 111, .14)' : 'rgba(79, 143, 214, .08)');
+      glow.addColorStop(1, 'rgba(10, 13, 17, 0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, W, H);
+
+      hitList.length = 0;
+      const t = now * .001;
+      const scanPhase = state.backup ? ((t - state.backupAt * .001) * 7) % (N * 2 + 6) : -99;
+
+      for (let sum = 0; sum <= (N - 1) * 2; sum++) {
+        for (let x = 0; x < N; x++) {
+          const z = sum - x;
+          if (z < 0 || z >= N) continue;
+          const cell = grid[x][z];
+          if (!cell.core && lodAnim < .03) continue;
+
+          // torch light contribution
+          let amber = 0;
+          if (state.light) {
+            for (const key of torches) {
+              const [tx, tz] = key.split(',').map(Number);
+              const d = Math.hypot(x - tx, z - tz);
+              if (d < 4.5) amber += Math.max(0, 1 - d / 4.5) * (.42 + Math.sin(t * 5 + tx) * .04);
+            }
+            amber = Math.min(.55, amber);
+          }
+
+          const boost = state.light ? 1.02 : .72;
+          const alpha = cell.core ? 1 : lodAnim * .48;
+          const hScale = cell.core ? 1 : lodAnim;
+          const baseY = 0;
+
+          if (cell.core) {
+            if (cell.h > 2) drawBox(x, z, baseY, cell.h - 1, PAL.stone, boost, amber * .4, 1);
+            const topY = cell.h - 1;
+            const wave = cell.river ? Math.sin(t * 2.2 + x * .8 + z * .6) * .07 : 0;
+            drawBox(x, z, topY + wave, 1, cell.river ? PAL.water : PAL.grass, boost, amber, 1);
+
+            const [px, py] = iso(x, z, cell.h + wave);
+            hitList.push({ x, z, px, py, river: cell.river });
+
+            if (state.hover && state.hover.x === x && state.hover.z === z) {
+              ctx.strokeStyle = 'rgba(238, 241, 244, .75)';
+              ctx.lineWidth = 1.4;
+              ctx.beginPath();
+              ctx.moveTo(px, py - th); ctx.lineTo(px + tw, py); ctx.lineTo(px, py + th); ctx.lineTo(px - tw, py);
+              ctx.closePath(); ctx.stroke();
+            }
+
+            if (cell.tree) {
+              drawBox(x, z, cell.h, 2.2, PAL.wood, boost, amber * .5, 1);
+              drawBox(x, z, cell.h + 2.2, 1.3, PAL.leaf, boost, amber * .4, .96);
+            }
+
+            if (torches.has(`${x},${z}`)) {
+              const [txp, typ] = iso(x, z, cell.h);
+              ctx.fillStyle = '#6c4c2b';
+              ctx.fillRect(txp - 1.5, typ - 9, 3, 9);
+              const flk = state.light ? 1 + Math.sin(t * 9 + x) * .18 : .5;
+              ctx.fillStyle = state.light ? '#f6c453' : '#7a6345';
+              ctx.beginPath(); ctx.arc(txp, typ - 10, 3.2 * flk, 0, Math.PI * 2); ctx.fill();
+              if (state.light) {
+                const tg = ctx.createRadialGradient(txp, typ - 10, 1, txp, typ - 10, tw * 1.8);
+                tg.addColorStop(0, 'rgba(226, 169, 75, .42)');
+                tg.addColorStop(1, 'rgba(226, 169, 75, 0)');
+                ctx.fillStyle = tg;
+                ctx.beginPath(); ctx.arc(txp, typ - 10, tw * 1.8, 0, Math.PI * 2); ctx.fill();
+              }
+            }
+          } else {
+            drawBox(x, z, 0, cell.h * hScale, PAL.lod, boost * .9, amber * .2, alpha);
+          }
+
+          if (state.backup && cell.core && Math.abs(sum - scanPhase) < 1.35) {
+            const [px, py] = iso(x, z, cell.h);
+            ctx.strokeStyle = 'rgba(123, 201, 111, .9)';
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.moveTo(px, py - th); ctx.lineTo(px + tw, py); ctx.lineTo(px, py + th); ctx.lineTo(px - tw, py);
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+
+      if (!still) {
+        motes.forEach(m => {
+          const my = (m.y + t * m.sp) % 6.5;
+          const [mx, mpy] = iso(m.x + Math.sin(t + m.ph) * .2, m.z, my);
+          ctx.fillStyle = state.light ? 'rgba(226, 169, 75, .45)' : 'rgba(123, 201, 111, .35)';
+          ctx.fillRect(mx - 1, mpy - 1, 2.2, 2.2);
+        });
+      }
+    };
+
+    const pick = e => {
+      const r = featCanvas.getBoundingClientRect();
+      const mx = e.clientX - r.left, my = e.clientY - r.top;
+      let best = null, bestD = 1e9;
+      for (let i = hitList.length - 1; i >= 0; i--) {
+        const h = hitList[i];
+        const d = Math.abs(mx - h.px) / tw + Math.abs(my - h.py) / th;
+        if (d < 1.05 && d < bestD) { best = h; bestD = d; }
+      }
+      return best;
+    };
+
+    featCanvas.addEventListener('pointermove', e => {
+      const h = pick(e);
+      state.hover = h ? { x: h.x, z: h.z } : null;
+      if (still) draw(performance.now());
     });
-    const place = (order, stagger) => order.forEach((it, s) => { it.el.style.transitionDelay = stagger ? (s * 28) + 'ms' : '0ms'; it.el.style.transform = `translate(calc(var(--slot) * ${s % 9}), calc(var(--slot) * ${s / 9 | 0}))`; });
-    const shuffle = () => {
-      const slots = [...Array(27).keys()].sort(() => Math.random() - .5).slice(0, items.length);
-      items.forEach((it, i) => { const s = slots[i]; it.el.style.transitionDelay = (i * 18) + 'ms'; it.el.style.transform = `translate(calc(var(--slot) * ${s % 9}), calc(var(--slot) * ${s / 9 | 0}))`; });
-    };
-    const sort = () => { btn.classList.add('press'); setTimeout(() => btn.classList.remove('press'), 220); place([...items].sort((a, b) => a.t - b.t || b.n - a.n), true); };
-    shuffle();
-    let sorted = false, quietUntil = 0;
-    btn.addEventListener('click', () => { if (sorted) { shuffle(); sorted = false; } else { sort(); sorted = true; } quietUntil = performance.now() + 4000; });
-    if (!still) {
-      let on = false;
-      whileVisible(inv, v => { on = v; });
-      // a calm loop: every 2.6 s it either sorts the mess or makes a new one, only while on screen and not right after a click
-      setInterval(() => {
-        if (!on || document.hidden || performance.now() < quietUntil) return;
-        if (sorted) shuffle(); else sort();
-        sorted = !sorted;
-      }, 2600);
-    } else { sort(); sorted = true; }
+    featCanvas.addEventListener('pointerleave', () => { state.hover = null; });
+    featCanvas.addEventListener('click', e => {
+      const h = pick(e);
+      if (!h || h.river) return;
+      const k = `${h.x},${h.z}`;
+      if (torches.has(k)) torches.delete(k); else torches.add(k);
+      if (still) draw(performance.now());
+    });
+
+    if (still) {
+      draw(performance.now());
+    } else {
+      let raf = 0;
+      const loop = now => { draw(now); raf = requestAnimationFrame(loop); };
+      whileVisible(featCanvas, on => {
+        if (on && !raf) { lastT = performance.now(); raf = requestAnimationFrame(loop); }
+        else if (!on && raf) { cancelAnimationFrame(raf); raf = 0; }
+      });
+    }
   }
 
   // ---------- render distance map (performance) ----------

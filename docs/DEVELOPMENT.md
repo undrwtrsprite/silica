@@ -26,11 +26,11 @@ The app registration needs the iOS / macOS redirect URI `msauth.dev.betavk.launc
 
 How it works: `tools/mcprep` (ASM) prepares the jar; `agent/` is a Java agent that applies the patch definitions in `hooks/` (`dev.betavk.hooks.PatchSet`) to the game's
 classes as they load; the hook classes are our own implementations (rendering workers, chunk prefetch and saves, inventory, options, HUD). `agent:selfTest` checks the patch kinds,
-`-Dbetavk.test=hud|video|inv|world|fly` (see `hooks/.../TestHarness`) check the patched game. Multiplayer online-mode needs `-Dbetavk.joinUrl`. Your own skin and cape come from your signed-in profile; other players are looked up by name on Mojang's servers in the background (`dev.betavk.net.Skins`; `-Dbetavk.skins=off` disables it, `-Dbetavk.skinUrl`/`-Dbetavk.cloakUrl` point at your own host instead; `-Dbetavk.test=skins` checks it).
+`-Dbetavk.test=hud|video|inv|world|fly|lod|worlds` (see `hooks/.../TestHarness`) check the patched game. Multiplayer online-mode needs `-Dbetavk.joinUrl`. Your own skin and cape come from your signed-in profile; other players are looked up by name on Mojang's servers in the background (`dev.betavk.net.Skins`; `-Dbetavk.skins=off` disables it, `-Dbetavk.skinUrl`/`-Dbetavk.cloakUrl` point at your own host instead; `-Dbetavk.test=skins` checks it).
 
 ## Quality of life (patched build)
 
-Inventory: drag to spread a stack, number keys over a slot swap with the hotbar, Q and Ctrl+Q drop one or all, shift + double-click moves every stack of a kind, scroll over a slot to move one item across, Sort buttons, shift-click crafting results crafts as many as possible, durability numbers in tooltips. Menus: FOV and sensitivity on the main Options screen, Music & Sounds (master, music, effects, ambient), GUI scale 1x-4x, a World screen (autosave interval, backups), Resume on the title screen, a sortable world list with seeds. In game: a fuller F3 screen, middle-click pick block, zoom, FPS counter. Gameplay is vanilla (no sprinting and the like).
+Inventory: drag to spread a stack, number keys over a slot swap with the hotbar, Q and Ctrl+Q drop one or all, shift + double-click moves every stack of a kind, scroll over a slot to move one item across, Sort buttons, shift-click crafting results crafts as many as possible, durability numbers in tooltips. Visuals & world: Better Grass (`Off`, `Fast`, `Fancy` in Video Settings), `2–32` chunk render distance slider, true-textured 5-tier distant LODs with `.lod` disk cache and border trees. Menus: FOV and sensitivity on the main Options screen, Music & Sounds (master, music, effects, ambient), GUI scale `1x–4x`, World options (autosave interval, backups), Resume on the title screen, a sortable world list with seeds. In game: a fuller F3 screen, middle-click pick block, zoom, FPS counter, optional `/fly` command with speed control. Gameplay is vanilla (no sprinting or hunger).
 
 ## Layout
 
@@ -55,8 +55,7 @@ cd launcher && ./build_app.sh             # Silica.app; first run installs the J
 scripts/bench.sh my-label                 # fixed-seed benchmark at 3 render distances (BENCH_BACKEND=vulkan, BENCH_MONITOR=0, ...)
 ```
 
-Switches: `-Dbetavk.backend=gl|vulkan`, `-Dbetavk.meshworkers=N` (default 1), `-Dbetavk.genworkers=N` (default 2), `-Dbetavk.vsync`, `-Dbetavk.uncapped`,
-`-Dbetavk.gamedir`, `-Dbetavk.assets`, `-Dbetavk.vkstats`. CLI: `dev.betavk.Main --help`.
+Switches: `-Dbetavk.backend=gl|vulkan`, `-Dbetavk.meshworkers=N` (default 1), `-Dbetavk.genworkers=N` (default 2), `-Dbetavk.vsync`, `-Dbetavk.uncapped`, `-Dbetavk.bettergrass=0|1|2`, `-Dbetavk.gamedir`, `-Dbetavk.assets`, `-Dbetavk.vkstats`. CLI: `dev.betavk.Main --help`.
 
 ## What was verified (details and numbers in CHANGELOG.md)
 

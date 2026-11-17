@@ -2,27 +2,27 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0a0d11">
-<meta name="description" content="Where Silica is going: Better performance, Better grass, LODs, Beta fixes, Silica's own mod library, modern texture packs, and one unified system for Alpha to Beta.">
+<meta name="description" content="Where Silica is going: Better performance, Better grass, LODs, Beta fixes, Silica's own mod library, modern texture packs, unified Alpha to Beta support, and cross-platform builds.">
 <title>Roadmap: Silica</title>
 <link rel="canonical" href="https://silicalauncher.xyz/roadmap">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Silica">
 <meta property="og:title" content="Roadmap: Silica">
-<meta property="og:description" content="Where Silica is going: LODs, Better grass, Beta fixes, our own mod library, modern texture support, and one unified system from Alpha to Beta.">
+<meta property="og:description" content="Where Silica is going: LODs, Better grass, Beta fixes, our own mod library, modern texture support, unified Alpha to Beta support, and cross-platform.">
 <meta property="og:url" content="https://silicalauncher.xyz/roadmap">
 <meta property="og:image" content="https://silicalauncher.xyz/assets/shot-lod.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Roadmap: Silica">
-<meta name="twitter:description" content="Where Silica is going: LODs, Better grass, Beta fixes, our own mod library, modern texture support, and unified Alpha–Beta support.">
+<meta name="twitter:description" content="Where Silica is going: LODs, Better grass, Beta fixes, our own mod library, modern texture support, unified Alpha–Beta, and cross-platform.">
 <meta name="twitter:image" content="https://silicalauncher.xyz/assets/shot-lod.jpg">
 <link rel="icon" href="assets/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"></noscript>
-<link rel="stylesheet" href="silica.css?v=7">
+<link rel="stylesheet" href="silica.css?v=8">
 <script>document.documentElement.classList.add('js')</script>
 <script type="module">
   import { inject } from "https://cdn.jsdelivr.net/npm/@vercel/analytics@2.0.1/dist/index.mjs";
@@ -96,9 +96,9 @@
         </ul>
       </div>
       <div class="tree-wrap card" data-r>
-        <div class="tree" id="treegrid" data-edges='[["beta", "perf"], ["perf", "fixes"], ["beta", "grass"], ["perf", "lods"], ["lods", "textures"], ["beta", "modlib"], ["modlib", "bugfixmod"], ["beta", "unified"]]'>
+        <div class="tree" id="treegrid" data-edges='[["beta", "perf"], ["perf", "fixes"], ["beta", "grass"], ["perf", "lods"], ["lods", "textures"], ["beta", "modlib"], ["modlib", "bugfixmod"], ["beta", "unified"], ["unified", "xplat"]]'>
           <svg class="wires" aria-hidden="true"></svg>
-          <span class="lane" style="grid-row:1;grid-column:1">Engine</span><span class="lane" style="grid-row:2;grid-column:1">Visuals</span><span class="lane" style="grid-row:3;grid-column:1">Modding</span><span class="lane" style="grid-row:4;grid-column:1">Versions</span>
+          <span class="lane" style="grid-row:1;grid-column:1">Engine</span><span class="lane" style="grid-row:2;grid-column:1">Visuals</span><span class="lane" style="grid-row:3;grid-column:1">Modding</span><span class="lane" style="grid-row:4;grid-column:1">Reach</span>
 
           <button type="button" class="nbtn done" data-id="beta" data-state="done" data-status="Ready" style="grid-row:1;grid-column:2" aria-pressed="false" data-plain="Beta 1.7.3 runs natively on Apple Silicon with Vulkan, instance isolation, world tools, and full QoL controls." data-tech="The game runs from your own Mojang jar, remapped and patched at launch via ASM. Your original jar is never touched."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-chunks"/></svg></span><span class="nt">Beta 1.7.3</span></button>
           <button type="button" class="nbtn done" data-id="perf" data-state="done" data-status="Done" style="grid-row:1;grid-column:3" aria-pressed="false" data-plain="Native Vulkan rendering, multithreaded chunk workers, hoisted noise, direct lighting, and fast dirty-chunk bucketing." data-tech="Cuts frame spikes across Apple Silicon and scales cleanly up to 32 real chunks while keeping McRegion saves vanilla-compatible."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-chip"/></svg></span><span class="nt">Better performance</span></button>
@@ -112,6 +112,7 @@
           <button type="button" class="nbtn later" data-id="bugfixmod" data-state="later" data-status="Not started" style="grid-row:3;grid-column:4" aria-pressed="false" data-plain="Fixes for quirks and bugs in vanilla Beta 1.7.3, shipped as an optional module inside our own mod library so purists can leave vanilla untouched." data-tech="Addresses long-standing vanilla quirks (lighting bugs, hitbox/boat oddities, block updates) as opt-in toggleable mods rather than forced engine edits."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-bug"/></svg></span><span class="nt">Beta bugfix mod</span></button>
 
           <button type="button" class="nbtn next" data-id="unified" data-state="next" data-status="Not started" style="grid-row:4;grid-column:3" aria-pressed="false" data-plain="One singular patch and mapping architecture so every Silica feature works seamlessly from Alpha through every Beta release." data-tech="Replaces version-specific hooks tied solely to Beta 1.7.3 with capability-driven Version Profiles, unified obfuscation adapters, and shared Vulkan/LOD bridges."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-tag"/></svg></span><span class="nt">Unified Alpha–Beta system</span></button>
+          <button type="button" class="nbtn later" data-id="xplat" data-state="later" data-status="Not started" style="grid-row:4;grid-column:4" aria-pressed="false" data-plain="Bring Silica beyond Apple Silicon Macs — targeting Windows, Linux, and Intel Macs on one shared Vulkan and OpenGL core." data-tech="Our Java engine layers (game/, platform/, hooks/) already use standard Vulkan 1.2 and GLFW/LWJGL 3. Cross-platform support adds native Windows/Linux/x86_64 binaries and a desktop launcher outside SwiftUI."><span class="tile"><svg class="ico" aria-hidden="true"><use href="#i-laptop"/></svg></span><span class="nt">Cross-platform</span></button>
         </div>
         <aside class="detail" id="detail" aria-live="polite">
           <div class="detail-head">
@@ -135,8 +136,9 @@
       <ol class="rail-track" data-reveal>
         <li class="stop ready" style="--i:0"><span class="node"><svg class="ico" aria-hidden="true"><use href="#i-ok"/></svg></span><h3>Beta 1.7.3</h3><span class="st">Ready · Done</span></li>
         <li class="stop soon" style="--i:1"><span class="node"></span><h3>Alpha – Beta</h3><span class="st">Unified system · Not started</span></li>
-        <li class="stop soon" style="--i:2"><span class="node"></span><h3>Silica mod library</h3><span class="st">Not started</span></li>
-        <li class="stop gone" style="--i:3"><span class="node"><svg class="ico" aria-hidden="true"><use href="#i-no"/></svg></span><h3>Legacy jar mods</h3><span class="st">Gone · Replaced by own API</span></li>
+        <li class="stop soon" style="--i:2"><span class="node"></span><h3>Cross-platform</h3><span class="st">Windows, Linux &amp; Intel · Not started</span></li>
+        <li class="stop soon" style="--i:3"><span class="node"></span><h3>Silica mod library</h3><span class="st">Not started</span></li>
+        <li class="stop gone" style="--i:4"><span class="node"><svg class="ico" aria-hidden="true"><use href="#i-no"/></svg></span><h3>Legacy jar mods</h3><span class="st">Gone · Replaced by own API</span></li>
       </ol>
     </div>
   </section>

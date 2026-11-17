@@ -620,65 +620,42 @@
     });
   });
 
-  // ---------- performance hero backdrop: dithered chunk sonar rings & frame-speed pixel streams ----------
-  const perfStreaks = Array.from({ length: 18 }, (_, i) => ({
-    y: .14 + hash(i * 7.3) * .72, sp: .28 + hash(i * 4.1) * .45, len: .08 + hash(i * 11.7) * .14, ph: hash(i * 3.9)
-  }));
+  // ---------- performance hero backdrop: calm Bayer-dithered frame-pacing horizon & subtle columns ----------
   mountDither($('canvas.perf-bg'), (buf, pw, ph, t, mx) => {
-    const cx = pw * (.72 - mx * .03), cy = ph * .52;
-    const sweepAngle = t * .65;
-    const maxR = Math.hypot(pw * .65, ph * .75);
-
     for (let y = 0; y < ph; y++) {
       const ny = y / ph;
       const bRow = BAYER[y & 3];
-      const fadeOut = ny > .86 ? Math.max(0, 1 - (ny - .86) / .14) : 1;
+      const fadeOut = ny > .84 ? Math.max(0, 1 - (ny - .84) / .16) : 1;
 
       for (let x = 0; x < pw; x++) {
         const nx = x / pw;
         const b = (bRow[x & 3] + .5) / 16;
-        const leftDim = .45 + .55 * Math.min(1, nx * 1.2);
+        // keep contrast clean behind the left headline & right rdmap card
+        const cardQuiet = 1 - .38 * Math.exp(-Math.pow((nx - .74) / .26, 2));
 
-        const dx = x - cx, dy = y - cy;
-        const dist = Math.hypot(dx, dy);
-        const nd = dist / maxR;
+        // two smooth rolling frame-pacing horizon waves along the lower half
+        const w1 = .68 + .07 * Math.sin(nx * 4.2 + t * .45 + mx * .5) + .03 * Math.cos(nx * 9.0 - t * .3);
+        const w2 = .76 + .06 * Math.cos(nx * 3.6 - t * .35 - mx * .4);
+        const crest1 = ny > w1 ? Math.exp(-(ny - w1) * 5.2) : Math.exp(-(w1 - ny) * 14) * .45;
+        const crest2 = ny > w2 ? Math.exp(-(ny - w2) * 4.5) : 0;
 
-        // expanding concentric sonar pulses + soft sweeping radar sector
-        const pulse = Math.pow(Math.max(0, Math.sin(nd * 16 - t * 2.2)), 4) * Math.exp(-nd * 2.1);
-        const ang = Math.atan2(dy, dx);
-        const diff = ((ang - sweepAngle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-        const radar = Math.exp(-diff * 2.4) * Math.exp(-nd * 1.7) * .55;
+        // subtle vertical equalizer bars tucked into the lower wave
+        const barCol = Math.floor(x / 3);
+        const barH = .84 - (.08 + .14 * (.5 + .5 * Math.sin(barCol * .7 + t * 1.4)));
+        const bar = (x % 3 !== 0 && ny > barH) ? .32 : 0;
 
-        // subtle perspective chunk grid lines on lower half
-        const gridLine = (x % 16 === 0 || y % 16 === 0) ? .08 * Math.exp(-nd * 1.6) : 0;
-
-        const val = (pulse * .65 + radar + gridLine + Math.exp(-nd * 2.6) * .28) * leftDim * fadeOut;
-        const q = Math.min(1, Math.floor(val * 5 + b) / 5);
-        const qWarm = Math.min(1, Math.floor(pulse * .5 * leftDim * fadeOut * 4 + b) / 4);
+        const v1 = (crest1 * .52 + bar * .45) * cardQuiet * fadeOut;
+        const v2 = (crest2 * .38) * cardQuiet * fadeOut;
+        const q1 = Math.min(1, Math.floor(v1 * 5 + b) / 5);
+        const q2 = Math.min(1, Math.floor(v2 * 4 + b) / 4);
 
         const idx = (y * pw + x) * 4;
-        buf[idx] = Math.min(255, (10 + q * 46 + qWarm * 75) | 0);
-        buf[idx + 1] = Math.min(255, (13 + q * 140 + qWarm * 54) | 0);
-        buf[idx + 2] = Math.min(255, (17 + q * 118 + qWarm * 18) | 0);
+        buf[idx] = Math.min(255, (10 + q1 * 48 + q2 * 22) | 0);
+        buf[idx + 1] = Math.min(255, (13 + q1 * 124 + q2 * 64) | 0);
+        buf[idx + 2] = Math.min(255, (17 + q1 * 86 + q2 * 76) | 0);
         buf[idx + 3] = 255;
       }
     }
-
-    // horizontal high-speed frame-stream pixel trails
-    perfStreaks.forEach(s => {
-      const sy = Math.floor(s.y * ph);
-      if (sy < 0 || sy >= ph) return;
-      const head = ((s.ph + (still ? 0 : t * s.sp)) % 1.3) - .15;
-      const x0 = Math.floor((head - s.len) * pw), x1 = Math.floor(head * pw);
-      for (let x = Math.max(0, x0); x <= Math.min(pw - 1, x1); x++) {
-        const k = (x - x0) / Math.max(1, x1 - x0);
-        const dim = .28 + .72 * Math.min(1, (x / pw) * 1.15);
-        const idx = (sy * pw + x) * 4;
-        buf[idx] = Math.min(255, buf[idx] + (48 * k * k * dim) | 0);
-        buf[idx + 1] = Math.min(255, buf[idx + 1] + (120 * k * k * dim) | 0);
-        buf[idx + 2] = Math.min(255, buf[idx + 2] + (88 * k * k * dim) | 0);
-      }
-    });
   });
 
   // ---------- download hero backdrop: centered dithered beacon beam & descending pixel starlight ----------
@@ -955,6 +932,19 @@
       const starts = btns.filter(c => c.dataset.src === 'launcher'); let hit = starts[0];
       starts.forEach(c => { if (v.currentTime >= parseFloat(c.dataset.t)) hit = c; }); mark(hit);
     });
+  }
+
+  // ---------- docs sidebar scroll spy ----------
+  const docLinks = $$('.docs-side nav a');
+  if (docLinks.length) {
+    const secs = docLinks.map(a => $(a.getAttribute('href'))).filter(Boolean);
+    const spy = () => {
+      let cur = secs[0];
+      for (const s of secs) if (s.getBoundingClientRect().top <= 160) cur = s;
+      docLinks.forEach((a, i) => a.setAttribute('aria-current', secs[i] === cur ? 'true' : 'false'));
+    };
+    addEventListener('scroll', spy, { passive: true });
+    spy();
   }
 
   // ---------- rise-in for headings, rows, tiles (last, once the page has built its DOM) ----------

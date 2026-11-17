@@ -98,6 +98,11 @@ module.exports = async (req, res) => {
         }
       }
 
+      if (req.method === 'POST') {
+        if (cmds.length > 0) await redisPipeline(cfg, cmds);
+        return res.status(200).json({ ok: Boolean(id), persisted: true });
+      }
+
       cmds.push(['ZREMRANGEBYSCORE', 'silica:online', '-inf', String(liveCutoff)]);
       cmds.push(['ZREMRANGEBYSCORE', 'silica:playing', '-inf', String(liveCutoff)]);
       cmds.push(['ZREMRANGEBYSCORE', 'silica:dau', '-inf', String(dayCutoff)]);
@@ -150,6 +155,9 @@ module.exports = async (req, res) => {
       if (!bucket) { bucket = { online: new Set(), playing: new Set() }; mem.buckets.set(curHour, bucket); }
       bucket.online.add(id);
       if (playing) bucket.playing.add(id);
+    }
+    if (req.method === 'POST') {
+      return res.status(200).json({ ok: Boolean(id), persisted: false });
     }
 
     let online = 0, playingCnt = 0, dau = 0;

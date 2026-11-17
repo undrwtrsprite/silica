@@ -49,7 +49,32 @@
 
   // ---------- top bar, links, pointer light on cards ----------
   const bar = $('.masthead');
-  if (bar) { const solid = () => bar.classList.toggle('solid', scrollY > 24); addEventListener('scroll', solid, { passive: true }); solid(); }
+  if (bar) {
+    const solid = () => bar.classList.toggle('solid', scrollY > 24);
+    addEventListener('scroll', solid, { passive: true });
+    solid();
+    const actions = $('.bar-actions', bar), nav = $('nav', bar);
+    if (actions && nav) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'nav-toggle';
+      btn.setAttribute('aria-label', 'Menu');
+      btn.setAttribute('aria-expanded', 'false');
+      const iconMenu = '<svg viewBox="0 0 18 18" aria-hidden="true"><path d="M2.5 5h13M2.5 9h13M2.5 13h13"/></svg>';
+      const iconClose = '<svg viewBox="0 0 18 18" aria-hidden="true"><path d="M4 4l10 10M14 4L4 14"/></svg>';
+      btn.innerHTML = iconMenu;
+      const setOpen = on => {
+        bar.classList.toggle('open', on);
+        btn.setAttribute('aria-expanded', String(on));
+        btn.innerHTML = on ? iconClose : iconMenu;
+      };
+      btn.addEventListener('click', e => { e.stopPropagation(); setOpen(!bar.classList.contains('open')); });
+      $$('a', nav).forEach(a => a.addEventListener('click', () => setOpen(false)));
+      document.addEventListener('click', e => { if (bar.classList.contains('open') && !bar.contains(e.target)) setOpen(false); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape' && bar.classList.contains('open')) setOpen(false); });
+      actions.appendChild(btn);
+    }
+  }
   // any link to a section of the page you are already on (#faq, or /download#faq while on /download) scrolls there smoothly
   const samePage = p => p.replace(/\.html$/, '').replace(/\/$/, '') === location.pathname.replace(/\.html$/, '').replace(/\/$/, '');
   $$('a[href*="#"]').forEach(a => a.addEventListener('click', e => {

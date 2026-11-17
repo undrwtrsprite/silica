@@ -65,6 +65,7 @@ p { max-width: 65ch; }
 .gh-link { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; padding: 8px 12px; border-radius: 10px; transition: color .2s, background-color .2s; }
 .gh-link .ico { width: 18px; height: 18px; }
 .gh-link:hover { color: var(--text); background: rgba(255, 255, 255, .06); }
+.nav-toggle { display: none; }
 
 /* ---------- buttons, controls ---------- */
 .btn { display: inline-flex; align-items: center; gap: 9px; padding: 13px 22px; border-radius: var(--r-ctl); font-weight: 600; font-size: 16px; text-decoration: none; border: 1px solid transparent; cursor: pointer; transition: background-color .2s, border-color .2s, translate .2s, box-shadow .2s; }
@@ -544,6 +545,11 @@ footer { padding: 0 var(--gutter) 48px; color: var(--dim); font-size: 14px; line
 @media (max-width: 900px) {
   .masthead { background: rgba(10, 13, 17, .94); }
   .masthead nav { display: none; }
+  .nav-toggle { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--card-2); color: var(--text); cursor: pointer; padding: 0; }
+  .nav-toggle svg { width: 18px; height: 18px; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; fill: none; }
+  .masthead.open nav { position: fixed; inset: 68px var(--gutter) auto var(--gutter); margin-left: 0; display: grid; gap: 4px; padding: 12px; border-radius: 14px; background: rgba(13, 17, 22, .97); border: 1px solid var(--line); box-shadow: 0 24px 60px rgba(0, 0, 0, .65); backdrop-filter: blur(14px); z-index: 29; }
+  .masthead.open nav a { padding: 10px 14px; font-size: 16px; }
+  .masthead.open nav a[aria-current]::after { left: 6px; top: 50%; bottom: auto; width: 4px; height: 14px; margin: -7px 0 0; border-radius: 2px; }
   .hero { grid-template-columns: 1fr; padding-top: 100px; min-height: 0; }
   .island { height: 420px; min-height: 0; margin: 0 calc(var(--gutter) * -1); }
   .page-hero .inner, .row, .row.flip { grid-template-columns: 1fr; }

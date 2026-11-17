@@ -15,6 +15,7 @@ final class Telemetry {
     private var enabled = true
     private var playing = false
     private var backend = "vulkan"
+    private var playingActivity: NSObjectProtocol?
 
     init() {
         if let saved = UserDefaults.standard.string(forKey: Self.clientKey), saved.count >= 8 {
@@ -43,6 +44,7 @@ final class Telemetry {
         self.enabled = enabled
         self.playing = playing
         self.backend = backend
+        syncAppNapAssertion()
         let args = CommandLine.arguments
         if args.contains("--snapshots") || args.contains("--selftest") { return }
         guard task == nil else { return }
@@ -61,9 +63,24 @@ final class Telemetry {
         self.enabled = enabled
         self.playing = playing
         self.backend = backend
+        syncAppNapAssertion()
         let args = CommandLine.arguments
         if changed, enabled, !args.contains("--snapshots"), !args.contains("--selftest") {
             Task { [weak self] in await self?.ping() }
+        }
+    }
+
+    /// Prevents macOS App Nap from throttling the 90s heartbeat timer while Silica is occluded behind fullscreen Minecraft.
+    private func syncAppNapAssertion() {
+        let active = enabled && playing
+        if active, playingActivity == nil {
+            playingActivity = ProcessInfo.processInfo.beginActivity(
+                options: .userInitiatedAllowingIdleSystemSleep,
+                reason: "Sending active session telemetry while Beta 1.7.3 is running"
+            )
+        } else if !active, let activity = playingActivity {
+            ProcessInfo.processInfo.endActivity(activity)
+            playingActivity = nil
         }
     }
 

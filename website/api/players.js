@@ -10,7 +10,7 @@ const DAY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const RATE_WINDOW_MS = 60 * 1000;
 const GET_CACHE_MS = 10 * 1000;
-const MAX_POST_PER_ID = 5;
+const MAX_POST_PER_ID = 15;
 const MAX_POST_PER_IP = 30;
 const MAX_GET_PER_IP = 60;
 const MAX_BODY_BYTES = 1024;
@@ -85,11 +85,13 @@ async function redisPipeline(cfg, commands) {
   return res.json();
 }
 
-function parseZSetPairs(arr) {
+function parseHashPairs(arr) {
   const out = {};
   if (!Array.isArray(arr)) return out;
   for (let i = 0; i < arr.length; i += 2) {
-    out[arr[i]] = Number(arr[i + 1] || 0);
+    if (typeof arr[i] === 'string' && arr[i + 1] != null) {
+      out[arr[i]] = String(arr[i + 1]);
+    }
   }
   return out;
 }
@@ -182,7 +184,10 @@ module.exports = async (req, res) => {
       }
 
       if (req.method === 'POST') {
-        if (cmds.length > 0) await redisPipeline(cfg, cmds);
+        if (cmds.length > 0) {
+          await redisPipeline(cfg, cmds);
+          mem.getCache = null;
+        }
         return res.status(200).json({ ok: Boolean(id), persisted: true });
       }
 
@@ -221,7 +226,7 @@ module.exports = async (req, res) => {
         const metaCmds = dauIds.map(sid => ['HGETALL', `silica:meta:${sid}`]);
         const metaOut = await redisPipeline(cfg, metaCmds);
         for (const r of metaOut) {
-          const kv = parseZSetPairs(r?.result);
+          const kv = parseHashPairs(r?.result);
           if (kv.b === 'vulkan' || kv.b === 'gl') backends[kv.b]++;
           if (kv.c) chips[kv.c] = (chips[kv.c] || 0) + 1;
           if (kv.v) versions[kv.v] = (versions[kv.v] || 0) + 1;

@@ -859,11 +859,11 @@
   }
 
   // ---------- rise-in for headings, rows, tiles (last, once the page has built its DOM) ----------
-  $$('section.block h2, .compare tbody tr, details, .rows .row > div:not(.stage), .split-head, .sect-sub').forEach(el => el.setAttribute('data-r', ''));
-  $$('.compare tbody, .grid6, .faq-cols > div, .links-grid, .doors, .reqs, .steps, .howto').forEach(g => [...g.children].forEach((c, i) => { c.style.setProperty('--i', Math.min(i, 7)); c.setAttribute('data-r', ''); }));
+  $$('section.block h2, details, .rows .row > div:not(.stage), .split-head, .sect-sub').forEach(el => el.setAttribute('data-r', ''));
+  $$('.grid6, .faq-cols > div, .links-grid, .doors, .reqs, .steps, .howto').forEach(g => [...g.children].forEach((c, i) => { c.style.setProperty('--i', Math.min(i, 5)); c.setAttribute('data-r', ''); }));
   const rise = $$('[data-r]');
   if ('IntersectionObserver' in window && !still) {
-    const rio = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('r-in'); rio.unobserve(e.target); } }), { threshold: .1, rootMargin: '0px 0px -5% 0px' });
+    const rio = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('r-in'); rio.unobserve(e.target); } }), { threshold: .01, rootMargin: '0px 0px 80px 0px' });
     rise.forEach(el => rio.observe(el));
   } else rise.forEach(el => el.classList.add('r-in'));
 })();

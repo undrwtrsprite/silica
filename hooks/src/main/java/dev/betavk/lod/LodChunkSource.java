@@ -565,7 +565,11 @@ public final class LodChunkSource {
                 var lookup = java.lang.invoke.MethodHandles.publicLookup();
                 var mt = java.lang.invoke.MethodType.methodType(void.class, int.class, int.class, byte[].class);
                 g = lookup.findVirtual(ChunkProviderGenerate.class, "generateTerrain", mt);
-                r = lookup.findVirtual(ChunkProviderGenerate.class, "replaceSurfaceBlocks", mt);
+                try {
+                    r = lookup.findVirtual(ChunkProviderGenerate.class, "replaceSurfaceBlocks", mt);
+                } catch (NoSuchMethodException e) {
+                    r = lookup.findVirtual(ChunkProviderGenerate.class, "replaceBlocks", mt);
+                }
             } catch (Throwable ignored) {}
             GEN = g;
             REPL = r;

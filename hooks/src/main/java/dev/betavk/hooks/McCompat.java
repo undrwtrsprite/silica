@@ -134,6 +134,72 @@ public final class McCompat {
         }
     }
 
+    private static int diagStage, diagTicks, diagShotTick = -1;
+
+    /** Diagnostic probe verifying wide render distance, LOD distance, and far-plane/fog behavior across eras. */
+    public static void diagFrame(net.minecraft.client.Minecraft mc) {
+        if (diagStage == 0) {
+            if (mc.currentScreen == null) return;
+            diagStage = 1;
+            Opts.renderChunks = 24;
+            Opts.syncLegacyRenderDistance(mc.gameSettings, 24);
+            Opts.lodEnabled = true;
+            Opts.lodChunks = 128;
+            try {
+                try {
+                    mc.playerController = new net.minecraft.src.PlayerControllerSP(mc);
+                } catch (IllegalStateException demoMode) {
+                    Class<?> demo = Class.forName(SRC.replace('/', '.') + "PlayerControllerDemo");
+                    mc.playerController = (net.minecraft.src.PlayerController) demo.getConstructor(net.minecraft.client.Minecraft.class).newInstance(mc);
+                }
+                startWorldCompat(mc, "diag_world", "Diag", 12345L);
+                mc.displayGuiScreen(null);
+            } catch (Throwable t) {
+                throw new RuntimeException(t);
+            }
+            return;
+        }
+        if (mc.theWorld == null || mc.thePlayer == null) return;
+        diagTicks++;
+        var p = mc.thePlayer;
+        p.posY = 108.0; p.prevPosY = 108.0; p.lastTickPosY = 108.0;
+        p.motionY = 0; p.rotationPitch = p.prevRotationPitch = 8.0F;
+        boolean ready = diagTicks >= 180 && ((dev.betavk.lod.LodEngine.drawnLastFrame > 0 && dev.betavk.lod.LodEngine.jobsWaiting() == 0) || diagTicks >= 600);
+        if (ready && diagShotTick < 0) {
+            diagShotTick = diagTicks + 2;
+            String shot = System.getProperty("betavk.test.shot");
+            if (shot != null) dev.betavk.platform.Display.captureNextFrame(shot);
+            return;
+        }
+        if (diagShotTick > 0 && diagTicks >= diagShotTick) {
+            var rg = mc.renderGlobal;
+            var wrs = rg.worldRenderers;
+            int initCnt = 0, drawnCnt = 0, maxCheb = 0;
+            int pcx = ((int) Math.floor(p.posX)) >> 4, pcz = ((int) Math.floor(p.posZ)) >> 4;
+            if (wrs != null) {
+                for (var wr : wrs) {
+                    if (wr.isInitialized) {
+                        initCnt++;
+                        if (!wr.skipAllRenderPasses()) drawnCnt++;
+                        int cheb = Math.max(Math.abs((wr.posX >> 4) - pcx), Math.abs((wr.posZ >> 4) - pcz));
+                        if (cheb > maxCheb) maxCheb = cheb;
+                    }
+                }
+            }
+            int minLod = dev.betavk.lod.LodEngine.minDrawnCheb(pcx, pcz);
+            System.out.println("[diag] rc=" + Opts.renderChunks
+                    + " WxD=" + rg.renderChunksWide + "x" + rg.renderChunksDeep
+                    + " wrs=" + (wrs == null ? 0 : wrs.length)
+                    + " initWR=" + initCnt + " nonEmptyWR=" + drawnCnt + " maxRealCheb=" + maxCheb
+                    + " far=" + mc.entityRenderer.farPlaneDistance
+                    + " lodDrawn=" + dev.betavk.lod.LodEngine.drawnLastFrame
+                    + " minLodCheb=" + minLod
+                    + " jobs=" + dev.betavk.lod.LodEngine.jobsWaiting()
+                    + " ticks=" + diagTicks);
+            mc.shutdown();
+        }
+    }
+
     /** Cross-version UI + in-world smoke test (Options, Video, Controls, Audio, World, LOD, movement, item use, inventory, Vulkan). */
     public static void compatFrame(net.minecraft.client.Minecraft mc) {
         if (compatStage == 0) {
@@ -525,6 +591,27 @@ public final class McCompat {
         static String get(World w, int bx, int bz) {
             return w.getWorldChunkManager().getBiomeGenAt(bx, bz).biomeName;
         }
+    }
+
+    private static final Field CLOUD_FOG_FIELD;
+    static {
+        Field cf = null;
+        try { cf = net.minecraft.src.EntityRenderer.class.getField("cloudFog"); } catch (Throwable ignored) {}
+        CLOUD_FOG_FIELD = cf;
+    }
+
+    public static boolean isOpenAirFog(net.minecraft.client.Minecraft mc, net.minecraft.src.EntityRenderer er, int fogMode) {
+        if (mc == null || mc.theWorld == null || fogMode < 0 || fogMode == 999 || isNether(mc.theWorld)) return false;
+        if (CLOUD_FOG_FIELD != null) {
+            try { if (CLOUD_FOG_FIELD.getBoolean(er)) return false; } catch (Throwable ignored) {}
+        }
+        net.minecraft.src.EntityLiving view = renderViewEntity(mc);
+        if (view == null) return false;
+        if (view.isInsideOfMaterial(net.minecraft.src.Material.water) || view.isInsideOfMaterial(net.minecraft.src.Material.lava)) {
+            return false;
+        }
+        if (HAS_WORLD_SETTINGS && view.posY < 16.0) return false;   // preserve b1.8+ bedrock void fog
+        return true;
     }
 
     public static boolean isTileHit(net.minecraft.src.MovingObjectPosition hit) {

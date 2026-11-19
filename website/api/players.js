@@ -16,10 +16,11 @@ const MAX_GET_PER_IP = 60;
 const MAX_BODY_BYTES = 1024;
 const ALLOWED_CHIPS = new Set(['M1', 'M2', 'M3', 'M4', 'M5', 'Apple Silicon']);
 const VERSION_RE = /^v?\d{1,3}\.\d{1,3}(?:\.\d{1,3})?(?:-[a-zA-Z0-9.]{1,12})?$/;
+const GAME_VERSION_RE = /^(?:[ab]\d\.\d+(?:\.\d+)?(?:_[0-9]{2}|-[a-zA-Z0-9._-]{1,12})?|inf-[0-9]{8}(?:-[0-9]{4})?|in-[0-9]{6}(?:-[0-9]+)?|custom)$/;
 
 const mem = globalThis.__silicaStats || (globalThis.__silicaStats = {
   salt: crypto.randomBytes(16),
-  sessions: new Map(),   // id -> { ts, playing, backend, version, chip }
+  sessions: new Map(),   // id -> { ts, playing, backend, version, gameVersion, chip }
   buckets: new Map(),    // hourEpoch -> { online: Set, playing: Set }
   rates: new Map(),      // ephemeral key -> { resetAt, count }
   getCache: null,        // { expiresAt, payload, persisted }
@@ -42,6 +43,12 @@ function cleanVersion(raw) {
   const s = raw.trim();
   if (s === 'dev' || VERSION_RE.test(s)) return s;
   return null;
+}
+
+function cleanGameVersion(raw) {
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim();
+  return GAME_VERSION_RE.test(s) ? s : null;
 }
 
 function hashedClientKey(req) {
@@ -160,6 +167,7 @@ module.exports = async (req, res) => {
   const backend = body.backend === 'gl' ? 'gl' : 'vulkan';
   const chip = cleanChip(body.chip);
   const version = cleanVersion(body.version);
+  const gameVersion = cleanGameVersion(body.gameVersion);
 
   try {
     if (cfg) {
@@ -170,7 +178,7 @@ module.exports = async (req, res) => {
         else cmds.push(['ZREM', 'silica:playing', id]);
 
         cmds.push(['ZADD', 'silica:dau', String(now), id]);
-        cmds.push(['HSET', `silica:meta:${id}`, 'b', backend, ...(chip ? ['c', chip] : []), ...(version ? ['v', version] : [])]);
+        cmds.push(['HSET', `silica:meta:${id}`, 'b', backend, ...(chip ? ['c', chip] : []), ...(version ? ['v', version] : []), ...(gameVersion ? ['gv', gameVersion] : [])]);
         cmds.push(['EXPIRE', `silica:meta:${id}`, '86400']);
 
         const hKeyOn = `silica:h:${curHour}:on`;
@@ -222,6 +230,7 @@ module.exports = async (req, res) => {
       const backends = { vulkan: 0, gl: 0 };
       const chips = {};
       const versions = {};
+      const gameVersions = {};
       if (dauIds.length > 0) {
         const metaCmds = dauIds.map(sid => ['HGETALL', `silica:meta:${sid}`]);
         const metaOut = await redisPipeline(cfg, metaCmds);
@@ -230,17 +239,18 @@ module.exports = async (req, res) => {
           if (kv.b === 'vulkan' || kv.b === 'gl') backends[kv.b]++;
           if (kv.c) chips[kv.c] = (chips[kv.c] || 0) + 1;
           if (kv.v) versions[kv.v] = (versions[kv.v] || 0) + 1;
+          if (kv.gv) gameVersions[kv.gv] = (gameVersions[kv.gv] || 0) + 1;
         }
       }
 
-      const payload = { online, playing: playingCnt, dau, persisted: true, history, backends, chips, versions };
+      const payload = { online, playing: playingCnt, dau, persisted: true, history, backends, chips, versions, gameVersions };
       mem.getCache = { expiresAt: now + GET_CACHE_MS, payload, persisted: true };
       return res.status(200).json(payload);
     }
 
     // In-memory fallback (dev / unlinked Redis)
     if (id) {
-      mem.sessions.set(id, { ts: now, playing, backend, chip, version });
+      mem.sessions.set(id, { ts: now, playing, backend, chip, version, gameVersion });
       let bucket = mem.buckets.get(curHour);
       if (!bucket) { bucket = { online: new Set(), playing: new Set() }; mem.buckets.set(curHour, bucket); }
       bucket.online.add(id);
@@ -254,6 +264,7 @@ module.exports = async (req, res) => {
     const backends = { vulkan: 0, gl: 0 };
     const chips = {};
     const versions = {};
+    const gameVersions = {};
 
     for (const [k, s] of mem.sessions.entries()) {
       if (s.ts < dayCutoff) { mem.sessions.delete(k); continue; }
@@ -265,6 +276,7 @@ module.exports = async (req, res) => {
       if (s.backend === 'vulkan' || s.backend === 'gl') backends[s.backend]++;
       if (s.chip) chips[s.chip] = (chips[s.chip] || 0) + 1;
       if (s.version) versions[s.version] = (versions[s.version] || 0) + 1;
+      if (s.gameVersion) gameVersions[s.gameVersion] = (gameVersions[s.gameVersion] || 0) + 1;
     }
 
     for (const h of mem.buckets.keys()) if (h < curHour - 24) mem.buckets.delete(h);
@@ -275,10 +287,10 @@ module.exports = async (req, res) => {
       history.push({ hour: h * HOUR_MS, online: b ? b.online.size : 0, playing: b ? b.playing.size : 0 });
     }
 
-    const payload = { online, playing: playingCnt, dau, persisted: false, history, backends, chips, versions };
+    const payload = { online, playing: playingCnt, dau, persisted: false, history, backends, chips, versions, gameVersions };
     mem.getCache = { expiresAt: now + GET_CACHE_MS, payload, persisted: false };
     return res.status(200).json(payload);
   } catch (err) {
-    return res.status(200).json({ online: 0, playing: 0, dau: 0, persisted: false, history: [], backends: { vulkan: 0, gl: 0 }, chips: {}, versions: {} });
+    return res.status(200).json({ online: 0, playing: 0, dau: 0, persisted: false, history: [], backends: { vulkan: 0, gl: 0 }, chips: {}, versions: {}, gameVersions: {} });
   }
 };

@@ -122,6 +122,12 @@ public final class IntKeyMap<V> extends AbstractMap<Integer, V> {
         return size;
     }
 
+    public void forEachValue(java.util.function.Consumer<V> action) {
+        for (int i = 0; i < vals.length; i++) {
+            if (vals[i] != null) action.accept(cast(vals[i]));
+        }
+    }
+
     @Override public Set<Entry<Integer, V>> entrySet() {
         java.util.LinkedHashMap<Integer, V> copy = new java.util.LinkedHashMap<>();
         for (int i = 0; i < keys.length; i++) if (vals[i] != null) copy.put(keys[i], cast(vals[i]));

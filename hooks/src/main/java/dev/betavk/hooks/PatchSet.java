@@ -41,6 +41,9 @@ public final class PatchSet implements dev.betavk.agent.PatchSet {
                 .onReturn("?getFOVModifier", "(F)F", zoom, "fov")
                 .onReturn("?getFOVModifier", "(FZ)F", zoom, "fov")
                 .afterFieldSet("setupCameraTransform", "(FI)V", SRC + "EntityRenderer", "farPlaneDistance", loop, "applyFarPlane")
+                .atEnd("?setupFog", "(IF)V", loop, "applyFog")
+                .atEnd("?setupFog", "(I)V", loop, "applyFog1")
+                .atEnd("?func_4140_a", "(I)V", loop, "applyFog1")
                 .redirectCall("?renderWorld", "(FJ)V", SRC + "RenderGlobal", "sortAndRender", "(L" + SRC + "EntityLiving;ID)I", false, lodHooks, "sortAndRender")
                 .redirectCall("?renderWorld", "(FJ)V", SRC + "RenderGlobal", "renderAllRenderLists", "(ID)V", false, lodHooks, "renderAllRenderLists")
                 .redirectCall("?renderWorld", "(F)V", SRC + "RenderGlobal", "sortAndRender", "(L" + SRC + "EntityLiving;ID)I", false, lodHooks, "sortAndRender")
@@ -76,6 +79,8 @@ public final class PatchSet implements dev.betavk.agent.PatchSet {
                     .replaceBody("?updateRenderers", "(L" + SRC + "EntityLiving;Z)Z", am, "updateRenderers")
                     .replaceBody("?updateRenderers", "(L" + SRC + "EntityPlayer;Z)Z", am, "updateRenderersPlayer");
             r.on(SRC + "WorldRenderer").atStart("setDontDraw", "()V", am, "retarget");
+        } else {
+            rgPatch.replaceInt("updateRenderers", "(L" + SRC + "EntityLiving;Z)Z", 2, 1, am, "farBudget");
         }
         r.on(SRC + "ClippingHelper")
                 .replaceBody("isBoxInFrustum", "(DDDDDD)Z", "dev/betavk/hooks/mesh/CaveCull", "fastBoxInFrustum");
@@ -118,7 +123,11 @@ public final class PatchSet implements dev.betavk.agent.PatchSet {
         if (PatchRegistry.hasClass(SRC + "ChunkProviderLoadOrGenerate")) {
             r.on(SRC + "ChunkProviderLoadOrGenerate")
                     .atStartReturnIfNotNull("provideChunk", "(II)L" + SRC + "Chunk;", wh, "provideLoadOrGenFast")
-                    .onReturn("provideChunk", "(II)L" + SRC + "Chunk;", wh, "cacheLoadOrGenChunk");
+                    .onReturn("provideChunk", "(II)L" + SRC + "Chunk;", wh, "cacheLoadOrGenChunk")
+                    .replaceBody("chunkExists", "(II)Z", wh, "loadOrGenExistsFast")
+                    .replaceBody("?canChunkExist", "(II)Z", wh, "allowChunk")
+                    .replaceBody("?func_21111_d", "(II)Z", wh, "allowChunk")
+                    .atStart("saveChunks", "(ZL" + SRC + "IProgressUpdate;)Z", wh, "flushLoadOrGenDirty");
         }
         if (PatchRegistry.hasClass(SRC + "McRegionChunkLoader")) {
             r.on(SRC + "McRegionChunkLoader")

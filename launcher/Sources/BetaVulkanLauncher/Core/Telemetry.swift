@@ -15,6 +15,7 @@ final class Telemetry {
     private var enabled = true
     private var playing = false
     private var backend = "vulkan"
+    private var gameVersion = "b1.7.3"
     private var playingActivity: NSObjectProtocol?
 
     init() {
@@ -40,10 +41,11 @@ final class Telemetry {
         return "Apple Silicon"
     }
 
-    func start(enabled: Bool, playing: Bool, backend: String) {
+    func start(enabled: Bool, playing: Bool, backend: String, gameVersion: String = "b1.7.3") {
         self.enabled = enabled
         self.playing = playing
         self.backend = backend
+        self.gameVersion = gameVersion
         syncAppNapAssertion()
         let args = CommandLine.arguments
         if args.contains("--snapshots") || args.contains("--selftest") { return }
@@ -58,11 +60,12 @@ final class Telemetry {
         }
     }
 
-    func update(enabled: Bool, playing: Bool, backend: String) {
-        let changed = (self.enabled != enabled) || (self.playing != playing) || (self.backend != backend)
+    func update(enabled: Bool, playing: Bool, backend: String, gameVersion: String = "b1.7.3") {
+        let changed = (self.enabled != enabled) || (self.playing != playing) || (self.backend != backend) || (self.gameVersion != gameVersion)
         self.enabled = enabled
         self.playing = playing
         self.backend = backend
+        self.gameVersion = gameVersion
         syncAppNapAssertion()
         let args = CommandLine.arguments
         if changed, enabled, !args.contains("--snapshots"), !args.contains("--selftest") {
@@ -94,6 +97,7 @@ final class Telemetry {
             "state": playing ? "playing" : "launcher",
             "backend": backend,
             "version": UpdateManager.currentVersionText,
+            "gameVersion": gameVersion,
             "chip": chipFamily,
             "macos": macosMajor
         ]

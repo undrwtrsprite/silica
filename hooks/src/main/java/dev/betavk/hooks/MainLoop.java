@@ -69,6 +69,29 @@ public final class MainLoop {
         er.farPlaneDistance = dev.betavk.lod.LodEngine.effectiveFarPlane(er.mc, realFar);
     }
 
+    /** atEnd of EntityRenderer.setupFog(int, float): ease linear fog back when wide render distances or LODs are active. */
+    public static void applyFog(net.minecraft.src.EntityRenderer er, int fogMode, float partialTicks) {
+        applyFog1(er, fogMode);
+    }
+
+    /** atEnd of EntityRenderer.setupFog(int) / func_4140_a(int): Alpha/early-Beta 1-arg fog adjustment. */
+    public static void applyFog1(net.minecraft.src.EntityRenderer er, int fogMode) {
+        if (!McCompat.isOpenAirFog(er.mc, er, fogMode)) return;
+        float far = er.farPlaneDistance;
+        if (dev.betavk.lod.LodEngine.isActive(er.mc)) {
+            float realFar = Opts.effectiveFarPlane(er.mc.gameSettings);
+            dev.betavk.render.Gfx.glFogf(0xB63, Math.max(realFar * 0.65F, far * 0.72F));
+            dev.betavk.render.Gfx.glFogf(0xB64, far * 1.02F);
+        } else {
+            int chunks = Opts.effectiveChunks(er.mc.gameSettings);
+            if (chunks > 12) {
+                float startRatio = Math.min(0.65F, 0.25F + (chunks - 12) * 0.025F);
+                dev.betavk.render.Gfx.glFogf(0xB63, far * startRatio);
+                dev.betavk.render.Gfx.glFogf(0xB64, far);
+            }
+        }
+    }
+
     /** afterFieldSet / replaceBody of Minecraft.func_28001_B: the paid-account check talked to a login server that no longer exists. */
     public static void paidCheck(Minecraft mc) {
         Minecraft.hasPaidCheckTime = 0L;
@@ -122,6 +145,7 @@ public final class MainLoop {
         if (Bench.ENABLED) Bench.frame(mc);
         if ("boot".equals(System.getProperty("betavk.test"))) McCompat.bootFrame(mc);
         else if ("compat".equals(System.getProperty("betavk.test"))) McCompat.compatFrame(mc);
+        else if ("diag".equals(System.getProperty("betavk.test"))) McCompat.diagFrame(mc);
         else if (System.getProperty("betavk.test") != null) TestHarness.frame(mc);
         if (Display.wasResized()) {
             mc.displayWidth = Math.max(1, Display.getWidth());

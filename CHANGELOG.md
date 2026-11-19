@@ -4,6 +4,13 @@
 
 Every migrated or rewritten class is listed below alongside release history.
 
+## v0.3.1 — Seamless Updates, 128-Chunk LOD Visibility Across Eras & Multi-Version Online Counter
+
+- **No more Setup popup on updates (`InstallManager`, `AppState`, `PlayView`):** Added automatic migration of legacy v0.2.x root jars (`client.jar`, `readable.jar`, `resources/`) into `versions/b1.7.3/`, gated first-run setup and launch readiness on `baseReady` (`jdk && client && assets`), kept existing `client.jar` intact when re-running setup, and let `Play` silently re-prepare missing or bumped version jars.
+- **Wide render distances across Alpha, early Beta & experimental builds (`WorldHooks`, `PatchSet`, `Boot`):** Fixed `ChunkProviderLoadOrGenerate.chunkExists` 32-chunk ring wraparound aliasing, unlocked and safely bounded `canChunkExist` / `func_21111_d` past 15 chunks (`effectiveChunks + 4` in-world, `15` during initial spawn preload to prevent cascade OOM), flushed evicted cached chunks in `saveChunks`, sped up `b1.8`/`b1.8.1` `updateRenderers`, and enabled legacy merge sort for Infdev/Alpha `EntitySorter` comparators.
+- **Crisp 128-chunk LODs & eased fog across every version (`MainLoop`, `McCompat`, `LodEngine`, `LodChunkSource`):** Eased open-air `GL_FOG_START` / `GL_FOG_END` across all 1-arg and 2-arg `setupFog` / `func_4140_a` signatures when LODs or wide distances (`> 12` chunks) are active, removed the `jobs.size() < 512` gate that starved LOD meshing at 128 chunks (`DATA_QUEUE_CAP` raised to `8192`), and added Infdev `replaceBlocks` lookup in `LegacyGen`.
+- **Multi-version live player counter (`Telemetry`, `api/players.js`, `players.html`, `site.js`):** Anonymous heartbeats now include the active Golden Age version (`"custom"` for modded jars, keeping custom names private) with a live **Versions played** breakdown on [silicalauncher.xyz/players](https://silicalauncher.xyz/players).
+
 ## v0.3.0 — Golden Age Engine: Unified Alpha–Beta, Bugfixes & Experimental Infdev / Beta 1.8
 
 - **Unified Golden Age Engine (`Canonicalizer`, `PatchSet`, `McCompat`, `PatchRegistry`):** Fixed all remaining mapping, bytecode hook, options/sliders, movement (`b1.6`, `b1.8`), inventory (`CompatGuiInventory`), infinite lighting (`a1.0.16`/`a1.0.17_02`), audio slider linking (`a1.0.10–a1.0.13_01`), bed sleep (`b1.3_01`/`b1.3-demo`), stack memory (`MemoryStack`), and instant fullscreen bugs across all **61 Alpha 1.0–Beta 1.7.3** versions (`bad=0` verified on Vulkan).

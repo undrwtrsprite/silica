@@ -1091,7 +1091,8 @@
     const els = {
       on: $('#pl-online'), pl: $('#pl-playing'), dau: $('#pl-dau'),
       status: $('#pl-status'), chart: $('#pl-chart'), hover: $('#pl-hover'),
-      peak: $('#pl-peak'), backends: $('#pl-backends'), chips: $('#pl-chips'), versions: $('#pl-versions')
+      peak: $('#pl-peak'), backends: $('#pl-backends'), chips: $('#pl-chips'),
+      versions: $('#pl-versions'), gameVersions: $('#pl-game-versions')
     };
     let latest = null, hoverIdx = -1;
 
@@ -1197,6 +1198,16 @@
           renderBars(els.backends, d.backends, { vulkan: 'Vulkan (MoltenVK)', gl: 'OpenGL 2.1' });
           renderBars(els.chips, d.chips);
           renderBars(els.versions, d.versions);
+          if (els.gameVersions) {
+            const gvLabels = { custom: 'Custom jar' };
+            for (const k of Object.keys(d.gameVersions || {})) {
+              if (k === 'custom') continue;
+              if (k.startsWith('b')) gvLabels[k] = `Beta ${k.slice(1)}`;
+              else if (k.startsWith('a')) gvLabels[k] = `Alpha ${k.slice(1)}`;
+              else if (k.startsWith('inf-')) gvLabels[k] = `Infdev ${k.slice(4)}`;
+            }
+            renderBars(els.gameVersions, d.gameVersions, gvLabels);
+          }
           drawChart();
         }).catch(() => {});
     };

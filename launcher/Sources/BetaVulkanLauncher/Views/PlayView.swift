@@ -12,7 +12,7 @@ struct PlayView: View {
     let pointer: CGPoint
     let viewportHeight: CGFloat
 
-    private var ready: Bool { install.ready && state.stageReady }
+    private var ready: Bool { install.baseReady && state.stageReady }
     private var instance: GameInstance { state.activeInstance }
     private var effective: Settings { state.activeSettings }
     private var activeJar: CustomJar? { instance.jarID.flatMap { jars.jar($0) } }

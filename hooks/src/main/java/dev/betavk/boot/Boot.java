@@ -32,6 +32,7 @@ public final class Boot extends Minecraft {
     }
 
     public static void main(String[] args) {
+        System.setProperty("java.util.Arrays.useLegacyMergeSort", "true");
         String user = null, session = "-", server = null;
         for (int i = 0; i < args.length; i++) {
             String a = args[i];

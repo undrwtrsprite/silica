@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"></noscript>
-<link rel="stylesheet" href="silica.css?v=8">
+<link rel="stylesheet" href="silica.css?v=9">
 <script>document.documentElement.classList.add('js')</script>
 <script type="module">
   import { inject } from "https://cdn.jsdelivr.net/npm/@vercel/analytics@2.0.1/dist/index.mjs";
@@ -49,7 +49,7 @@
   </nav>
   <div class="bar-actions">
     <a class="gh-link" href="https://github.com/undrwtrsprite/silica" aria-label="Silica on GitHub"><svg class="ico fill" aria-hidden="true"><use href="#i-gh"/></svg><span>GitHub</span></a>
-    <a class="btn primary sm" href="https://github.com/undrwtrsprite/silica/releases/download/v0.3.0/Silica-0.3.0.dmg" download>Download</a>
+    <a class="btn primary sm" href="https://github.com/undrwtrsprite/silica/releases/download/v0.3.1/Silica-0.3.1.dmg" download>Download</a>
   </div>
 </header>
 
@@ -111,12 +111,17 @@
           <h3>Launcher builds</h3>
           <div class="pl-bars" id="pl-versions"></div>
         </article>
+        <article class="pl-bcard card">
+          <span class="kicker"><b>05</b> / Minecraft</span>
+          <h3>Versions played</h3>
+          <div class="pl-bars" id="pl-game-versions"></div>
+        </article>
       </div>
 
       <div class="banner card" style="margin-top:24px" data-r>
         <div>
           <h3>Completely anonymous by design.</h3>
-          <p class="fine" style="margin-top:6px">Each launcher picks a random local ID and sends only state, renderer, version, and chip family. Toggle <b>Share anonymous player count</b> off anytime in Settings.</p>
+          <p class="fine" style="margin-top:6px">Each launcher picks a random local ID and sends only state, renderer, launcher version, game version, and chip family. Toggle <b>Share anonymous player count</b> off anytime in Settings.</p>
         </div>
         <a class="textlink go" href="/privacy">Read the privacy policy <svg class="ico" aria-hidden="true"><use href="#i-right"/></svg></a>
       </div>
@@ -136,6 +141,6 @@
   </div>
   <div class="legal"><span>Not affiliated with Mojang or Microsoft. Minecraft is a trademark of Mojang Synergies AB.</span><span>Silica ships no Mojang files.</span></div>
 </footer>
-<script src="site.js?v=6" defer></script>
+<script src="site.js?v=7" defer></script>
 </body>
 </html>

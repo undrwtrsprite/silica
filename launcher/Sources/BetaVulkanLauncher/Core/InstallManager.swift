@@ -69,12 +69,14 @@ final class InstallManager: ObservableObject {
     }
 
     var javaPath: URL? { Self.findJava() }
-    var ready: Bool { jdk.isDone && client.isDone && prepared.isDone && assets.isDone }
+    var baseReady: Bool { jdk.isDone && client.isDone && assets.isDone }
+    var ready: Bool { baseReady && prepared.isDone }
 
     init() { refresh() }
 
     /// Re-check what is already on disk (cheap; no network).
     func refresh() {
+        migrateLegacyFiles()
         if let java = Self.findJava() {
             jdk = .done("Java at \(java.deletingLastPathComponent().deletingLastPathComponent().lastPathComponent)")
         } else { jdk = .pending }
@@ -83,6 +85,37 @@ final class InstallManager: ObservableObject {
             ? .done("readable jar present") : .pending
         let index = AppPaths.assets.appendingPathComponent("indexes/b1.7.json")
         assets = FileManager.default.fileExists(atPath: index.path) ? .done("asset index present") : .pending
+    }
+
+    /// Moves v0.2.x root files (`client.jar`, `readable.jar`, `resources/`) into `versions/b1.7.3/` so updates never trigger first-run setup.
+    @discardableResult
+    static func migrateLegacyFiles(in support: URL = AppPaths.support) -> Bool {
+        let fm = FileManager.default
+        let dstDir = support.appendingPathComponent("versions/b1.7.3", isDirectory: true)
+        let dstClient = dstDir.appendingPathComponent("client.jar")
+        let dstReadable = dstDir.appendingPathComponent("readable.jar")
+        let dstResources = dstDir.appendingPathComponent("resources", isDirectory: true)
+        let legacyClient = support.appendingPathComponent("client.jar")
+        let legacyReadable = support.appendingPathComponent("readable.jar")
+        let legacyResources = support.appendingPathComponent("resources", isDirectory: true)
+        var moved = false
+        if fm.fileExists(atPath: legacyClient.path), !fm.fileExists(atPath: dstClient.path) {
+            AppPaths.ensure(dstDir)
+            if (try? fm.moveItem(at: legacyClient, to: dstClient)) != nil { moved = true }
+        }
+        if fm.fileExists(atPath: legacyReadable.path), !fm.fileExists(atPath: dstReadable.path) {
+            AppPaths.ensure(dstDir)
+            if (try? fm.moveItem(at: legacyReadable, to: dstReadable)) != nil { moved = true }
+        }
+        if fm.fileExists(atPath: legacyResources.path), !fm.fileExists(atPath: dstResources.path) {
+            AppPaths.ensure(dstDir)
+            if (try? fm.moveItem(at: legacyResources, to: dstResources)) != nil { moved = true }
+        }
+        return moved
+    }
+
+    private func migrateLegacyFiles() {
+        Self.migrateLegacyFiles(in: AppPaths.support)
     }
 
     static func findJava() -> URL? {

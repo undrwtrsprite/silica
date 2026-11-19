@@ -35,7 +35,7 @@ public final class LodEngine {
     private static final int UPLOAD_BUDGET_INTS = Integer.getInteger("betavk.lodbudget", 800_000);
     private static final long MAX_CACHE_BYTES = (long) Integer.getInteger("betavk.lodcachemb", 96) << 20;
     private static final int GPU_EVICT_FRAMES = 900;
-    private static final int DATA_QUEUE_CAP = 2048;
+    private static final int DATA_QUEUE_CAP = 8192;
 
     private record Job(boolean mesh, LodNode node, int prio, int epoch, int version) {
     }
@@ -760,7 +760,7 @@ public final class LodEngine {
                     || n.bakedFancy != fancy
                     || n.bakedBetterGrass != betterGrass
                     || (nbMask & ~n.bakedNeighborMask) != 0;
-            if (needsMesh && !n.queuedMesh && meshQueued < 64 && jobs.size() < 512 && done.size() < 128) {
+            if (needsMesh && !n.queuedMesh && meshQueued < 64 && done.size() < 128) {
                 n.queuedMesh = true;
                 double cx = ox + size * 0.5 - camX, cz = oz + size * 0.5 - camZ;
                 int dist = (int) Math.hypot(cx, cz);
@@ -772,7 +772,7 @@ public final class LodEngine {
             if (n.transList >= 0) visibleTrans.add(n);
         }
 
-        for (int i = 0, psz = pendingMesh.size(); i < psz && meshQueued < 64 && jobs.size() < 512 && done.size() < 128; i++) {
+        for (int i = 0, psz = pendingMesh.size(); i < psz && meshQueued < 64 && done.size() < 128; i++) {
             LodNode n = pendingMesh.get(i);
             if (!n.dataReady || n.queuedMesh || n.opaqueList >= 0) continue;
             double size = n.span * 16.0;

@@ -68,7 +68,7 @@ final class AppState: ObservableObject {
     init() {
         settings = Settings.load()
         instances.syncLegacyJars(jars)
-        wizardOpen = !(install.ready && GameRunner.stageConfig(settings.stageDir) != nil)
+        wizardOpen = !(install.baseReady && GameRunner.stageConfig(settings.stageDir) != nil)
         refreshWorlds()
         benchRuns = BenchmarkStore.runs()
         if let demo = ProcessInfo.processInfo.environment["SILICA_DEMO_PLAYER"] {
@@ -78,16 +78,22 @@ final class AppState: ObservableObject {
             activateActiveAccount()
         }
         if install.ready && stageReady { Task { [self] in await jars.recheckStale(stageDir: settings.stageDir, java: install.javaPath) } }
-        telemetry.start(enabled: settings.shareAnonymousCount != false, playing: runner.isRunning, backend: activeSettings.backend.rawValue)
+        telemetry.start(enabled: settings.shareAnonymousCount != false, playing: runner.isRunning, backend: activeSettings.backend.rawValue, gameVersion: telemetryGameVersion)
         runner.$isRunning.sink { [weak self] running in
             guard let self else { return }
-            self.telemetry.update(enabled: self.settings.shareAnonymousCount != false, playing: running, backend: self.activeSettings.backend.rawValue)
+            self.telemetry.update(enabled: self.settings.shareAnonymousCount != false, playing: running, backend: self.activeSettings.backend.rawValue, gameVersion: self.telemetryGameVersion)
         }.store(in: &telemetryCancellables)
         $settings.sink { [weak self] next in
             guard let self else { return }
-            let eff = self.instances.effectiveSettings(next, for: self.instances.instance(for: next.instanceID))
-            self.telemetry.update(enabled: next.shareAnonymousCount != false, playing: self.runner.isRunning, backend: eff.backend.rawValue)
+            let inst = self.instances.instance(for: next.instanceID)
+            let eff = self.instances.effectiveSettings(next, for: inst)
+            let gv = inst.jarID != nil ? "custom" : inst.effectiveVersionID
+            self.telemetry.update(enabled: next.shareAnonymousCount != false, playing: self.runner.isRunning, backend: eff.backend.rawValue, gameVersion: gv)
         }.store(in: &telemetryCancellables)
+    }
+
+    private var telemetryGameVersion: String {
+        activeInstance.jarID != nil ? "custom" : activeInstance.effectiveVersionID
     }
 
     var activeInstance: GameInstance { instances.instance(for: settings.instanceID) }
@@ -101,7 +107,7 @@ final class AppState: ObservableObject {
     }
 
     var stageReady: Bool { GameRunner.stageConfig(settings.stageDir) != nil }
-    var canPlay: Bool { player?.isValid == true && install.ready && stageReady && !runner.isRunning && !benchBusy }
+    var canPlay: Bool { player?.isValid == true && install.baseReady && stageReady && !runner.isRunning && !benchBusy }
 
     /// Signs in with Microsoft and saves the account; it becomes the active one. Used both for the first account and for "Add account".
     func signInWithMicrosoft() {
@@ -252,6 +258,7 @@ final class AppState: ObservableObject {
             if chosen == nil {
                 do {
                     try await versions.prepareIfNeeded(instance.effectiveVersionID, java: java, stageDir: launchSettings.stageDir)
+                    install.refresh()
                 } catch {
                     versions.busyMessage = nil
                     message = error.localizedDescription
@@ -298,7 +305,9 @@ final class AppState: ObservableObject {
         guard let player, player.isValid, !install.busy else { return }
         install.stageDir = settings.stageDir
         install.clientSource = source
-        install.client = .pending
+        if case .local = source {
+            install.client = .pending
+        }
         Task { [self] in
             await install.installAll(player: player)
             // a jar chosen in the setup is added once the original game is in place (the check compares against it)

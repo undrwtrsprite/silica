@@ -75,4 +75,25 @@ final class VersionCatalogTests: XCTestCase {
             "inf-20100630-1340",
         ])
     }
+
+    @MainActor
+    func testLegacyInstallMigrationMovesRootClientAndResourcesIntoVersionDir() throws {
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        try Data("client".utf8).write(to: tmp.appendingPathComponent("client.jar"))
+        try Data("readable".utf8).write(to: tmp.appendingPathComponent("readable.jar"))
+        let res = tmp.appendingPathComponent("resources", isDirectory: true)
+        try FileManager.default.createDirectory(at: res, withIntermediateDirectories: true)
+        try Data("png".utf8).write(to: res.appendingPathComponent("terrain.png"))
+
+        XCTAssertTrue(InstallManager.migrateLegacyFiles(in: tmp))
+        let verDir = tmp.appendingPathComponent("versions/b1.7.3", isDirectory: true)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: verDir.appendingPathComponent("client.jar").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: verDir.appendingPathComponent("readable.jar").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: verDir.appendingPathComponent("resources/terrain.png").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: tmp.appendingPathComponent("client.jar").path))
+        XCTAssertFalse(InstallManager.migrateLegacyFiles(in: tmp))
+    }
 }

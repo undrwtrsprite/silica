@@ -86,6 +86,46 @@ public final class WorldHooks {
         return c;
     }
 
+    /** replaceBody of ChunkProviderLoadOrGenerate.chunkExists: check unbounded cache before the 1024-slot ring that aliases beyond +/-15 chunks. */
+    public static boolean loadOrGenExistsFast(net.minecraft.src.ChunkProviderLoadOrGenerate cp, int x, int z) {
+        if (x == cp.lastQueriedChunkXPos && z == cp.lastQueriedChunkZPos && cp.lastQueriedChunk != null) return true;
+        if (loadOrGenCache(cp).getInt((x & 0xFFFF) | ((z & 0xFFFF) << 16)) != null) return true;
+        Chunk slot = cp.chunks[(x & 31) + (z & 31) * 32];
+        return slot != null && (slot == cp.blankChunk || slot.isAtLocation(x, z));
+    }
+
+    /** replaceBody of ChunkProviderLoadOrGenerate.canChunkExist / func_21111_d: unlock wide render distances past 15 chunks while still bounding cascade population. */
+    public static boolean allowChunk(net.minecraft.src.ChunkProviderLoadOrGenerate cp, int x, int z) {
+        Minecraft mc = dev.betavk.hooks.McCompat.minecraft;
+        int pcx, pcz, r;
+        if (mc != null && mc.thePlayer != null && mc.theWorld == cp.worldObj) {
+            pcx = ((int) Math.floor(mc.thePlayer.posX)) >> 4;
+            pcz = ((int) Math.floor(mc.thePlayer.posZ)) >> 4;
+            r = Math.max(15, dev.betavk.hooks.Opts.effectiveChunks(mc.gameSettings) + 4);
+        } else {
+            pcx = dev.betavk.hooks.McCompat.spawnX(cp.worldObj) >> 4;
+            pcz = dev.betavk.hooks.McCompat.spawnZ(cp.worldObj) >> 4;
+            r = 15;
+        }
+        return Math.abs(x - pcx) <= r && Math.abs(z - pcz) <= r;
+    }
+
+    /** atStart of ChunkProviderLoadOrGenerate.saveChunks: save modified cached chunks evicted from the 1024-slot ring. */
+    public static void flushLoadOrGenDirty(net.minecraft.src.ChunkProviderLoadOrGenerate cp, boolean fullSave, net.minecraft.src.IProgressUpdate prog) {
+        if (!fullSave) return;
+        IntKeyMap<Chunk> cache = loadOrGenCaches.get(cp);
+        if (cache == null) return;
+        cache.forEachValue(c -> {
+            if (c == cp.blankChunk) return;
+            if (cp.chunks[(c.xPosition & 31) + (c.zPosition & 31) * 32] == c) return;
+            if (!c.neverSave) cp.saveExtraChunkData(c);
+            if (c.needsSaving(true)) {
+                cp.saveChunk(c);
+                c.isModified = false;
+            }
+        });
+    }
+
     private static final boolean HAS_CHUNK_PROVIDER = dev.betavk.hooks.McCompat.hasClass("net/minecraft/src/ChunkProvider");
 
     /** atStart of Minecraft.runTick. */

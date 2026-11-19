@@ -30,7 +30,7 @@ def draw(scale):
     f = font(S(22), True)
     tw = d.textlength(title, font=f)
     d.text(((w - tw) / 2, S(34)), title, font=f, fill=INK)
-    sub = "Minecraft Beta 1.7.3, native on Apple Silicon"
+    sub = "Golden Age Minecraft & Vulkan, native on Apple Silicon"
     f2 = font(S(13))
     sw = d.textlength(sub, font=f2)
     d.text(((w - sw) / 2, S(68)), sub, font=f2, fill=MUTED)

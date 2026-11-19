@@ -68,7 +68,7 @@ final class TreePlanter {
         BiomeGenBase biome = s[3].corner;
         int x0 = cx * 16, z0 = cz * 16;
         Random r = p.rand;
-        long seed = p.worldObj.getRandomSeed();
+        long seed = dev.betavk.hooks.McCompat.worldSeed(p.worldObj);
         r.setSeed(seed);
         long a = r.nextLong() / 2L * 2L + 1L, b = r.nextLong() / 2L * 2L + 1L;
         r.setSeed((long) cx * a + (long) cz * b ^ seed);

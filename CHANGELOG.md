@@ -4,6 +4,12 @@
 
 Every migrated or rewritten class is listed below alongside release history.
 
+## v0.3.0 — Golden Age Engine: Unified Alpha–Beta, Bugfixes & Experimental Infdev / Beta 1.8
+
+- **Unified Golden Age Engine (`Canonicalizer`, `PatchSet`, `McCompat`, `PatchRegistry`):** Fixed all remaining mapping, bytecode hook, options/sliders, movement (`b1.6`, `b1.8`), inventory (`CompatGuiInventory`), infinite lighting (`a1.0.16`/`a1.0.17_02`), audio slider linking (`a1.0.10–a1.0.13_01`), bed sleep (`b1.3_01`/`b1.3-demo`), stack memory (`MemoryStack`), and instant fullscreen bugs across all **61 Alpha 1.0–Beta 1.7.3** versions (`bad=0` verified on Vulkan).
+- **Experimental Infdev & Beta 1.8 support (`Display`, `Mouse`, `Cursor`, `PixelFormat`, `MainLoop`, `Gfx`):** Added multi-version platform shims (`Mouse.setNativeCursor`, `PixelFormat`, AWT `MouseHelper` fallback), `HAS_WORLD_SETTINGS` / `HAS_LIGHTING_TO_UPDATE` guards, and `KeyBinding` canonicalization so **`inf-20100630-1340`**, **`inf-20100630-1835`**, **`b1.8`**, and **`b1.8.1`** run cleanly on Vulkan behind an opt-in **Experimental** toggle.
+- **Multi-version Golden Age launcher (`VersionCatalog`, `InstanceStore`, `InstancesView`, `PlayView`):** Added correct chronological version ordering, an **Experimental versions** toggle with amber badges in Instances & Play, instance version preservation on duplication, automatic prepared-jar cache invalidation (`prep.version`), and refreshed Golden Age branding and assets.
+
 ## v0.2.1 — Sharp Textured LODs, Disk Cache, Better Grass & Flight
 
 - **True-textured tiled LODs (`gfx.vert`, `gfx.frag`, `VulkanRenderer`):** Hardware-tiled terrain atlas sampling with mip-clamped borders gives distant greedy-merged terrain crisp 1:1 block textures alongside full border tree canopies (`SurfCell`) and coarse cliff grass/snow splitting.

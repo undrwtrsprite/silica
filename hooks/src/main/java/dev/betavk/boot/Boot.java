@@ -23,7 +23,12 @@ public final class Boot extends Minecraft {
     }
 
     @Override public void displayUnexpectedThrowable(UnexpectedThrowable t) {
-        t.exception.printStackTrace();
+        try {
+            // a1.0.1_01..a1.0.3 type this field as Exception instead of Throwable
+            if (UnexpectedThrowable.class.getField("exception").get(t) instanceof Throwable th) {
+                th.printStackTrace();
+            }
+        } catch (Throwable ignored) {}
     }
 
     public static void main(String[] args) {
@@ -49,7 +54,9 @@ public final class Boot extends Minecraft {
         if (user == null) user = "Player" + System.currentTimeMillis() % 1000L;
         Boot mc = new Boot(Integer.getInteger("betavk.width", 854), Integer.getInteger("betavk.height", 480), Boolean.getBoolean("betavk.fullscreen"));
         mc.session = new Session(user, session);
-        mc.minecraftUri = "www.minecraft.net";
+        try {
+            Minecraft.class.getField("minecraftUri").set(mc, "www.minecraft.net");
+        } catch (Throwable ignored) {}
         if (server != null) {
             String[] hp = server.split(":");
             mc.setServer(hp[0], Integer.parseInt(hp[1]));

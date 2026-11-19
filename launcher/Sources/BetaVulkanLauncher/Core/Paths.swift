@@ -11,11 +11,35 @@ enum AppPaths {
         return base.appendingPathComponent("BetaVulkan", isDirectory: true)
     }()
     static var jdk: URL { support.appendingPathComponent("jdk", isDirectory: true) }
-    static var clientJar: URL { support.appendingPathComponent("versions/b1.7.3/client.jar") }
+    static var clientJar: URL { clientJar(for: "b1.7.3") }
     /// Your own jar, remapped to readable names by our prepare tool (derived from Mojang's jar, so it stays on this machine).
-    static var readableJar: URL { support.appendingPathComponent("versions/b1.7.3/readable.jar") }
-    static var resources: URL { support.appendingPathComponent("versions/b1.7.3/resources", isDirectory: true) }
-    /// Extra jars you add (modded Beta 1.7.3 jars), each in its own folder: jars/<id>/{original.jar, readable.jar, resources/, game/}. The original client.jar is never touched.
+    static var readableJar: URL { readableJar(for: "b1.7.3") }
+    static var resources: URL { resources(for: "b1.7.3") }
+    static var versionCatalogCache: URL { support.appendingPathComponent("versions/catalog.json") }
+
+    static func versionDir(_ versionID: String) -> URL {
+        support.appendingPathComponent("versions/\(versionID)", isDirectory: true)
+    }
+
+    static func clientJar(for versionID: String) -> URL {
+        versionDir(versionID).appendingPathComponent("client.jar")
+    }
+
+    static func readableJar(for versionID: String) -> URL {
+        versionDir(versionID).appendingPathComponent("readable.jar")
+    }
+
+    static func resources(for versionID: String) -> URL {
+        versionDir(versionID).appendingPathComponent("resources", isDirectory: true)
+    }
+
+    static func mappings(for versionID: String) -> URL {
+        versionID == "b1.7.3" ? mappings : versionDir(versionID).appendingPathComponent("mappings.tiny")
+    }
+    static func prepStamp(for versionID: String) -> URL {
+        versionDir(versionID).appendingPathComponent("prep.version")
+    }
+    /// Extra jars you add (modded Golden Age client jars), each in its own folder: jars/<id>/{original.jar, readable.jar, resources/, game/}. The original client.jar is never touched.
     static var jars: URL { support.appendingPathComponent("jars", isDirectory: true) }
     static var jarIndex: URL { jars.appendingPathComponent("index.json") }
     /// Isolated game instances, each with its own saves, options, and optional custom jar.

@@ -90,7 +90,7 @@ struct SettingsView: View {
             }
 
             Card(title: "Files and setup") {
-                PathRow(title: "Default Beta 1.7.3 game folder", path: state.settings.gameDir) {
+                PathRow(title: "Default game folder", path: state.settings.gameDir) {
                     state.choose(\.gameDir, message: "Choose the game data folder")
                 }
                 HStack(spacing: 10) {
@@ -120,7 +120,7 @@ struct SettingsView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Silica \(UpdateManager.currentVersionText)").font(.system(size: 14.5, weight: .semibold))
-                        Text("Minecraft Beta 1.7.3 on Apple Silicon with Vulkan rendering. Zero Mojang code or assets bundled.")
+                        Text("Golden Age Minecraft on Apple Silicon — native Vulkan rendering and real-block distant LODs. Zero Mojang code or assets bundled.")
                             .font(.system(size: 12)).foregroundStyle(.secondary)
                     }
                 }

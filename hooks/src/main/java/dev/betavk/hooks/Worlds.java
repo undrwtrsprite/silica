@@ -66,6 +66,11 @@ public final class Worlds {
 
     private static long lastAutosave = System.nanoTime();
 
+    /** atStart of Minecraft.startWorld(folder) on Alpha and early Beta (< b1.3). */
+    public static void startWorld1(Minecraft mc, String folder) {
+        startWorld(mc, folder, folder, 0L);
+    }
+
     /** atStart of Minecraft.startWorld(folder, name, seed). */
     public static void startWorld(Minecraft mc, String folder, String name, long seed) {
         CommandSuggestions.clearHistory();
@@ -150,9 +155,10 @@ public final class Worlds {
         if (b.id != RESUME || !b.enabled) return false;
         Level l = level(Opts.lastWorld);
         Minecraft mc = gm.mc;
-        mc.displayGuiScreen(null);
         mc.playerController = new PlayerControllerSP(mc);
-        mc.startWorld(Opts.lastWorld, l == null || l.name().isBlank() ? Opts.lastWorld : l.name(), 0L);
+        try {
+            McCompat.startWorldCompat(mc, Opts.lastWorld, l == null || l.name().isBlank() ? Opts.lastWorld : l.name(), 0L);
+        } catch (Throwable ignored) {}
         mc.displayGuiScreen(null);
         return true;
     }

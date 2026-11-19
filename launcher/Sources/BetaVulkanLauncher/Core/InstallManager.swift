@@ -208,6 +208,7 @@ final class InstallManager: ObservableObject {
             try? FileManager.default.removeItem(at: resources)
             AppPaths.ensure(resources)
             try await Task.detached { try ProcessRunner.run("/usr/bin/unzip", ["-q", "-o", client.path, "-x", "*.class", "META-INF/*", "-d", resources.path]) }.value
+            try? VersionCatalog.prepFormatVersion.write(to: AppPaths.prepStamp(for: "b1.7.3"), atomically: true, encoding: .utf8)
             prepared = .done("readable jar ready")
         } catch { prepared = .failed(error.localizedDescription) }
     }

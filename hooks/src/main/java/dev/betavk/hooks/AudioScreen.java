@@ -27,7 +27,8 @@ public final class AudioScreen extends GuiScreen {
     }
 
     private static void refresh() {
-        if (net.minecraft.src.SoundManager.sndSystem != null) net.minecraft.src.SoundManager.sndSystem.refreshVolumes();
+        var ss = dev.betavk.audio.AlSoundSystem.active;
+        if (ss != null) ss.refreshVolumes();
     }
 
     @SuppressWarnings("unchecked")
@@ -37,8 +38,14 @@ public final class AudioScreen extends GuiScreen {
             Opts.master = v;
             refresh();
         }, () -> pct("Master Volume", Opts.master)));
-        controlList.add(new GuiSlider(EnumOptions.MUSIC.returnEnumOrdinal(), OptionsScreens.x(this, 1), OptionsScreens.y(this, 0), EnumOptions.MUSIC, options.getKeyBinding(EnumOptions.MUSIC), options.getOptionFloatValue(EnumOptions.MUSIC)));
-        controlList.add(new GuiSlider(EnumOptions.SOUND.returnEnumOrdinal(), OptionsScreens.x(this, 0), OptionsScreens.y(this, 1), EnumOptions.SOUND, options.getKeyBinding(EnumOptions.SOUND), options.getOptionFloatValue(EnumOptions.SOUND)));
+        if (McCompat.HAS_ENUM_OPTIONS) {
+            BetaAudio.addSliders(this, options);
+        } else if (McCompat.hasField(GameSettings.class, "musicVolume")) {
+            LegacyVolumeSliders.addSliders(this, options);
+        } else {
+            controlList.add(new GuiButton(324, OptionsScreens.x(this, 1), OptionsScreens.y(this, 0), 150, 20, McCompat.legacyOptionString(options, 0)));
+            controlList.add(new GuiButton(325, OptionsScreens.x(this, 0), OptionsScreens.y(this, 1), 150, 20, McCompat.legacyOptionString(options, 1)));
+        }
         controlList.add(new SliderButton(321, OptionsScreens.x(this, 1), OptionsScreens.y(this, 1), Opts.ambient, v -> {
             Opts.ambient = v;
             refresh();
@@ -54,6 +61,13 @@ public final class AudioScreen extends GuiScreen {
 
     @Override public void actionPerformed(GuiButton b) {
         if (!b.enabled) return;
+        if (b.id == 324 || b.id == 325) {
+            int opt = b.id - 324;
+            McCompat.legacySetOptionValue(options, opt, 1);
+            b.displayString = McCompat.legacyOptionString(options, opt);
+            options.saveOptions();
+            return;
+        }
         if (b.id == CONTINUOUS_MUSIC) {
             Opts.continuousMusic = !Opts.continuousMusic;
             b.displayString = continuousMusicLabel();
@@ -79,5 +93,27 @@ public final class AudioScreen extends GuiScreen {
         drawDefaultBackground();
         drawCenteredString(fontRenderer, "Music & Sounds", width / 2, 20, 0xFFFFFF);
         super.drawScreen(mx, my, partial);
+    }
+
+    private static final class BetaAudio {
+        @SuppressWarnings("unchecked")
+        static void addSliders(AudioScreen s, GameSettings o) {
+            s.controlList.add(new GuiSlider(EnumOptions.MUSIC.returnEnumOrdinal(), OptionsScreens.x(s, 1), OptionsScreens.y(s, 0), EnumOptions.MUSIC, o.getKeyBinding(EnumOptions.MUSIC), o.getOptionFloatValue(EnumOptions.MUSIC)));
+            s.controlList.add(new GuiSlider(EnumOptions.SOUND.returnEnumOrdinal(), OptionsScreens.x(s, 0), OptionsScreens.y(s, 1), EnumOptions.SOUND, o.getKeyBinding(EnumOptions.SOUND), o.getOptionFloatValue(EnumOptions.SOUND)));
+        }
+    }
+
+    private static final class LegacyVolumeSliders {
+        @SuppressWarnings("unchecked")
+        static void addSliders(AudioScreen s, GameSettings o) {
+            s.controlList.add(new SliderButton(326, OptionsScreens.x(s, 1), OptionsScreens.y(s, 0), o.musicVolume, v -> {
+                o.musicVolume = v;
+                refresh();
+            }, () -> pct("Music", o.musicVolume)));
+            s.controlList.add(new SliderButton(327, OptionsScreens.x(s, 0), OptionsScreens.y(s, 1), o.soundVolume, v -> {
+                o.soundVolume = v;
+                refresh();
+            }, () -> pct("Sound", o.soundVolume)));
+        }
     }
 }

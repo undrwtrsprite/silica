@@ -51,7 +51,9 @@ public final class MeshPool {
 
     /** Only the overworld's plain WorldChunkManager can be duplicated per worker; other dimensions stay synchronous. */
     public static boolean canMesh(World w) {
-        return enabled() && w != null && w.getWorldChunkManager().getClass() == WorldChunkManager.class;
+        if (!enabled() || w == null) return false;
+        if (!dev.betavk.hooks.McCompat.HAS_WORLD_CHUNK_MANAGER) return true;
+        return w.getWorldChunkManager().getClass() == WorldChunkManager.class;
     }
 
     public static void submit(MeshWorker.Job job) {

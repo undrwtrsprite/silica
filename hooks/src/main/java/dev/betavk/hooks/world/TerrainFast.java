@@ -52,10 +52,12 @@ public final class TerrainFast {
                 if (hasPrev && cx == prevCx && cz == prevCz) {
                     valid = prevValid;
                 } else {
-                    valid = w.doChunksNearChunkExist(x, 0, z, 1);
+                    valid = dev.betavk.hooks.McCompat.HAS_DO_CHUNKS_NEAR
+                            ? w.doChunksNearChunkExist(x, 0, z, 1)
+                            : w.checkChunksExist((cx << 4) - 1, 0, (cz << 4) - 1, (cx << 4) + 16, 1, (cz << 4) + 16);
                     if (valid) {
                         c0 = w.getChunkFromChunkCoords(cx, cz);
-                        if (c0.func_21167_h()) {
+                        if (dev.betavk.hooks.McCompat.HAS_CHUNK_EMPTY && c0.func_21167_h()) {
                             valid = false;
                         } else {
                             lm0 = isSky ? c0.skylightMap.data : isBlock ? c0.blocklightMap.data : null;

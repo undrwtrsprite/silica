@@ -12,7 +12,7 @@ extension JarReport.Level {
     }
 }
 
-/// Manages isolated Beta 1.7.3 instances with optional per-instance settings or custom client jars.
+/// Manages isolated Golden Age Minecraft instances across Alpha, Beta, experimental Infdev/Beta 1.8, or custom jars.
 struct InstancesView: View {
     @EnvironmentObject private var state: AppState
     @EnvironmentObject private var instances: InstanceStore
@@ -66,9 +66,9 @@ struct InstancesView: View {
             }
         }
         .sheet(isPresented: $creating) {
-            NewInstanceSheet { name, jarURL in
+            NewInstanceSheet { name, versionID, jarURL in
                 creating = false
-                state.createInstance(name: name, customJarURL: jarURL)
+                state.createInstance(name: name, versionID: versionID, customJarURL: jarURL)
             } onCancel: {
                 creating = false
             }
@@ -97,6 +97,7 @@ private struct InstanceRow: View {
     @EnvironmentObject private var state: AppState
     @EnvironmentObject private var instances: InstanceStore
     @EnvironmentObject private var jars: JarLibrary
+    @EnvironmentObject private var versions: VersionCatalog
     @Environment(\.colorScheme) private var scheme
 
     let instance: GameInstance
@@ -107,6 +108,7 @@ private struct InstanceRow: View {
 
     private var selected: Bool { state.activeInstance.id == instance.id }
     private var jar: CustomJar? { instance.jarID.flatMap { jars.jar($0) } }
+    private var versionMeta: VersionCatalog.McVersion? { versions.version(for: instance.effectiveVersionID) }
     private var effective: Settings { instances.effectiveSettings(state.settings, for: instance) }
 
     var body: some View {
@@ -125,13 +127,21 @@ private struct InstanceRow: View {
                                 .padding(.vertical, 2)
                                 .background(Theme.accent, in: Capsule())
                         }
+                        if jar == nil && versionMeta?.isExperimental == true {
+                            Text("Experimental")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.orange)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(Color.orange.opacity(0.16), in: Capsule())
+                        }
                         if let jar {
                             JarVerdictBadge(report: jar.report, failure: jar.failure)
                         }
                     }
 
                     HStack(spacing: 8) {
-                        Text(jar?.name ?? "Beta 1.7.3 (Silica)")
+                        Text(jar?.name ?? versionMeta?.displayName ?? instance.effectiveVersionID)
                         Text("·")
                         Text(effective.backend == .vulkan ? "Vulkan" : "OpenGL")
                         Text("·")
@@ -315,11 +325,14 @@ private struct InstanceOptionsPopover: View {
 }
 
 private struct NewInstanceSheet: View {
-    let onCreate: (String, URL?) -> Void
+    @EnvironmentObject private var versions: VersionCatalog
+    let onCreate: (String, String, URL?) -> Void
     let onCancel: () -> Void
 
     @State private var name = ""
+    @State private var versionID = "b1.7.3"
     @State private var jarURL: URL? = nil
+    @State private var includeExperimental = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -330,7 +343,7 @@ private struct NewInstanceSheet: View {
                 Text("Name")
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(.secondary)
-                TextField("Beta 1.7.3 Survival", text: $name)
+                TextField(versions.version(for: versionID)?.displayName ?? "Beta 1.7.3", text: $name)
                     .textFieldStyle(.roundedBorder)
             }
 
@@ -339,12 +352,38 @@ private struct NewInstanceSheet: View {
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(.secondary)
                 HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(jarURL?.lastPathComponent ?? "Official Beta 1.7.3 (Silica patched)")
-                            .font(.system(size: 13, weight: .medium))
-                        Text(jarURL == nil ? "Clean isolated folder using your verified Mojang client." : "Modded client jar checked cleanly against Silica's patches.")
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(.secondary)
+                    if let jarURL {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(jarURL.lastPathComponent)
+                                .font(.system(size: 13, weight: .medium))
+                            Text("Modded client jar checked cleanly against Silica's patches.")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Picker("Version", selection: $versionID) {
+                                ForEach(versions.pickerVersions(includeExperimental: includeExperimental)) { ver in
+                                    Text(ver.pickerLabel).tag(ver.id)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(maxWidth: 230, alignment: .leading)
+                            Toggle("Include experimental versions (Infdev, Beta 1.8)", isOn: $includeExperimental)
+                                .toggleStyle(.checkbox)
+                                .font(.system(size: 11.5))
+                                .onChange(of: includeExperimental) { _, shown in
+                                    if !shown, versions.version(for: versionID)?.isExperimental == true {
+                                        versionID = "b1.7.3"
+                                    }
+                                }
+                            Text(versions.version(for: versionID)?.isExperimental == true
+                                 ? "Experimental: Infdev and Beta 1.8 launch on Vulkan, with distant LODs disabled on Beta 1.8+ and possible visual quirks."
+                                 : "Downloaded from Mojang and prepared on first launch.")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     Spacer()
                     if jarURL != nil {
@@ -361,20 +400,24 @@ private struct NewInstanceSheet: View {
                 Button("Cancel", action: onCancel).buttonStyle(SecondaryButtonStyle())
                 Button("Create") {
                     let finalName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-                    onCreate(finalName.isEmpty ? (jarURL?.deletingPathExtension().lastPathComponent ?? "Beta 1.7.3") : finalName, jarURL)
+                    let fallback = jarURL?.deletingPathExtension().lastPathComponent
+                        ?? versions.version(for: versionID)?.displayName
+                        ?? versionID
+                    onCreate(finalName.isEmpty ? fallback : finalName, versionID, jarURL)
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
             }
         }
         .padding(24)
-        .frame(width: 440)
+        .frame(width: 460)
         .background(Theme.bg)
+        .task { await versions.refresh() }
     }
 
     private func pickJar() {
         let panel = NSOpenPanel()
-        panel.message = "Choose a modded Minecraft Beta 1.7.3 jar (optional)"
+        panel.message = "Choose a modded Minecraft jar (optional)"
         panel.allowedContentTypes = [.init(filenameExtension: "jar")!]
         panel.canChooseDirectories = false
         if panel.runModal() == .OK { jarURL = panel.url }

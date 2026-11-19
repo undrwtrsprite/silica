@@ -19,10 +19,10 @@ public final class Hooks {
 
     private static final boolean[] SPECIAL_LIGHT = new boolean[256];
     static {
-        SPECIAL_LIGHT[Block.stairSingle.blockID] = true;
-        SPECIAL_LIGHT[Block.tilledField.blockID] = true;
-        SPECIAL_LIGHT[Block.stairCompactPlanks.blockID] = true;
-        SPECIAL_LIGHT[Block.stairCompactCobblestone.blockID] = true;
+        SPECIAL_LIGHT[44] = true; // stairSingle
+        SPECIAL_LIGHT[60] = true; // tilledField
+        SPECIAL_LIGHT[53] = true; // stairCompactPlanks (Alpha 1.1.x+)
+        SPECIAL_LIGHT[67] = true; // stairCompactCobblestone (Alpha 1.1.x+)
     }
 
     private static MeshWorker worker() {
@@ -83,12 +83,12 @@ public final class Hooks {
     public static float getBrightness(ChunkCache c, int x, int y, int z, int minLight) {
         int lv = lightLevel(c, x, y, z);
         if (lv < minLight) lv = minLight;
-        return c.worldObj.worldProvider.lightBrightnessTable[lv];
+        return dev.betavk.hooks.McCompat.lightBrightnessTable(c.worldObj)[lv];
     }
 
     /** replaceBody of ChunkCache.getLightBrightness(III)F. */
     public static float getLightBrightness(ChunkCache c, int x, int y, int z) {
-        return c.worldObj.worldProvider.lightBrightnessTable[lightLevel(c, x, y, z)];
+        return dev.betavk.hooks.McCompat.lightBrightnessTable(c.worldObj)[lightLevel(c, x, y, z)];
     }
 
     /** atStartCancelable of ChunkCache.getBlockTileEntity: tile-entity maps belong to the game thread; mesh jobs record positions instead. */
@@ -179,6 +179,29 @@ public final class Hooks {
         }
     }
 
+    private static final boolean HAS_FANCY_GRASS = dev.betavk.hooks.McCompat.hasField(RenderBlocks.class, "fancyGrass");
+    private static final boolean HAS_AO = dev.betavk.hooks.McCompat.hasField(RenderBlocks.class, "enableAO");
+
+    private static final class FancyGrassFlag {
+        static boolean isOn() { return RenderBlocks.fancyGrass; }
+    }
+
+    private static final class AoGrass {
+        static boolean isEnabled(RenderBlocks rb) { return rb.enableAO; }
+        static void draw(RenderBlocks rb, Block b, double x, double y, double z, int side, float cr, float cg, float cb) {
+            float rTL = rb.colorRedTopLeft, rBL = rb.colorRedBottomLeft, rBR = rb.colorRedBottomRight, rTR = rb.colorRedTopRight;
+            float gTL = rb.colorGreenTopLeft, gBL = rb.colorGreenBottomLeft, gBR = rb.colorGreenBottomRight, gTR = rb.colorGreenTopRight;
+            float bTL = rb.colorBlueTopLeft, bBL = rb.colorBlueBottomLeft, bBR = rb.colorBlueBottomRight, bTR = rb.colorBlueTopRight;
+            rb.colorRedTopLeft *= cr; rb.colorRedBottomLeft *= cr; rb.colorRedBottomRight *= cr; rb.colorRedTopRight *= cr;
+            rb.colorGreenTopLeft *= cg; rb.colorGreenBottomLeft *= cg; rb.colorGreenBottomRight *= cg; rb.colorGreenTopRight *= cg;
+            rb.colorBlueTopLeft *= cb; rb.colorBlueBottomLeft *= cb; rb.colorBlueBottomRight *= cb; rb.colorBlueTopRight *= cb;
+            drawSideFace(rb, side, b, x, y, z, 0);
+            rb.colorRedTopLeft = rTL; rb.colorRedBottomLeft = rBL; rb.colorRedBottomRight = rBR; rb.colorRedTopRight = rTR;
+            rb.colorGreenTopLeft = gTL; rb.colorGreenBottomLeft = gBL; rb.colorGreenBottomRight = gBR; rb.colorGreenTopRight = gTR;
+            rb.colorBlueTopLeft = bTL; rb.colorBlueBottomLeft = bBL; rb.colorBlueBottomRight = bBR; rb.colorBlueTopRight = bTR;
+        }
+    }
+
     private static boolean betterGrassFace(RenderBlocks rb, Block b, double x, double y, double z, int tex, int side) {
         int mode = Opts.betterGrass;
         if (mode == 0 || (tex != 3 && tex != 38 && tex != 68) || b.blockID != 2 || rb.overrideBlockTexture >= 0 || rb.blockAccess == null) {
@@ -204,7 +227,7 @@ public final class Hooks {
         if (mode != 1 && fastBlockId(rb.blockAccess, bx + dx, by - 1, bz + dz) != 2) {
             return false;
         }
-        if (RenderBlocks.fancyGrass) {
+        if (HAS_FANCY_GRASS && FancyGrassFlag.isOn()) {
             if (tex == 3) return true;   // skip dirt face 3; Beta immediately follows with tinted side overlay 38
             drawSideFace(rb, side, b, x, y, z, 0);
             return true;
@@ -215,17 +238,8 @@ public final class Hooks {
         float cr = ((col >>> 16) & 255) / 255.0F;
         float cg = ((col >>> 8) & 255) / 255.0F;
         float cb = (col & 255) / 255.0F;
-        if (rb.enableAO) {
-            float rTL = rb.colorRedTopLeft, rBL = rb.colorRedBottomLeft, rBR = rb.colorRedBottomRight, rTR = rb.colorRedTopRight;
-            float gTL = rb.colorGreenTopLeft, gBL = rb.colorGreenBottomLeft, gBR = rb.colorGreenBottomRight, gTR = rb.colorGreenTopRight;
-            float bTL = rb.colorBlueTopLeft, bBL = rb.colorBlueBottomLeft, bBR = rb.colorBlueBottomRight, bTR = rb.colorBlueTopRight;
-            rb.colorRedTopLeft *= cr; rb.colorRedBottomLeft *= cr; rb.colorRedBottomRight *= cr; rb.colorRedTopRight *= cr;
-            rb.colorGreenTopLeft *= cg; rb.colorGreenBottomLeft *= cg; rb.colorGreenBottomRight *= cg; rb.colorGreenTopRight *= cg;
-            rb.colorBlueTopLeft *= cb; rb.colorBlueBottomLeft *= cb; rb.colorBlueBottomRight *= cb; rb.colorBlueTopRight *= cb;
-            drawSideFace(rb, side, b, x, y, z, 0);
-            rb.colorRedTopLeft = rTL; rb.colorRedBottomLeft = rBL; rb.colorRedBottomRight = rBR; rb.colorRedTopRight = rTR;
-            rb.colorGreenTopLeft = gTL; rb.colorGreenBottomLeft = gBL; rb.colorGreenBottomRight = gBR; rb.colorGreenTopRight = gTR;
-            rb.colorBlueTopLeft = bTL; rb.colorBlueBottomLeft = bBL; rb.colorBlueBottomRight = bBR; rb.colorBlueTopRight = bTR;
+        if (HAS_AO && AoGrass.isEnabled(rb)) {
+            AoGrass.draw(rb, b, x, y, z, side, cr, cg, cb);
         } else {
             float shade = side <= 3 ? 0.8F : 0.6F;
             float br = b.getBlockBrightness(rb.blockAccess, bx + dx, by, bz + dz) * shade;

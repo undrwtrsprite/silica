@@ -85,7 +85,7 @@ public final class VoxLod {
 
     public static boolean active(Minecraft mc) {
         World w = mc.theWorld;
-        return distanceChunks > 0 && w != null && !w.worldProvider.isNether && w == world;
+        return distanceChunks > 0 && w != null && !dev.betavk.hooks.McCompat.isNether(w) && w == world;
     }
 
     /** Blocks; 0 when off. */
@@ -109,7 +109,7 @@ public final class VoxLod {
         }
         store.clear();
         world = w;
-        seed = w == null ? 0 : w.getRandomSeed();
+        seed = dev.betavk.hooks.McCompat.worldSeed(w);
     }
 
     // ---- workers --------------------------------------------------------------------------

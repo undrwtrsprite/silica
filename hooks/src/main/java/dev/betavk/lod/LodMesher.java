@@ -218,14 +218,23 @@ public final class LodMesher {
         return ((a & 255) << 24) | ((b & 255) << 16) | ((g & 255) << 8) | (r & 255);
     }
 
-    private static int tintRgb(int id, int meta, short colTint, int side, boolean grassSlope) {
-        if (id == 2 && (side == 1 || (side >= 2 && grassSlope))) {
-            return ColorizerGrass.getGrassColor(LodNode.tintTemp(colTint), LodNode.tintHum(colTint)) & 0xFFFFFF;
-        }
-        if (id == 18) {
+    private static final class PineBirch {
+        static int tint(int meta, short colTint) {
             int t = meta & 3;
             if (t == 1) return ColorizerFoliage.getFoliageColorPine() & 0xFFFFFF;
             if (t == 2) return ColorizerFoliage.getFoliageColorBirch() & 0xFFFFFF;
+            return ColorizerFoliage.getFoliageColor(LodNode.tintTemp(colTint), LodNode.tintHum(colTint)) & 0xFFFFFF;
+        }
+    }
+
+    private static int tintRgb(int id, int meta, short colTint, int side, boolean grassSlope) {
+        if (id == 2 && (side == 1 || (side >= 2 && grassSlope))) {
+            if (!dev.betavk.hooks.McCompat.HAS_COLORIZER_GRASS) return 0x7CBD6B;
+            return ColorizerGrass.getGrassColor(LodNode.tintTemp(colTint), LodNode.tintHum(colTint)) & 0xFFFFFF;
+        }
+        if (id == 18) {
+            if (!dev.betavk.hooks.McCompat.HAS_COLORIZER_GRASS) return 0x48B518;
+            if (dev.betavk.hooks.McCompat.HAS_FOLIAGE_PINE_BIRCH) return PineBirch.tint(meta, colTint);
             return ColorizerFoliage.getFoliageColor(LodNode.tintTemp(colTint), LodNode.tintHum(colTint)) & 0xFFFFFF;
         }
         return 0xFFFFFF;

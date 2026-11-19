@@ -41,6 +41,11 @@ public final class SmallFixes {
         return Thread.currentThread() instanceof MeshWorker w ? w.blocks[Block.stairSingle.blockID] : Block.stairSingle;
     }
 
+    /** atStart of GuiScreen.setWorldAndResolution: early Alpha (e.g. a1.0.1_01) didn't clear controlList before initGui(), leaving duplicate buttons on resize/reopen. */
+    public static void clearControls(net.minecraft.src.GuiScreen s, net.minecraft.client.Minecraft mc, int w, int h) {
+        if (s != null && s.controlList != null) s.controlList.clear();
+    }
+
     /** redirectCall of Thread.stop() in NetworkMasterThread: stop() no longer exists; interrupting ends the blocked reader and writer. */
     public static void stopThread(Thread t) {
         t.interrupt();
@@ -58,12 +63,14 @@ public final class SmallFixes {
         return t == null ? null : String.format(t, user);
     }
 
-    /**
-     * afterFieldSet of EntityOtherPlayerMP.skinUrl: the S3 skin bucket is gone. -Dbetavk.skinUrl=https://host/skins/%s.png points at a replacement;
-     * without it the player's real skin and cape are looked up on Mojang's servers in the background (-Dbetavk.skins=off disables that).
-     */
-    public static void otherSkin(EntityOtherPlayerMP e) {
-        applyTextures(e);
+    public static final class Multiplayer {
+        /**
+         * afterFieldSet of EntityOtherPlayerMP.skinUrl: the S3 skin bucket is gone. -Dbetavk.skinUrl=https://host/skins/%s.png points at a replacement;
+         * without it the player's real skin and cape are looked up on Mojang's servers in the background (-Dbetavk.skins=off disables that).
+         */
+        public static void otherSkin(EntityOtherPlayerMP e) {
+            applyTextures(e);
+        }
     }
 
     public static void ownSkin(EntityPlayerSP e) {
@@ -80,6 +87,15 @@ public final class SmallFixes {
         applyTextures(e);
     }
 
+    private static final boolean HAS_CLOAK = McCompat.hasField(EntityPlayer.class, "playerCloakUrl");
+
+    private static final class CloakFields {
+        static void set(EntityPlayer e, String url) {
+            e.playerCloakUrl = url;
+            e.cloakUrl = url;
+        }
+    }
+
     private static void applyTextures(EntityPlayer e) {
         String template = endpoint("betavk.skinUrl", e.username);
         if (template != null) {
@@ -90,10 +106,7 @@ public final class SmallFixes {
         // the pictures arrive later on a background thread; the renderer starts downloading as soon as the field holds an address
         dev.betavk.net.Skins.resolve(e.username, t -> {
             if (t.skin() != null) e.skinUrl = t.skin();
-            if (t.cape() != null) {
-                e.playerCloakUrl = t.cape();
-                e.cloakUrl = t.cape();
-            }
+            if (HAS_CLOAK && t.cape() != null) CloakFields.set(e, t.cape());
         });
     }
 

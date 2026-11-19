@@ -19,6 +19,7 @@ import java.util.Arrays;
  */
 public final class CaveCull {
     public static final boolean ENABLED = !"false".equalsIgnoreCase(System.getProperty("betavk.caveCull", "true"));
+    private static final boolean HAS_RENDERER_COUNTS = dev.betavk.hooks.McCompat.hasField(RenderGlobal.class, "renderersLoaded");
     public static final long ALL_VISIBLE = 0xFFFFFFFFFL;   // 6x6 face bits all connected
 
     // Faces: 0=-Y, 1=+Y, 2=-Z, 3=+Z, 4=-X, 5=+X
@@ -148,8 +149,10 @@ public final class CaveCull {
         }
         Arrays.fill(visMasks, ALL_VISIBLE);
         Arrays.fill(passFlags, (byte) 3);
+        boolean assignIdx = n > 1 && wrs[0].chunkIndex == wrs[1].chunkIndex;
         for (int i = 0; i < n; i++) {
             WorldRenderer w = wrs[i];
+            if (assignIdx) w.chunkIndex = i;
             wrX[i] = w.posX;
             wrY[i] = w.posY;
             wrZ[i] = w.posZ;
@@ -208,7 +211,8 @@ public final class CaveCull {
             reset(w);
             return;
         }
-        set(w, w.skipAllRenderPasses() ? ALL_VISIBLE : syncGraph.computeFromWorld(w.worldObj, w.posX, w.posY, w.posZ));
+        boolean empty = dev.betavk.hooks.McCompat.HAS_SKIP_ALL_RENDER_PASSES && w.skipAllRenderPasses();
+        set(w, empty ? ALL_VISIBLE : syncGraph.computeFromWorld(w.worldObj, w.posX, w.posY, w.posZ));
     }
 
     private static void ensureScratch(int n) {
@@ -311,21 +315,30 @@ public final class CaveCull {
         }
     }
 
+    private static int fallbackFrustrumOffset;
+
+    private static final class FrustrumOffset {
+        static int get(RenderGlobal rg) { return rg.frustrumCheckOffset; }
+        static void inc(RenderGlobal rg) { rg.frustrumCheckOffset++; }
+    }
+
     /** replaceBody of RenderGlobal.clipRenderersByFrustrum: frustum + cave culling on reachable sections only. */
     public static void clipAndCull(RenderGlobal rg, ICamera cam, float pt) {
         WorldRenderer[] wrs = rg.worldRenderers;
         if (wrs == null) return;
         int N = wrs.length;
-        EntityLiving ent = rg.mc.renderViewEntity;
+        EntityLiving ent = dev.betavk.hooks.McCompat.renderViewEntity(rg.mc);
         if (!ENABLED || rg.mc.gameSettings.thirdPersonView || ent == null) {
             wasFallback = true;
+            int offset = dev.betavk.hooks.McCompat.HAS_FRUSTRUM_CHECK_OFFSET ? FrustrumOffset.get(rg) : fallbackFrustrumOffset;
             for (int i = 0; i < N; i++) {
                 WorldRenderer w = wrs[i];
-                if (!w.skipAllRenderPasses() && (!w.isInFrustum || ((i + rg.frustrumCheckOffset) & 15) == 0)) {
+                if (!w.skipAllRenderPasses() && (!w.isInFrustum || ((i + offset) & 15) == 0)) {
                     w.updateInFrustrum(cam);
                 }
             }
-            rg.frustrumCheckOffset++;
+            if (dev.betavk.hooks.McCompat.HAS_FRUSTRUM_CHECK_OFFSET) FrustrumOffset.inc(rg);
+            else fallbackFrustrumOffset++;
             return;
         }
         int W = rg.renderChunksWide, T = rg.renderChunksTall, D = rg.renderChunksDeep;
@@ -497,9 +510,9 @@ public final class CaveCull {
     }
 
     private static void appendRegion(WorldRenderer w, int glList) {
-        int wx = w.posXMinus, wz = w.posZMinus;
+        int wx = w.posX & ~1023, wz = w.posZ & ~1023;
         int r = regMap[(((wx >> 10) & 3) << 2) | ((wz >> 10) & 3)];
-        if (r >= 0 && w.posYMinus == 0 && regX[r] == wx && regZ[r] == wz) {
+        if (r >= 0 && regX[r] == wx && regZ[r] == wz) {
             int[] arr = regArr[r];
             int c = regCnt[r];
             if (c < arr.length) {
@@ -512,7 +525,7 @@ public final class CaveCull {
     }
 
     private static void appendRegionSlow(WorldRenderer w, int glList) {
-        int wx = w.posXMinus, wy = w.posYMinus, wz = w.posZMinus;
+        int wx = w.posX & ~1023, wy = 0, wz = w.posZ & ~1023;
         int r = -1;
         for (int k = 0; k < regActive; k++) {
             if (regX[k] == wx && regZ[k] == wz && regY[k] == wy) {
@@ -555,13 +568,13 @@ public final class CaveCull {
     public static int renderSortedRenderers(RenderGlobal rg, int start, int end, int pass, double pt) {
         net.minecraft.src.RenderList[] rls = rg.allRenderLists;
         for (net.minecraft.src.RenderList rl : rls) rl.func_859_b();
-        EntityLiving ent = rg.mc.renderViewEntity;
+        EntityLiving ent = dev.betavk.hooks.McCompat.renderViewEntity(rg.mc);
         double camX = ent.lastTickPosX + (ent.posX - ent.lastTickPosX) * pt;
         double camY = ent.lastTickPosY + (ent.posY - ent.lastTickPosY) * pt;
         double camZ = ent.lastTickPosZ + (ent.posZ - ent.lastTickPosZ) * pt;
         WorldRenderer[] wrs = rg.worldRenderers;
         WorldRenderer[] sorted = rg.sortedWorldRenderers;
-        boolean occActive = rg.occlusionEnabled && rg.mc.gameSettings.advancedOpengl;
+        boolean occActive = dev.betavk.hooks.McCompat.HAS_ADVANCED_OPENGL && rg.occlusionEnabled && rg.mc.gameSettings.advancedOpengl;
         boolean fast = ENABLED && !wasFallback && wrs != null && sorted != null
                 && start == 0 && end == sorted.length && !occActive
                 && !rg.mc.gameSettings.thirdPersonView && (pass == 0 || (pass == 1 && pass0UsedFast));
@@ -583,11 +596,13 @@ public final class CaveCull {
                     count++;
                 }
                 pass1Count = p1;
-                rg.renderersLoaded = wrs.length;
-                rg.renderersBeingClipped = wrs.length - lastVisibleCount;
-                rg.renderersBeingOccluded = 0;
-                rg.renderersBeingRendered = count;
-                rg.renderersSkippingRenderPass = lastVisibleCount - count;
+                if (HAS_RENDERER_COUNTS) {
+                    rg.renderersLoaded = wrs.length;
+                    rg.renderersBeingClipped = wrs.length - lastVisibleCount;
+                    rg.renderersBeingOccluded = 0;
+                    rg.renderersBeingRendered = count;
+                    rg.renderersSkippingRenderPass = lastVisibleCount - count;
+                }
             } else {
                 if (pass1Count == 0) return 0;
                 for (int i = 0, n = pass1Count; i < n; i++) {
@@ -606,7 +621,7 @@ public final class CaveCull {
         resetRegions();
         for (int i = start; i < end; i++) {
             WorldRenderer w = sorted[i];
-            if (pass == 0) {
+            if (pass == 0 && HAS_RENDERER_COUNTS) {
                 rg.renderersLoaded++;
                 if (w.skipRenderPass[0]) rg.renderersSkippingRenderPass++;
                 else if (!w.isInFrustum) rg.renderersBeingClipped++;

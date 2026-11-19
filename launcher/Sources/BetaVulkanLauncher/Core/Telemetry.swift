@@ -76,7 +76,7 @@ final class Telemetry {
         if active, playingActivity == nil {
             playingActivity = ProcessInfo.processInfo.beginActivity(
                 options: .userInitiatedAllowingIdleSystemSleep,
-                reason: "Sending active session telemetry while Beta 1.7.3 is running"
+                reason: "Sending active session telemetry while Minecraft is running"
             )
         } else if !active, let activity = playingActivity {
             ProcessInfo.processInfo.endActivity(activity)

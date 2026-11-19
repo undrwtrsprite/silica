@@ -58,7 +58,10 @@ public final class AlSoundSystem {
         return t;
     });
 
+    public static volatile AlSoundSystem active;
+
     public AlSoundSystem() {
+        active = this;
         try {
             device = ALC10.alcOpenDevice((ByteBuffer) null);
             if (device == 0) throw new IllegalStateException("alcOpenDevice returned NULL (no audio device)");
@@ -282,9 +285,16 @@ public final class AlSoundSystem {
         }
     }
 
+    private static final boolean HAS_CODEC_MUS = dev.betavk.hooks.McCompat.hasClass("net/minecraft/src/CodecMus");
+
+    private static final class MusCodec {
+        static ICodec create() { return new net.minecraft.src.CodecMus(); }
+    }
+
     private static SoundBuffer decode(URL url) throws Exception {
         String p = url.getPath().toLowerCase();
-        ICodec codec = p.endsWith(".mus") ? new CodecMus() : p.endsWith(".wav") ? new CodecWav() : new CodecJOrbis();
+        ICodec codec = (p.endsWith(".mus") && HAS_CODEC_MUS) ? MusCodec.create()
+                : p.endsWith(".wav") ? new CodecWav() : new CodecJOrbis();
         if (!codec.initialize(url)) throw new IllegalStateException("codec could not open " + url);
         SoundBuffer sb = codec.readAll();
         codec.cleanup();

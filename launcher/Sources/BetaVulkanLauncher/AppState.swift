@@ -59,6 +59,7 @@ final class AppState: ObservableObject {
     let runner = GameRunner()
     let jars = JarLibrary()
     let instances = InstanceStore()
+    let versions = VersionCatalog()
     private let telemetry = Telemetry()
     private var telemetryCancellables: Set<AnyCancellable> = []
     /// The jar the setup wizard imported last, so its final page can show the result.
@@ -248,7 +249,16 @@ final class AppState: ObservableObject {
                 message = "The custom jar for \"\(instance.name)\" could not be found."
                 return
             }
-            if let err = runner.launch(settings: launchSettings, java: java, player: player, jar: chosen, gameDirOverride: dir) {
+            if chosen == nil {
+                do {
+                    try await versions.prepareIfNeeded(instance.effectiveVersionID, java: java, stageDir: launchSettings.stageDir)
+                } catch {
+                    versions.busyMessage = nil
+                    message = error.localizedDescription
+                    return
+                }
+            }
+            if let err = runner.launch(settings: launchSettings, java: java, player: player, versionID: instance.effectiveVersionID, jar: chosen, gameDirOverride: dir) {
                 message = err
             } else {
                 instances.touchLastPlayed(instance.id)
@@ -256,8 +266,8 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Creates a new isolated instance (either vanilla Silica Beta 1.7.3 or backed by a custom jar URL).
-    func createInstance(name: String, customJarURL: URL? = nil, select: Bool = true) {
+    /// Creates a new isolated instance (either any official Alpha/Beta version or backed by a custom jar URL).
+    func createInstance(name: String, versionID: String = "b1.7.3", customJarURL: URL? = nil, select: Bool = true) {
         Task { [self] in
             var jarID: String? = nil
             if let customJarURL {
@@ -265,7 +275,7 @@ final class AppState: ObservableObject {
                 jarID = added.id
                 wizardJarID = added.id
             }
-            let created = instances.create(name: name, jarID: jarID)
+            let created = instances.create(name: name, versionID: customJarURL == nil ? versionID : nil, jarID: jarID)
             if select { selectInstance(created.id) }
         }
     }
@@ -278,7 +288,7 @@ final class AppState: ObservableObject {
 
     func chooseJarFile(select: Bool = true) {
         let panel = NSOpenPanel()
-        panel.message = "Choose a Minecraft Beta 1.7.3 jar (modded or not)"
+        panel.message = "Choose a modded Minecraft jar"
         panel.allowedContentTypes = [.init(filenameExtension: "jar")!]
         panel.canChooseDirectories = false
         if panel.runModal() == .OK, let url = panel.url { addJar(url, select: select) }

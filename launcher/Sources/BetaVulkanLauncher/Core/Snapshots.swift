@@ -28,6 +28,7 @@ enum Snapshots {
                 .environmentObject(state.jars)
                 .environmentObject(state.instances)
                 .environmentObject(state.updates)
+                .environmentObject(state.versions)
                 .environment(\.colorScheme, scheme)
         }
 
@@ -37,10 +38,14 @@ enum Snapshots {
         state.install.assets = .done("ok")
         state.wizardOpen = false
 
+        let env = ProcessInfo.processInfo.environment
+        let pageW = CGFloat(Double(env["SILICA_SNAPSHOT_WIDTH"] ?? "") ?? 1080)
+        let pageH = CGFloat(Double(env["SILICA_SNAPSHOT_HEIGHT"] ?? "") ?? 700)
+
         for scheme in [ColorScheme.dark, .light] {
             for tab in Tab.allCases {
                 state.tab = tab
-                write(root(scheme), "\(tab.rawValue.lowercased())-\(scheme == .dark ? "dark" : "light")", out, width: 1080, height: 700)
+                write(root(scheme), "\(tab.rawValue.lowercased())-\(scheme == .dark ? "dark" : "light")", out, width: pageW, height: pageH)
             }
             state.tab = .advanced
             write(root(scheme), "advanced-compact-\(scheme == .dark ? "dark" : "light")", out, width: 960, height: 700)

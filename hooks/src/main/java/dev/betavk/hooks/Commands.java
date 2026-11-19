@@ -8,7 +8,6 @@ import net.minecraft.src.Item;
 import net.minecraft.src.ItemStack;
 import net.minecraft.src.NBTTagCompound;
 import net.minecraft.src.World;
-import net.minecraft.src.WorldInfo;
 
 import java.util.Collections;
 import java.util.List;
@@ -24,7 +23,7 @@ public final class Commands {
     private static final String GIVE_USAGE = "/give <item ID> [count]";
     private static final String WEATHER_USAGE = "/weather <clear|rain|thunder> [seconds]";
     private static final String CHEATS_TAG = "SilicaCheats";
-    private static final Set<WorldInfo> cheats = Collections.newSetFromMap(new WeakHashMap<>());
+    private static final Set<World> legacyCheats = Collections.newSetFromMap(new WeakHashMap<>());
     private static World flyWorld;
     private static boolean flying;
     private static float flySpeed = 1.0F;
@@ -32,20 +31,26 @@ public final class Commands {
     private Commands() {
     }
 
-    public static void load(WorldInfo info, NBTTagCompound tag) {
-        if (tag.getBoolean(CHEATS_TAG)) cheats.add(info);
+    public static void load(net.minecraft.src.WorldInfo info, NBTTagCompound tag) {
+        BetaCheats.load(info, tag);
     }
 
-    public static void copy(WorldInfo info, WorldInfo previous) {
-        if (cheats.contains(previous)) cheats.add(info);
+    public static void copy(net.minecraft.src.WorldInfo info, net.minecraft.src.WorldInfo previous) {
+        BetaCheats.copy(info, previous);
     }
 
-    public static void save(WorldInfo info, NBTTagCompound tag, NBTTagCompound player) {
-        tag.setBoolean(CHEATS_TAG, cheats.contains(info));
+    public static void save(net.minecraft.src.WorldInfo info, NBTTagCompound tag, NBTTagCompound player) {
+        BetaCheats.save(info, tag);
     }
+
+    private static final boolean HAS_MULTIPLAYER_WORLD = McCompat.hasField(net.minecraft.src.World.class, "multiplayerWorld");
 
     static boolean isLocalWorld(Minecraft mc) {
-        return mc.theWorld != null && !mc.isMultiplayerWorld() && !mc.theWorld.multiplayerWorld;
+        return mc.theWorld != null && !mc.isMultiplayerWorld() && (!HAS_MULTIPLAYER_WORLD || !MultiplayerWorldFlag.isRemote(mc.theWorld));
+    }
+
+    private static final class MultiplayerWorldFlag {
+        static boolean isRemote(net.minecraft.src.World w) { return w.multiplayerWorld; }
     }
 
     public static boolean canOpenChat(Minecraft mc) {
@@ -53,14 +58,17 @@ public final class Commands {
     }
 
     static boolean enabled(Minecraft mc) {
-        return isLocalWorld(mc) && cheats.contains(mc.theWorld.getWorldInfo());
+        if (!isLocalWorld(mc)) return false;
+        return McCompat.HAS_WORLD_INFO ? BetaCheats.enabled(mc.theWorld) : legacyCheats.contains(mc.theWorld);
     }
 
     static void toggle(Minecraft mc) {
         if (!isLocalWorld(mc)) return;
-        WorldInfo info = mc.theWorld.getWorldInfo();
-        if (!cheats.remove(info)) cheats.add(info);
-        mc.theWorld.saveLevel();
+        if (McCompat.HAS_WORLD_INFO) {
+            BetaCheats.toggle(mc.theWorld);
+        } else {
+            if (!legacyCheats.remove(mc.theWorld)) legacyCheats.add(mc.theWorld);
+        }
     }
 
     public static boolean run(Minecraft mc, String message) {
@@ -76,7 +84,7 @@ public final class Commands {
             case "help" -> {
                 for (String line : List.of(FLY_USAGE, "/help", "/seed", TIME_USAGE, GIVE_USAGE, WEATHER_USAGE)) reply(mc, line);
             }
-            case "seed" -> reply(mc, "Seed: " + mc.theWorld.getRandomSeed());
+            case "seed" -> reply(mc, "Seed: " + McCompat.worldSeed(mc.theWorld));
             case "fly" -> fly(mc, args);
             case "time" -> time(mc, args);
             case "give" -> give(mc, args);
@@ -141,13 +149,29 @@ public final class Commands {
         reply(mc, String.format(Locale.ROOT, "Flight enabled at %.1fx speed.", flySpeed));
     }
 
+    private static final boolean HAS_SLEEPING = McCompat.hasField(EntityPlayer.class, "sleeping");
+    private static final boolean HAS_SNEAK_FIELD = McCompat.hasField(net.minecraft.src.MovementInput.class, "sneak");
+    private static final boolean HAS_ADD_CHAT = McCompat.hasMethod(net.minecraft.src.GuiIngame.class, "addChatMessage", String.class);
+
+    private static final class SleepingFlag {
+        static boolean is(EntityPlayerSP p) { return p.sleeping; }
+    }
+
+    private static final class SneakInputFlag {
+        static boolean is(EntityPlayerSP p) { return p.movementInput.sneak; }
+    }
+
+    private static final class ChatReply {
+        static void send(Minecraft mc, String msg) { mc.ingameGUI.addChatMessage(msg); }
+    }
+
     public static boolean flyMove(EntityLiving e, float strafe, float forward) {
         if (!flying || !(e instanceof EntityPlayerSP p) || p.mc == null || p.mc.theWorld != flyWorld
-                || p.ridingEntity != null || p.sleeping) {
+                || p.ridingEntity != null || (HAS_SLEEPING && SleepingFlag.is(p))) {
             return false;
         }
         boolean jump = p.movementInput != null && p.movementInput.jump;
-        boolean sneak = p.movementInput != null && p.movementInput.sneak;
+        boolean sneak = HAS_SNEAK_FIELD && p.movementInput != null && SneakInputFlag.is(p);
         float s = sneak ? strafe / 0.3F : strafe;
         float f = sneak ? forward / 0.3F : forward;
         p.moveFlying(s, f, 0.14F * flySpeed);
@@ -187,24 +211,58 @@ public final class Commands {
             reply(mc, usage);
             return;
         }
-        long current = mc.theWorld.getWorldTime();
-        mc.theWorld.setWorldTime(current + Math.floorMod(tick - current, 24000L));
+        long current = McCompat.worldTime(mc.theWorld);
+        McCompat.setWorldTime(mc.theWorld, current + Math.floorMod(tick - current, 24000L));
         reply(mc, "Time set to " + tick + ".");
     }
 
     private static void weather(Minecraft mc, String[] args) {
+        if (!McCompat.HAS_WORLD_INFO) {
+            reply(mc, "Weather is not supported in this version.");
+            return;
+        }
         String type = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "";
         int seconds = args.length == 3 ? number(args[2]) : 300;
         if (!WEATHER_TYPES.contains(type) || args.length > 3 || seconds < 1 || seconds > 86400) {
             reply(mc, "Usage: " + WEATHER_USAGE + " (1-86400)");
             return;
         }
-        WorldInfo info = mc.theWorld.getWorldInfo();
-        info.setRaining(!type.equals("clear"));
-        info.setThundering(type.equals("thunder"));
-        info.setRainTime(seconds * 20);
-        info.setThunderTime(seconds * 20);
+        BetaCheats.setWeather(mc.theWorld, type, seconds);
         reply(mc, "Weather set to " + type + " for " + seconds + " seconds.");
+    }
+
+    private static final class BetaCheats {
+        private static final Set<net.minecraft.src.WorldInfo> cheats = Collections.newSetFromMap(new WeakHashMap<>());
+
+        static void load(net.minecraft.src.WorldInfo info, NBTTagCompound tag) {
+            if (tag.getBoolean(CHEATS_TAG)) cheats.add(info);
+        }
+
+        static void copy(net.minecraft.src.WorldInfo info, net.minecraft.src.WorldInfo previous) {
+            if (cheats.contains(previous)) cheats.add(info);
+        }
+
+        static void save(net.minecraft.src.WorldInfo info, NBTTagCompound tag) {
+            tag.setBoolean(CHEATS_TAG, cheats.contains(info));
+        }
+
+        static boolean enabled(World w) {
+            return cheats.contains(w.getWorldInfo());
+        }
+
+        static void toggle(World w) {
+            var info = w.getWorldInfo();
+            if (!cheats.remove(info)) cheats.add(info);
+            w.saveLevel();
+        }
+
+        static void setWeather(World w, String type, int seconds) {
+            var info = w.getWorldInfo();
+            info.setRaining(!type.equals("clear"));
+            info.setThundering(type.equals("thunder"));
+            info.setRainTime(seconds * 20);
+            info.setThunderTime(seconds * 20);
+        }
     }
 
     private static void give(Minecraft mc, String[] args) {
@@ -243,6 +301,7 @@ public final class Commands {
     }
 
     private static void reply(Minecraft mc, String message) {
-        mc.ingameGUI.addChatMessage(message);
+        if (HAS_ADD_CHAT) ChatReply.send(mc, message);
+        else System.out.println("[chat] " + message);
     }
 }

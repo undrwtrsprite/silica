@@ -30,6 +30,11 @@ public final class GenPool {
 
     public static final int WORKERS = Integer.getInteger("betavk.genworkers",
             Math.max(2, Math.min(4, Runtime.getRuntime().availableProcessors() / 2)));
+    private static final boolean HAS_CHUNK_PROVIDER = dev.betavk.hooks.McCompat.hasClass("net/minecraft/src/ChunkProvider");
+    private static final boolean HAS_LOWEST_HEIGHT = dev.betavk.hooks.McCompat.hasField(Chunk.class, "lowestBlockHeight");
+    private static final boolean HAS_BIOMES_FIELD = dev.betavk.hooks.McCompat.HAS_WORLD_CHUNK_MANAGER
+            && !dev.betavk.hooks.McCompat.HAS_WORLD_SETTINGS
+            && dev.betavk.hooks.McCompat.hasField(ChunkProviderGenerate.class, "biomesForGeneration");
 
     private static final class Job {
         final int x, z, priority, epoch;
@@ -69,7 +74,7 @@ public final class GenPool {
 
     /** atEnd of ChunkProviderGenerate's constructor: the overworld's terrain provider was created (a new world). */
     public static void registerMain(ChunkProviderGenerate provider, World w, long s) {
-        if (w instanceof GenWorld) return;   // our own worker instances
+        if (!HAS_BIOMES_FIELD || w instanceof GenWorld) return;   // our own worker instances or pre-Beta Alpha without biomesForGeneration
         epoch++;
         for (Job j : jobs.values()) j.state.set(3);
         jobs.clear();
@@ -114,7 +119,7 @@ public final class GenPool {
                 while (y > 0 && Block.lightOpacity[c.blocks[base + y - 1] & 255] == 0) y--;
                 c.heightMap[z << 4 | x] = (byte) y;
                 if (y < lowest) lowest = y;
-                if (!c.worldObj.worldProvider.hasNoSky) {
+                if (!dev.betavk.hooks.McCompat.isNether(c.worldObj)) {
                     int level = 15, yy = 127;
                     do {
                         level -= Block.lightOpacity[c.blocks[base + yy] & 255];
@@ -124,7 +129,11 @@ public final class GenPool {
                 }
             }
         }
-        c.lowestBlockHeight = lowest;
+        if (HAS_LOWEST_HEIGHT) LowestHeight.set(c, lowest);
+    }
+
+    private static final class LowestHeight {
+        static void set(Chunk c, int lowest) { c.lowestBlockHeight = lowest; }
     }
 
     /** Second half (game thread): reads neighbouring chunks through the world and schedules lighting updates. */
@@ -168,7 +177,7 @@ public final class GenPool {
 
     /** atStartReturnIfNotNull of ChunkProviderGenerate.provideChunk (game thread): a prefetched chunk, or null (the game generates it inline). */
     public static Chunk take(ChunkProviderGenerate caller, int x, int z) {
-        if (WORKERS <= 0 || caller != main) return null;
+        if (WORKERS <= 0 || !HAS_BIOMES_FIELD || caller != main) return null;
         Job j = jobs.remove(key(x, z));
         if (j == null || j.epoch != epoch) {
             misses.incrementAndGet();
@@ -204,14 +213,20 @@ public final class GenPool {
         return dx * dx + dz * dz;
     }
 
+    private static final class PopulateDrain {
+        static void run(Minecraft mc, long populateBudgetNs) {
+            ChunkProvider cp = Populate.active;
+            if (cp != null && mc.theWorld != null && Populate.isFor(cp, mc.theWorld)) {
+                int pend = Populate.pending(cp);
+                if (pend > 0) Populate.drain(cp, pend > 12 ? populateBudgetNs * 2 : populateBudgetNs);
+            }
+        }
+    }
+
     /** atStart of Minecraft.runTick: populate what is queued under a time budget, and keep chunks around the player generated ahead of demand. */
     public static void onTick(Minecraft mc, long populateBudgetNs) {
-        ChunkProvider cp = Populate.active;
-        if (cp != null && mc.theWorld != null && Populate.isFor(cp, mc.theWorld)) {
-            int pend = Populate.pending(cp);
-            if (pend > 0) Populate.drain(cp, pend > 12 ? populateBudgetNs * 2 : populateBudgetNs);
-        }
-        if (WORKERS <= 0) return;
+        if (HAS_CHUNK_PROVIDER) PopulateDrain.run(mc, populateBudgetNs);
+        if (WORKERS <= 0 || !HAS_BIOMES_FIELD) return;
         World w = mc.theWorld;
         if (w == null || w != world || main == null || mc.thePlayer == null) return;
         start();
@@ -239,10 +254,9 @@ public final class GenPool {
 
     /** At world creation: start generating the spawn area before the loading screen asks for it. */
     public static void prefetchSpawn(World w) {
-        if (WORKERS <= 0 || w != world || main == null) return;
+        if (WORKERS <= 0 || !HAS_BIOMES_FIELD || w != world || main == null) return;
         start();
-        ChunkCoordinates sp = w.getSpawnPoint();
-        int cx = sp.x >> 4, cz = sp.z >> 4;
+        int cx = dev.betavk.hooks.McCompat.spawnX(w) >> 4, cz = dev.betavk.hooks.McCompat.spawnZ(w) >> 4;
         for (int[] o : OFFSETS) {
             if (o[0] * o[0] + o[1] * o[1] > 12 * 12) break;
             enqueue(w, cx + o[0], cz + o[1], o[0] * o[0] + o[1] * o[1]);

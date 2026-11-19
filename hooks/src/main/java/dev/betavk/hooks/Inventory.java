@@ -285,12 +285,12 @@ public final class Inventory {
         ItemStack st = s.getStack();
         int max = st.getMaxDamage();
         if (max <= 0) return;
-        String name = ("" + net.minecraft.src.StringTranslate.getInstance().translateNamedKey(st.getItemName())).trim();
-        if (name.length() == 0) return;
-        String line = "Durability: " + (max - st.getItemDamage()) + " / " + max;
+        String name = McCompat.itemDisplayName(st);
+        if (name.length() == 0 && McCompat.HAS_ITEM_NAME) return;
+        String line = "Durability: " + (max - McCompat.itemDamage(st)) + " / " + max;
         int left = (g.width - g.xSize) / 2, top = (g.height - g.ySize) / 2;
         int x = mx - left + 12, y = my - top - 12;
-        int w = Math.max(g.fontRenderer.getStringWidth(name), g.fontRenderer.getStringWidth(line));
+        int w = Math.max(name.isEmpty() ? 0 : g.fontRenderer.getStringWidth(name), g.fontRenderer.getStringWidth(line));
         Gfx.glPushMatrix();
         Gfx.glTranslatef(left, top, 0.0F);
         Gfx.glDisable(Gfx.GL_LIGHTING);

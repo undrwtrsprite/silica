@@ -50,7 +50,7 @@
   </nav>
   <div class="bar-actions">
     <a class="gh-link" href="https://github.com/undrwtrsprite/silica" aria-label="Silica on GitHub"><svg class="ico fill" aria-hidden="true"><use href="#i-gh"/></svg><span>GitHub</span></a>
-    <a class="btn primary sm" href="https://github.com/undrwtrsprite/silica/releases/download/v0.2.1/Silica-0.2.1.dmg" download>Download</a>
+    <a class="btn primary sm" href="https://github.com/undrwtrsprite/silica/releases/download/v0.3.0/Silica-0.3.0.dmg" download>Download</a>
   </div>
 </header>
 
@@ -58,9 +58,9 @@
   <section class="page-hero solo" aria-labelledby="h1" style="padding-bottom:clamp(32px,4vw,56px)">
     <canvas class="docs-bg dither-bg" aria-hidden="true"></canvas>
     <div class="inner">
-      <span class="kicker"><b>Docs</b> / v0.2.1 reference</span>
+      <span class="kicker"><b>Docs</b> / v0.3.0 reference</span>
       <h1 id="h1">Silica <span class="hl">documentation.</span></h1>
-      <p class="lede">Architecture, controls, Vulkan &amp; LOD settings, isolated instances, building from source, and JVM switches.</p>
+      <p class="lede">Architecture, controls, Vulkan &amp; LOD settings, multi-version Golden Age instances, building from source, and JVM switches.</p>
     </div>
   </section>
 
@@ -83,7 +83,7 @@
         <article class="doc-section" id="install">
           <span class="kicker"><b>01</b> / Installation</span>
           <h2>Requirements &amp; first run</h2>
-          <p>Silica runs Minecraft Beta 1.7.3 natively on Apple Silicon without Rosetta 2. The repository ships zero Mojang code, jars, or assets — you bring your own copy of Minecraft: Java Edition.</p>
+          <p>Silica runs Golden Age Minecraft (Alpha 1.0–Beta 1.7.3, plus experimental Infdev and Beta 1.8) natively on Apple Silicon without Rosetta 2. The repository ships zero Mojang code, jars, or assets — you bring your own copy of Minecraft: Java Edition.</p>
           <div class="docs-grid">
             <div class="doc-card card">
               <h3>System requirements</h3>
@@ -97,7 +97,7 @@
             <div class="doc-card card">
               <h3>First-launch flow</h3>
               <ol class="doc-steps">
-                <li>Mount <code>Silica-0.2.1.dmg</code> and drag <b>Silica</b> to <code>/Applications</code>.</li>
+                <li>Mount <code>Silica-0.3.0.dmg</code> and drag <b>Silica</b> to <code>/Applications</code>.</li>
                 <li>Sign in with Microsoft on the Play page (tokens are stored in the macOS Keychain for the session).</li>
                 <li>Silica downloads or verifies the clean <code>b1.7.3</code> jar against Mojang's SHA-1 checksum, prepares it locally, and launches via the native <code>arm64</code> JDK 21 runtime.</li>
               </ol>
@@ -107,8 +107,8 @@
 
         <article class="doc-section" id="architecture">
           <span class="kicker"><b>02</b> / Architecture</span>
-          <h2>How Silica patches &amp; runs Beta 1.7.3</h2>
-          <p>Your original Beta 1.7.3 jar is never modified in place. Instead, Silica splits preparation, bytecode patching, platform shimming, and rendering across dedicated modules:</p>
+          <h2>How Silica patches &amp; runs Golden Age builds</h2>
+          <p>Your original client jars are never modified in place. Instead, Silica splits canonicalization, bytecode patching, platform shimming, and rendering across dedicated modules:</p>
           <div class="tablewrap card">
             <table class="doc-table">
               <thead><tr><th scope="col">Module</th><th scope="col">Role</th></tr></thead>
@@ -201,7 +201,7 @@
             </div>
             <div class="doc-card card">
               <h3>Isolated instances</h3>
-              <p>On the launcher's <b>Instances</b> tab, create separate Beta 1.7.3 profiles with independent saves, configs, and per-instance overrides:</p>
+              <p>On the launcher's <b>Instances</b> tab, create separate Alpha, Beta, or experimental Infdev and Beta 1.8 profiles with independent saves, configs, and per-instance overrides:</p>
               <ul class="points">
                 <li><b>Per-profile isolation:</b> Separate world folders, options, and Vulkan/OpenGL or fullscreen settings.</li>
                 <li><b>Visual &amp; movement QoL:</b> Better Grass (<code>Off</code>, <code>Fast</code>, <code>Fancy</code>) in Video Settings plus <code>/fly [on|off|speed &lt;val&gt;]</code> when commands are enabled.</li>
@@ -280,7 +280,7 @@ scripts/bench.sh my-label</code></pre>
   <div class="foot">
     <div>
       <a class="brand" href="/"><img src="assets/icon.png" width="28" height="28" alt=""><span>Silica</span></a>
-      <p>The Minecraft Beta launcher for Mac. A passion project, heavily AI-assisted.</p>
+      <p>The Golden Age Minecraft launcher and Vulkan engine for Mac. A passion project, heavily AI-assisted.</p>
     </div>
     <div><h4>Silica</h4><ul><li><a href="/features">Features</a></li><li><a href="/performance">Performance</a></li><li><a href="/roadmap">Roadmap</a></li><li><a href="/players">Players</a></li><li><a href="/docs">Docs</a></li><li><a href="/download">Download</a></li></ul></div>
     <div><h4>Project</h4><ul><li><a href="https://github.com/undrwtrsprite/silica">Source</a></li><li><a href="https://github.com/undrwtrsprite/silica/releases">Releases</a></li><li><a href="https://github.com/undrwtrsprite/silica/issues">Issues</a></li><li><a href="https://github.com/undrwtrsprite/silica/blob/main/CHANGELOG.md">Changelog</a></li></ul></div>

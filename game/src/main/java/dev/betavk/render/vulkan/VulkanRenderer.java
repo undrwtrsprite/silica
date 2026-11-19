@@ -250,11 +250,15 @@ public final class VulkanRenderer implements Renderer {
         try (InputStream in = VulkanRenderer.class.getResourceAsStream(res)) {
             if (in == null) throw new IllegalStateException("missing shader resource " + res + " (run :game:compileShaders)");
             byte[] bytes = in.readAllBytes();
-            ByteBuffer bb = st.malloc(bytes.length);
-            bb.put(bytes).flip();
-            LongBuffer p = st.mallocLong(1);
-            check(vkCreateShaderModule(core.device, VkShaderModuleCreateInfo.calloc(st).sType$Default().pCode(bb), null, p), "shader module " + res);
-            return p.get(0);
+            ByteBuffer bb = MemoryUtil.memAlloc(bytes.length);
+            try {
+                bb.put(bytes).flip();
+                LongBuffer p = st.mallocLong(1);
+                check(vkCreateShaderModule(core.device, VkShaderModuleCreateInfo.calloc(st).sType$Default().pCode(bb), null, p), "shader module " + res);
+                return p.get(0);
+            } finally {
+                MemoryUtil.memFree(bb);
+            }
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }

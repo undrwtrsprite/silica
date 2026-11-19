@@ -20,7 +20,7 @@ public final class VoxHooks {
         if (lastFrame == MainLoop.frameNo) return;
         lastFrame = MainLoop.frameNo;
         Minecraft mc = er.mc;
-        EntityLiving e = mc.renderViewEntity;
+        EntityLiving e = McCompat.renderViewEntity(mc);
         if (e == null) return;
         float p = mc.timer.renderPartialTicks;
         double x = e.lastTickPosX + (e.posX - e.lastTickPosX) * p, y = e.lastTickPosY + (e.posY - e.lastTickPosY) * p, z = e.lastTickPosZ + (e.posZ - e.lastTickPosZ) * p;

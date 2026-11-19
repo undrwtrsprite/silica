@@ -33,6 +33,14 @@ public final class PatchRegistry {
     /** Every "owner.name+desc" a patch found and edited; filled while patches are applied (the jar checker reads it to find overlaps with a modded jar). */
     private final java.util.Set<String> touched = new java.util.LinkedHashSet<>();
 
+    /** True when the named class exists on the context/application classpath (without loading or linking it). */
+    public static boolean hasClass(String internalName) {
+        String res = internalName + ".class";
+        ClassLoader ctx = Thread.currentThread().getContextClassLoader();
+        if (ctx != null && ctx.getResource(res) != null) return true;
+        return ClassLoader.getSystemClassLoader().getResource(res) != null;
+    }
+
     public ClassPatch on(String internalName) {
         return byClass.computeIfAbsent(internalName, n -> new ClassPatch(n, touched));
     }
@@ -178,7 +186,8 @@ public final class PatchRegistry {
 
         /** Replaces every float constant equal to {@code value} in the method by hook(this) (must match exactly {@code expected} places). */
         public ClassPatch replaceFloat(String method, String desc, float value, int expected, String hookOwner, String hookName) {
-            steps.add(cn -> forEach(cn, method, desc, m -> constant(m, value, expected, hookOwner, hookName)));
+            boolean optional = method.startsWith("?");
+            steps.add(cn -> forEach(cn, method, desc, m -> constant(m, value, expected, hookOwner, hookName, optional)));
             return this;
         }
 
@@ -194,6 +203,28 @@ public final class PatchRegistry {
          */
         public ClassPatch atStartReturnIfNotNull(String method, String desc, String hookOwner, String hookName) {
             steps.add(cn -> forEach(cn, method, desc, m -> startReturn(m, hookOwner, hookName)));
+            return this;
+        }
+
+        /** Adds a public method that calls hook(this, args...) and returns its result, or replaces its body if it already exists. */
+        public ClassPatch ensureMethod(String name, String desc, String hookOwner, String hookName) {
+            steps.add(cn -> {
+                for (MethodNode m : cn.methods) {
+                    if (m.name.equals(name) && m.desc.equals(desc)) {
+                        int n = replace(m, hookOwner, hookName);
+                        touched.add(owner + "." + m.name + m.desc);
+                        return n;
+                    }
+                }
+                MethodNode m = new MethodNode(Opcodes.ACC_PUBLIC, name, desc, null, null);
+                Type ret = Type.getReturnType(desc);
+                InsnList l = loadSelfAndArgs(m);
+                l.add(new MethodInsnNode(Opcodes.INVOKESTATIC, hookOwner, hookName, hookDesc(m, ret.getDescriptor()), false));
+                l.add(new InsnNode(ret.getOpcode(Opcodes.IRETURN)));
+                m.instructions.add(l);
+                cn.methods.add(m);
+                return 1;
+            });
             return this;
         }
 
@@ -252,16 +283,27 @@ public final class PatchRegistry {
         }
 
         private int forEach(ClassNode cn, String method, String desc, Edit e) {
-            int hits = 0, n = 0;
-            for (MethodNode m : cn.methods) {
-                if (!m.name.equals(method) || (desc != null && !m.desc.equals(desc))) continue;
-                hits++;
-                n += e.edit(m);
-                touched.add(owner + "." + m.name + m.desc);
+            boolean optional = method.startsWith("?");
+            String spec = optional ? method.substring(1) : method;
+            String[] names = spec.split("\\|");
+            for (String candidate : names) {
+                int hits = 0, n = 0;
+                for (MethodNode m : cn.methods) {
+                    if (!m.name.equals(candidate) || (desc != null && !m.desc.equals(desc))) continue;
+                    hits++;
+                    n += e.edit(m);
+                    touched.add(owner + "." + m.name + m.desc);
+                }
+                if (hits > 0) {
+                    if (n == 0) {
+                        if (optional) return 0;
+                        throw new IllegalStateException("patch matched the method but changed nothing (call site missing?): " + owner + "." + candidate);
+                    }
+                    return n;
+                }
             }
-            if (hits == 0) throw new IllegalStateException("patch target not found: " + owner + "." + method + (desc == null ? "" : desc));
-            if (n == 0) throw new IllegalStateException("patch matched the method but changed nothing (call site missing?): " + owner + "." + method);
-            return n;
+            if (optional) return 0;
+            throw new IllegalStateException("patch target not found: " + owner + "." + spec + (desc == null ? "" : desc));
         }
 
         private InsnList loadSelfAndArgs(MethodNode m) {
@@ -372,7 +414,7 @@ public final class PatchRegistry {
             return n;
         }
 
-        private int constant(MethodNode m, float value, int expected, String hookOwner, String hookName) {
+        private int constant(MethodNode m, float value, int expected, String hookOwner, String hookName, boolean optional) {
             int n = 0;
             for (AbstractInsnNode i : m.instructions.toArray()) {
                 if (!(i instanceof org.objectweb.asm.tree.LdcInsnNode ld) || !(ld.cst instanceof Float f) || f != value) continue;
@@ -383,7 +425,7 @@ public final class PatchRegistry {
                 m.instructions.remove(i);
                 n++;
             }
-            if (n != expected) throw new IllegalStateException("expected " + expected + " use(s) of the constant " + value + " in " + owner + "." + m.name + ", found " + n);
+            if (n != expected && !(optional && n == 0)) throw new IllegalStateException("expected " + expected + " use(s) of the constant " + value + " in " + owner + "." + m.name + ", found " + n);
             return n;
         }
 

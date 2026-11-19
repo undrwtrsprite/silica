@@ -52,13 +52,15 @@ final class GameRunner: ObservableObject {
     func clearLog() { lines.removeAll(); hints.removeAll() }
 
     /// Builds and starts the game. `extraJVM` let the benchmark runner reuse this.
-    func launch(settings: Settings, java: URL, player: VerifiedMinecraftPlayer?, extraJVM: [String] = [], jar: JarLibrary.Selection? = nil, gameDirOverride: String? = nil, completion: (@MainActor (Int32) -> Void)? = nil) -> String? {
+    func launch(settings: Settings, java: URL, player: VerifiedMinecraftPlayer?, extraJVM: [String] = [], versionID: String = "b1.7.3", jar: JarLibrary.Selection? = nil, gameDirOverride: String? = nil, completion: (@MainActor (Int32) -> Void)? = nil) -> String? {
         guard let player, player.isValid else { return Self.signInRequired }
         guard !isRunning else { return "The game is already running." }
         guard let cfg = Self.stageConfig(settings.stageDir) else { return "No staged game build in \(settings.stageDir). Run `gradle :hooks:stageGame` first, or pick the folder in Settings." }
         let stage = URL(fileURLWithPath: settings.stageDir)
         // our hook classes first, then your prepared jar and its resources; the agent patches the game's classes as they load
-        let cp = (cfg.classpath.map { stage.appendingPathComponent($0).path } + [(jar?.readable ?? AppPaths.readableJar).path, (jar?.resources ?? AppPaths.resources).path]).joined(separator: ":")
+        let mcReadable = jar?.readable ?? AppPaths.readableJar(for: versionID)
+        let mcResources = jar?.resources ?? AppPaths.resources(for: versionID)
+        let cp = (cfg.classpath.map { stage.appendingPathComponent($0).path } + [mcReadable.path, mcResources.path]).joined(separator: ":")
         var jvm = cfg.jvmArgs.map { $0.replacingOccurrences(of: "${stage}", with: stage.path) }
         jvm += settings.gcProfile.flags(memoryMB: settings.memoryMB)
         jvm += ["-Dbetavk.backend=\(settings.backend.rawValue)", "-Dbetavk.assets=\(AppPaths.assets.path)",

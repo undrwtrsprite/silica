@@ -23,10 +23,32 @@ public final class Settings {
         return last == null ? null : last.optionsFile;
     }
 
+    /** atStart of GameSettings.loadOptions: strip lines with empty value ("key:") that crash < b1.3 split(":")[1]. */
+    public static void beforeLoad(GameSettings gs) {
+        last = gs;
+        File f = gs.optionsFile;
+        if (f == null || !f.isFile()) return;
+        try {
+            List<String> lines = Files.readAllLines(f.toPath(), StandardCharsets.UTF_8);
+            boolean changed = false;
+            List<String> clean = new java.util.ArrayList<>(lines.size());
+            for (String l : lines) {
+                int idx = l.indexOf(':');
+                if (idx <= 0 || idx == l.length() - 1) {
+                    changed = true;
+                    continue;
+                }
+                clean.add(l);
+            }
+            if (changed) Files.write(f.toPath(), clean, StandardCharsets.UTF_8);
+        } catch (IOException ignored) {
+        }
+    }
+
     /** atEnd of GameSettings.loadOptions. */
     public static void load(GameSettings gs) {
         last = gs;
-        if (gs.guiScale < 0 || gs.guiScale > 4) gs.guiScale = 0;
+        McCompat.fixGuiScale(gs);
         File f = file();
         if (f == null || !f.isFile()) return;
         try {

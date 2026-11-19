@@ -23,7 +23,7 @@ public final class Zoom {
 
     private static boolean held() {
         if (testHeld) return true;
-        Minecraft mc = Minecraft.theMinecraft;
+        Minecraft mc = McCompat.minecraft;
         return mc != null && mc.currentScreen == null && mc.inGameHasFocus && Controls.zoom != null && Keyboard.isKeyDown(Controls.zoom.keyCode);
     }
 
@@ -50,9 +50,16 @@ public final class Zoom {
         return handPass ? value : value * (Opts.fov / 70.0F) * factor;
     }
 
+    private static final boolean HAS_MOUSE_SENSITIVITY = McCompat.hasField(net.minecraft.src.GameSettings.class, "mouseSensitivity");
+
+    private static final class Sensitivity {
+        static float get(EntityRenderer er) { return er.mc.gameSettings.mouseSensitivity; }
+    }
+
     /** replaceFloat of the 8.0 mouse-turn constant in updateCameraAndRender: slower turning while zoomed. */
     public static float turnScale(EntityRenderer er) {
-        return OptionsScreens.turnConstant(er.mc.gameSettings.mouseSensitivity) * Math.max(0.15F, factor);
+        float s = HAS_MOUSE_SENSITIVITY ? Sensitivity.get(er) : 0.5F;
+        return OptionsScreens.turnConstant(s) * Math.max(0.15F, factor);
     }
 
     /** atStart of EntityRenderer.func_4135_b (the hand pass): when the FOV is not 70 or a zoom is on, the hand gets its own plain projection. */

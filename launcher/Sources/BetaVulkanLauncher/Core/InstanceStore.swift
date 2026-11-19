@@ -1,11 +1,12 @@
 import Foundation
 
-/// A playable Beta 1.7.3 profile with isolated saves/mods and optional per-instance settings overrides.
+/// A playable Golden Age Minecraft profile with isolated saves/mods and optional per-instance settings overrides.
 struct GameInstance: Codable, Identifiable, Equatable {
     static let defaultID = "default"
 
     var id: String
     var name: String
+    var versionID: String?
     var jarID: String?
     var backend: Backend?
     var fullscreen: Bool?
@@ -14,6 +15,7 @@ struct GameInstance: Codable, Identifiable, Equatable {
     var lastPlayed: Date?
 
     var isDefault: Bool { id == Self.defaultID }
+    var effectiveVersionID: String { versionID ?? "b1.7.3" }
 }
 
 @MainActor
@@ -71,11 +73,12 @@ final class InstanceStore: ObservableObject {
     }
 
     @discardableResult
-    func create(name: String, jarID: String? = nil, backend: Backend? = nil, fullscreen: Bool? = nil, memoryMB: Int? = nil) -> GameInstance {
+    func create(name: String, versionID: String? = nil, jarID: String? = nil, backend: Backend? = nil, fullscreen: Bool? = nil, memoryMB: Int? = nil) -> GameInstance {
         let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let entry = GameInstance(
             id: UUID().uuidString.lowercased(),
             name: clean.isEmpty ? "Beta 1.7.3 Copy" : clean,
+            versionID: versionID,
             jarID: jarID,
             backend: backend,
             fullscreen: fullscreen,
@@ -93,6 +96,7 @@ final class InstanceStore: ObservableObject {
     func duplicate(_ source: GameInstance, defaultDir: String, jars: JarLibrary) -> GameInstance {
         let copy = create(
             name: "\(source.name) Copy",
+            versionID: source.versionID,
             jarID: source.jarID,
             backend: source.backend,
             fullscreen: source.fullscreen,

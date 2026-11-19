@@ -66,13 +66,24 @@ public final class Mesher {
         return 255 << 24 | b << 16 | g << 8 | r;   // little-endian RGBA, as the game's tessellator packs it
     }
 
-    /** Biome colour of a voxel for tinted blocks, as 0xRRGGBB; 0xFFFFFF when untinted. */
-    static int tintRgb(int id, int meta, int tintIdx, int side) {
-        if (id == 2 && side == 1) return ColorizerGrass.getGrassColor(Vox.tintTemperature(tintIdx), Vox.tintHumidity(tintIdx)) & 0xFFFFFF;
-        if (id == 18) {
+    private static final class PineBirch {
+        static int tint(int meta, int tintIdx) {
             int t = meta & 3;
             if (t == 1) return ColorizerFoliage.getFoliageColorPine() & 0xFFFFFF;
             if (t == 2) return ColorizerFoliage.getFoliageColorBirch() & 0xFFFFFF;
+            return ColorizerFoliage.getFoliageColor(Vox.tintTemperature(tintIdx), Vox.tintHumidity(tintIdx)) & 0xFFFFFF;
+        }
+    }
+
+    /** Biome colour of a voxel for tinted blocks, as 0xRRGGBB; 0xFFFFFF when untinted. */
+    static int tintRgb(int id, int meta, int tintIdx, int side) {
+        if (id == 2 && side == 1) {
+            if (!dev.betavk.hooks.McCompat.HAS_COLORIZER_GRASS) return 0x7CBD6B;
+            return ColorizerGrass.getGrassColor(Vox.tintTemperature(tintIdx), Vox.tintHumidity(tintIdx)) & 0xFFFFFF;
+        }
+        if (id == 18) {
+            if (!dev.betavk.hooks.McCompat.HAS_COLORIZER_GRASS) return 0x48B518;
+            if (dev.betavk.hooks.McCompat.HAS_FOLIAGE_PINE_BIRCH) return PineBirch.tint(meta, tintIdx);
             return ColorizerFoliage.getFoliageColor(Vox.tintTemperature(tintIdx), Vox.tintHumidity(tintIdx)) & 0xFFFFFF;
         }
         return 0xFFFFFF;

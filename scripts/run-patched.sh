@@ -7,7 +7,15 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/scripts/env.sh" >/dev/null
 cd "$ROOT"
 gradle -q :agent:agentJar :hooks:classes :game:stageGame
-CP="$ROOT/hooks/build/classes/java/main:$ROOT/build/mc/minecraft-readable.jar:$ROOT/mojang/resources:$(ls "$ROOT"/game/build/stage/lib/*.jar | tr '\n' ':')"
+CP_VER="${1:-${MC_VERSION:-b1.7.3}}"
+if [ "$CP_VER" = "b1.7.3" ]; then
+  MC_JAR="$ROOT/build/mc/minecraft-readable.jar"
+  MC_RES="$ROOT/mojang/resources"
+else
+  MC_JAR="$ROOT/build/mc/$CP_VER/minecraft-readable.jar"
+  MC_RES="$ROOT/mojang/resources-$CP_VER"
+fi
+CP="$ROOT/hooks/build/classes/java/main:$MC_JAR:$MC_RES:$(ls "$ROOT"/game/build/stage/lib/*.jar | tr '\n' ':')"
 SANDBOX="${BETAVK_HOME:-$ROOT/mojang/run-home}"
 mkdir -p "$SANDBOX"
 # Sounds come from a Mojang asset store (indexes/b1.7.json + objects/): BETAVK_ASSETS, else the launcher's, if present.

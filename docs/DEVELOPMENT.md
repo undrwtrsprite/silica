@@ -1,7 +1,6 @@
 # Developing Silica
 
-Minecraft Beta 1.7.3 running **natively on Apple Silicon** (arm64 JDK 21, LWJGL 3, GLFW, OpenAL Soft) with a **Vulkan 1.2 renderer on MoltenVK**
-and a SwiftUI launcher. Gameplay and the world format stay b1.7.3-compatible (verified against Mojang's own server, see below).
+**Golden Age Minecraft** (Alpha 1.0 through Beta 1.7.3, plus experimental Infdev `2010-06-30` and Beta 1.8/1.8.1) running **natively on Apple Silicon** (arm64 JDK 21, LWJGL 3, GLFW, OpenAL Soft) with a **Vulkan 1.2 renderer on MoltenVK** and a SwiftUI launcher. Gameplay and the world format stay compatible with original clients and servers.
 
 **This repository contains no Mojang code, jars or assets.** You bring your own copy of Minecraft Beta 1.7.3; a setup step turns your jar into a
 readable, patchable form on your machine (git-ignored `build/mc/`, `mojang/`), and our code (renderer, platform layer, hooks) is applied to it at load time.

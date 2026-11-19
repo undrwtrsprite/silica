@@ -1,7 +1,6 @@
 package dev.betavk.lod;
 
 import dev.betavk.vox.GenWorld;
-import net.minecraft.src.BiomeGenBase;
 import net.minecraft.src.Block;
 import net.minecraft.src.Chunk;
 import net.minecraft.src.ChunkProviderGenerate;
@@ -10,7 +9,6 @@ import net.minecraft.src.NBTTagCompound;
 import net.minecraft.src.RegionFileCache;
 import net.minecraft.src.SaveHandler;
 import net.minecraft.src.World;
-import net.minecraft.src.WorldChunkManager;
 
 import java.io.DataInputStream;
 import java.io.File;
@@ -48,13 +46,13 @@ public final class LodChunkSource {
         long key = Long.MIN_VALUE;
         final byte[] topY = new byte[256];
         final byte[] topId = new byte[256];
-        BiomeGenBase centerBiome;
+        Object centerBiome;
     }
 
     static final class WorkerGen {
         final GenWorld genWorld;
         final ChunkProviderGenerate provider;
-        final WorldChunkManager manager;
+        final Object manager;
         final Random rng = new Random();
         final byte[] genBlocks = new byte[32768];
         final byte[] genData = new byte[16384];
@@ -63,13 +61,13 @@ public final class LodChunkSource {
         final ChunkSnap genSnap = new ChunkSnap(genBlocks, genData, genSky, genBlk);
         final byte[] surfBlocks = new byte[32768];
         final SurfCell[] surfCache = new SurfCell[256];
-        BiomeGenBase[] biomes;
-        BiomeGenBase[] surfBiomes;
+        Object[] biomes;
+        Object[] surfBiomes;
 
         WorkerGen(World real, long seed) {
             this.genWorld = GenWorld.create(real, seed);
             this.provider = new ChunkProviderGenerate(genWorld, seed);
-            this.manager = genWorld.manager();
+            this.manager = dev.betavk.hooks.McCompat.HAS_WORLD_CHUNK_MANAGER ? genWorld.manager() : null;
             for (int i = 0; i < surfCache.length; i++) surfCache[i] = new SurfCell();
         }
     }
@@ -91,11 +89,7 @@ public final class LodChunkSource {
     public static void reset(World w) {
         liveSnaps.clear();
         chunkHashes.clear();
-        if (w != null && w.saveHandler instanceof SaveHandler sh) {
-            saveDir = sh.getSaveDirectory();
-        } else {
-            saveDir = null;
-        }
+        saveDir = dev.betavk.hooks.McCompat.saveDirectory(w);
     }
 
     private static long blockDataHash(byte[] blocks, byte[] data) {
@@ -191,7 +185,7 @@ public final class LodChunkSource {
 
     /** Worker thread: resolve chunk (cx, cz), optionally including cross-chunk border tree canopies. */
     static ChunkSnap fetch(int cx, int cz, WorkerGen wg, boolean borderTrees) {
-        wg.biomes = wg.manager.loadBlockGeneratorData(wg.biomes, cx * 16, cz * 16, 16, 16);
+        if (dev.betavk.hooks.McCompat.HAS_WORLD_CHUNK_MANAGER) BiomeSupport.loadBiomes(wg, cx, cz);
 
         ChunkSnap snap = liveSnaps.get(key(cx, cz));
         if (snap == null) {
@@ -202,9 +196,11 @@ public final class LodChunkSource {
         } else {
             // Live/disk snapshots carry exact blocks/light; attach exact biome climate from manager.
             ChunkSnap view = new ChunkSnap(snap.blocks, snap.data, snap.skyLight, snap.blockLight);
-            for (int i = 0; i < 256; i++) {
-                view.temp[i] = (float) wg.manager.temperature[i];
-                view.hum[i] = (float) wg.manager.humidity[i];
+            if (dev.betavk.hooks.McCompat.HAS_WORLD_CHUNK_MANAGER) {
+                BiomeSupport.fillClimate(wg, view);
+            } else {
+                Arrays.fill(view.temp, 0.5F);
+                Arrays.fill(view.hum, 0.5F);
             }
             return view;
         }
@@ -255,22 +251,25 @@ public final class LodChunkSource {
 
         ChunkProviderGenerate p = wg.provider;
         p.rand.setSeed((long) cx * 341873128712L + (long) cz * 132897987541L);
-        p.generateTerrain(cx, cz, blocks, wg.biomes, wg.manager.temperature);
-        p.replaceBlocksForBiome(cx, cz, blocks, wg.biomes);
-
         ChunkSnap snap = wg.genSnap;
-        for (int i = 0; i < 256; i++) {
-            snap.temp[i] = (float) wg.manager.temperature[i];
-            snap.hum[i] = (float) wg.manager.humidity[i];
+        Object centerBiome;
+        if (dev.betavk.hooks.McCompat.HAS_WORLD_CHUNK_MANAGER) {
+            centerBiome = BiomeSupport.generateAndReplace(wg, cx, cz, blocks, false);
+            BiomeSupport.fillClimate(wg, snap);
+        } else {
+            LegacyGen.generateAndReplace(p, cx, cz, blocks);
+            Arrays.fill(snap.temp, 0.5F);
+            Arrays.fill(snap.hum, 0.5F);
+            centerBiome = null;
         }
-        SurfCell selfSurf = storeSurface(cx, cz, blocks, wg.biomes[8 * 16 + 8], wg);
+        SurfCell selfSurf = storeSurface(cx, cz, blocks, centerBiome, wg);
         plantFastTrees(cx, cz, blocks, data, selfSurf, borderTrees, wg);
         applySnowAndIce(blocks, snap.temp);
-        fillLightFast(blocks, sky, wg.genWorld.worldProvider.hasNoSky);
+        fillLightFast(blocks, sky, dev.betavk.hooks.McCompat.isNether(wg.genWorld));
         return snap;
     }
 
-    private static SurfCell storeSurface(int cx, int cz, byte[] blocks, BiomeGenBase centerBiome, WorkerGen wg) {
+    private static SurfCell storeSurface(int cx, int cz, byte[] blocks, Object centerBiome, WorkerGen wg) {
         long k = key(cx, cz);
         int slot = ((cx * 73856093) ^ (cz * 19349663)) & 255;
         SurfCell cell = wg.surfCache[slot];
@@ -297,18 +296,22 @@ public final class LodChunkSource {
 
         ChunkSnap live = liveSnaps.get(k);
         if (live != null) {
-            BiomeGenBase b = wg.manager.getBiomeGenAt(cx * 16 + 8, cz * 16 + 8);
+            Object b = dev.betavk.hooks.McCompat.HAS_WORLD_CHUNK_MANAGER ? BiomeSupport.getCenterBiome(wg, cx, cz) : null;
             return storeSurface(cx, cz, live.blocks, b, wg);
         }
 
         byte[] sb = wg.surfBlocks;
         Arrays.fill(sb, (byte) 0);
-        wg.surfBiomes = wg.manager.loadBlockGeneratorData(wg.surfBiomes, cx * 16, cz * 16, 16, 16);
         ChunkProviderGenerate p = wg.provider;
         p.rand.setSeed((long) cx * 341873128712L + (long) cz * 132897987541L);
-        p.generateTerrain(cx, cz, sb, wg.surfBiomes, wg.manager.temperature);
-        p.replaceBlocksForBiome(cx, cz, sb, wg.surfBiomes);
-        return storeSurface(cx, cz, sb, wg.surfBiomes[8 * 16 + 8], wg);
+        Object centerBiome;
+        if (dev.betavk.hooks.McCompat.HAS_WORLD_CHUNK_MANAGER) {
+            centerBiome = BiomeSupport.generateAndReplace(wg, cx, cz, sb, true);
+        } else {
+            LegacyGen.generateAndReplace(p, cx, cz, sb);
+            centerBiome = null;
+        }
+        return storeSurface(cx, cz, sb, centerBiome, wg);
     }
 
     private static void setNibble(byte[] arr, int idx, int val) {
@@ -328,8 +331,9 @@ public final class LodChunkSource {
                 long k = key(tcx, tcz);
                 int slot = ((tcx * 73856093) ^ (tcz * 19349663)) & 255;
                 SurfCell nb = wg.surfCache[slot].key == k ? wg.surfCache[slot] : null;
-                BiomeGenBase center = nb != null ? nb.centerBiome : wg.manager.getBiomeGenAt(tcx * 16 + 8, tcz * 16 + 8);
-                if (center == BiomeGenBase.desert || center == BiomeGenBase.iceDesert || center == BiomeGenBase.tundra) continue;
+                Object center = !dev.betavk.hooks.McCompat.HAS_WORLD_CHUNK_MANAGER ? null
+                        : (nb != null ? nb.centerBiome : BiomeSupport.getCenterBiome(wg, tcx, tcz));
+                if (dev.betavk.hooks.McCompat.HAS_WORLD_CHUNK_MANAGER && BiomeSupport.isDry(center)) continue;
                 int count = computeTreeCount(tcx, tcz, center, wg);
                 if (count <= 0) continue;
                 if (nb == null) nb = getSurface(tcx, tcz, wg);
@@ -338,24 +342,22 @@ public final class LodChunkSource {
         }
     }
 
-    private static int computeTreeCount(int cx, int cz, BiomeGenBase center, WorkerGen wg) {
+    private static int computeTreeCount(int cx, int cz, Object center, WorkerGen wg) {
         Random rng = wg.rng;
-        rng.setSeed((long) cx * 0x4F9939F508L ^ (long) cz * 0x1EF1565BD5L ^ wg.genWorld.getRandomSeed());
+        rng.setSeed((long) cx * 0x4F9939F508L ^ (long) cz * 0x1EF1565BD5L ^ dev.betavk.hooks.McCompat.worldSeed(wg.genWorld));
         double d = wg.provider.mobSpawnerNoise.func_806_a(cx * 8.0, cz * 8.0);
         int base = (int) ((d / 8.0 + rng.nextDouble() * 4.0 + 4.0) / 3.0);
         int count = rng.nextInt(10) == 0 ? 1 : 0;
-        if (center == BiomeGenBase.forest || center == BiomeGenBase.rainforest) count += base + 5;
-        else if (center == BiomeGenBase.seasonalForest) count += base + 2;
-        else if (center == BiomeGenBase.taiga) count += base + 5;
-        else if (center == BiomeGenBase.savanna || center == BiomeGenBase.plains) count = rng.nextInt(5) == 0 ? 1 : 0;
-        else count += base;
-        return count;
+        if (dev.betavk.hooks.McCompat.HAS_WORLD_CHUNK_MANAGER) {
+            return BiomeSupport.adjustTreeCount(center, count, base, rng);
+        }
+        return count + base;
     }
 
     private static void plantChunkTreesInto(int treeCX, int treeCZ, int targetCX, int targetCZ,
                                             byte[] blocks, byte[] data, SurfCell surf, WorkerGen wg) {
-        BiomeGenBase center = surf.centerBiome;
-        if (center == BiomeGenBase.desert || center == BiomeGenBase.iceDesert || center == BiomeGenBase.tundra) return;
+        Object center = surf.centerBiome;
+        if (dev.betavk.hooks.McCompat.HAS_WORLD_CHUNK_MANAGER && BiomeSupport.isDry(center)) return;
         int count = computeTreeCount(treeCX, treeCZ, center, wg);
         if (count <= 0) return;
 
@@ -363,8 +365,8 @@ public final class LodChunkSource {
         boolean sameChunk = (treeCX == targetCX && treeCZ == targetCZ);
         int offX = (treeCX - targetCX) << 4;
         int offZ = (treeCZ - targetCZ) << 4;
-        boolean birchAllowed = center == BiomeGenBase.forest;
-        boolean pine = center == BiomeGenBase.taiga;
+        boolean birchAllowed = dev.betavk.hooks.McCompat.HAS_WORLD_CHUNK_MANAGER && BiomeSupport.isForest(center);
+        boolean pine = dev.betavk.hooks.McCompat.HAS_WORLD_CHUNK_MANAGER && BiomeSupport.isTaiga(center);
 
         for (int t = 0; t < count; t++) {
             int lx = rng.nextInt(16);
@@ -495,6 +497,86 @@ public final class LodChunkSource {
 
                     sky[idxEven >>> 1] = (byte) ((sEven & 15) | ((sOdd & 15) << 4));
                 }
+            }
+        }
+    }
+
+    private static final class BiomeSupport {
+        static void loadBiomes(WorkerGen wg, int cx, int cz) {
+            net.minecraft.src.WorldChunkManager mgr = (net.minecraft.src.WorldChunkManager) wg.manager;
+            wg.biomes = mgr.loadBlockGeneratorData((net.minecraft.src.BiomeGenBase[]) wg.biomes, cx * 16, cz * 16, 16, 16);
+        }
+
+        static void fillClimate(WorkerGen wg, ChunkSnap snap) {
+            net.minecraft.src.WorldChunkManager mgr = (net.minecraft.src.WorldChunkManager) wg.manager;
+            for (int i = 0; i < 256; i++) {
+                snap.temp[i] = (float) mgr.temperature[i];
+                snap.hum[i] = (float) mgr.humidity[i];
+            }
+        }
+
+        static Object generateAndReplace(WorkerGen wg, int cx, int cz, byte[] blocks, boolean surf) {
+            net.minecraft.src.WorldChunkManager mgr = (net.minecraft.src.WorldChunkManager) wg.manager;
+            net.minecraft.src.BiomeGenBase[] arr;
+            if (surf) {
+                arr = mgr.loadBlockGeneratorData((net.minecraft.src.BiomeGenBase[]) wg.surfBiomes, cx * 16, cz * 16, 16, 16);
+                wg.surfBiomes = arr;
+            } else {
+                arr = (net.minecraft.src.BiomeGenBase[]) wg.biomes;
+            }
+            wg.provider.generateTerrain(cx, cz, blocks, arr, mgr.temperature);
+            wg.provider.replaceBlocksForBiome(cx, cz, blocks, arr);
+            return arr[8 * 16 + 8];
+        }
+
+        static Object getCenterBiome(WorkerGen wg, int cx, int cz) {
+            return ((net.minecraft.src.WorldChunkManager) wg.manager).getBiomeGenAt(cx * 16 + 8, cz * 16 + 8);
+        }
+
+        static boolean isDry(Object center) {
+            return center == net.minecraft.src.BiomeGenBase.desert
+                    || center == net.minecraft.src.BiomeGenBase.iceDesert
+                    || center == net.minecraft.src.BiomeGenBase.tundra;
+        }
+
+        static int adjustTreeCount(Object center, int count, int base, Random rng) {
+            if (center == net.minecraft.src.BiomeGenBase.forest || center == net.minecraft.src.BiomeGenBase.rainforest) return count + base + 5;
+            if (center == net.minecraft.src.BiomeGenBase.seasonalForest) return count + base + 2;
+            if (center == net.minecraft.src.BiomeGenBase.taiga) return count + base + 5;
+            if (center == net.minecraft.src.BiomeGenBase.savanna || center == net.minecraft.src.BiomeGenBase.plains) return rng.nextInt(5) == 0 ? 1 : 0;
+            return count + base;
+        }
+
+        static boolean isForest(Object center) {
+            return center == net.minecraft.src.BiomeGenBase.forest;
+        }
+
+        static boolean isTaiga(Object center) {
+            return center == net.minecraft.src.BiomeGenBase.taiga;
+        }
+    }
+
+    private static final class LegacyGen {
+        private static final java.lang.invoke.MethodHandle GEN;
+        private static final java.lang.invoke.MethodHandle REPL;
+        static {
+            java.lang.invoke.MethodHandle g = null, r = null;
+            try {
+                var lookup = java.lang.invoke.MethodHandles.publicLookup();
+                var mt = java.lang.invoke.MethodType.methodType(void.class, int.class, int.class, byte[].class);
+                g = lookup.findVirtual(ChunkProviderGenerate.class, "generateTerrain", mt);
+                r = lookup.findVirtual(ChunkProviderGenerate.class, "replaceSurfaceBlocks", mt);
+            } catch (Throwable ignored) {}
+            GEN = g;
+            REPL = r;
+        }
+
+        static void generateAndReplace(ChunkProviderGenerate p, int cx, int cz, byte[] blocks) {
+            try {
+                if (GEN != null) GEN.invokeExact(p, cx, cz, blocks);
+                if (REPL != null) REPL.invokeExact(p, cx, cz, blocks);
+            } catch (Throwable t) {
+                throw new RuntimeException(t);
             }
         }
     }

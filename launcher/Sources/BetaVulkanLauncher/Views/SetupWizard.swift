@@ -77,7 +77,7 @@ struct SetupWizard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Silica setup").font(.system(size: 16.5, weight: .bold))
-                    Text("Beta 1.7.3 for Apple Silicon").font(.system(size: 11.5)).foregroundStyle(.secondary)
+                    Text("Golden Age Minecraft on Apple Silicon").font(.system(size: 11.5)).foregroundStyle(.secondary)
                 }
             }
             .padding(.bottom, 26)
@@ -113,7 +113,7 @@ struct SetupWizard: View {
                 .font(.system(size: 26, weight: .bold))
                 .tracking(-0.7)
                 .accessibilityAddTraits(.isHeader)
-            Text("Use the Microsoft account that owns Minecraft: Java Edition. Once ownership is verified, Silica can install Beta 1.7.3.")
+            Text("Use the Microsoft account that owns Minecraft: Java Edition. Once ownership is verified, Silica sets up your Golden Age Minecraft runtime.")
                 .font(.system(size: 13.5))
                 .foregroundStyle(.secondary)
             Spacer()
@@ -253,7 +253,7 @@ struct SetupWizard: View {
             Text("You're all set")
                 .font(.system(size: 28, weight: .bold))
                 .tracking(-0.7)
-            Text(verified ? "Minecraft Beta 1.7.3 is installed." : "Minecraft Beta 1.7.3 is installed. Sign in on Play to launch.")
+            Text(verified ? "Silica is installed and ready to launch Golden Age Minecraft." : "Silica is installed. Sign in on Play to launch.")
                 .font(.system(size: 13.5))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

@@ -21,6 +21,7 @@ public final class MainLoop {
 
     /** atStart of Minecraft.startGame: the graphics backend must exist before the window is created. */
     public static void beforeStart(Minecraft mc) {
+        McCompat.minecraft = mc;
         Backends.install();
     }
 
@@ -79,6 +80,15 @@ public final class MainLoop {
     public static void focusLostToggle(Minecraft mc) {
     }
 
+    /** Removes pre-b1.6 Thread.sleep(1000) inside toggleFullscreen. */
+    public static void noopSleep(long ms) {
+    }
+
+    /** Pre-b1.6 toggleFullscreen called setIngameFocus() unconditionally; avoid locking the cursor while a menu is open. */
+    public static void fullscreenFocus(Minecraft mc) {
+        if (mc.currentScreen == null) mc.setIngameFocus();
+    }
+
     private static long nextFrameNs;
 
     /**
@@ -110,7 +120,9 @@ public final class MainLoop {
         frameNo++;
         PickBlock.poll(mc);
         if (Bench.ENABLED) Bench.frame(mc);
-        TestHarness.frame(mc);
+        if ("boot".equals(System.getProperty("betavk.test"))) McCompat.bootFrame(mc);
+        else if ("compat".equals(System.getProperty("betavk.test"))) McCompat.compatFrame(mc);
+        else if (System.getProperty("betavk.test") != null) TestHarness.frame(mc);
         if (Display.wasResized()) {
             mc.displayWidth = Math.max(1, Display.getWidth());
             mc.displayHeight = Math.max(1, Display.getHeight());
@@ -139,5 +151,18 @@ public final class MainLoop {
     /** replaceBody of MouseHelper.ungrabMouseCursor (the original centred the cursor in an AWT canvas): releasing the cursor also puts it in the middle of the window. */
     public static void ungrab(MouseHelper helper) {
         Mouse.setGrabbed(false);
+    }
+
+    /** replaceBody of legacy Infdev AWT MouseHelper.grabMouseCursor: avoid AWT MouseInfo/Robot in headless macOS mode. */
+    public static void grab(MouseHelper helper) {
+        Mouse.setGrabbed(true);
+        Mouse.getDX();
+        Mouse.getDY();
+    }
+
+    /** replaceBody of legacy Infdev AWT MouseHelper.mouseXYChange. */
+    public static void mouseDelta(MouseHelper helper) {
+        helper.deltaX = Mouse.getDX();
+        helper.deltaY = Mouse.getDY();
     }
 }

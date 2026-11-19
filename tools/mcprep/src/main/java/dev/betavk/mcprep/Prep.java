@@ -38,6 +38,7 @@ public final class Prep {
         for (String p : new String[]{"Keyboard", "Mouse"}) REDIRECT.put("org/lwjgl/input/" + p, "dev/betavk/platform/" + p);
         REDIRECT.put("org/lwjgl/opengl/Display", "dev/betavk/platform/Display");
         REDIRECT.put("org/lwjgl/opengl/DisplayMode", "dev/betavk/platform/DisplayMode");
+        REDIRECT.put("org/lwjgl/opengl/PixelFormat", "dev/betavk/compat/PixelFormat");
         REDIRECT.put("org/lwjgl/LWJGLException", "dev/betavk/platform/LWJGLException");
         REDIRECT.put("org/lwjgl/Sys", "dev/betavk/platform/Sys");
         REDIRECT.put("org/lwjgl/opengl/GLContext", "dev/betavk/compat/GLContext");
@@ -86,6 +87,9 @@ public final class Prep {
             String r = REDIRECT.get(internalName);
             if (r != null) return r;
             String m = maps.classes.get(internalName);
+            if ("net/minecraft/src/Minecraft".equals(m) && !maps.classes.containsValue("net/minecraft/client/Minecraft")) {
+                return "net/minecraft/client/Minecraft";
+            }
             return m != null ? m : internalName;
         }
 
@@ -168,20 +172,25 @@ public final class Prep {
             }
             Files.createDirectories(outJar.toAbsolutePath().getParent());
             Remapper remapper = new MapRemapper();
+            Map<String, org.objectweb.asm.tree.ClassNode> remapped = new java.util.LinkedHashMap<>();
+            for (String name : classEntries) {
+                if (name.startsWith("paulscode/") || name.startsWith("com/jcraft/")) continue;   // third-party libraries bundled in the jar: the game uses the separate library jars (and our sound system replaces SoundSystem)
+                byte[] bytes;
+                try (InputStream in = z.getInputStream(z.getEntry(name))) {
+                    bytes = in.readAllBytes();
+                }
+                ClassReader cr = new ClassReader(bytes);
+                org.objectweb.asm.tree.ClassNode cn = new org.objectweb.asm.tree.ClassNode();
+                cr.accept(new ClassRemapper(new Widen(new OddGl(cn)), remapper), 0);
+                remapped.put(cn.name, cn);
+            }
+            Canonicalizer.normalize(remapped);
             try (OutputStream os = Files.newOutputStream(outJar); ZipOutputStream out = new ZipOutputStream(os)) {
-                for (String name : classEntries) {
-                    if (name.startsWith("paulscode/") || name.startsWith("com/jcraft/")) continue;   // third-party libraries bundled in the jar: the game uses the separate library jars (and our sound system replaces SoundSystem)
-                    byte[] bytes;
-                    try (InputStream in = z.getInputStream(z.getEntry(name))) {
-                        bytes = in.readAllBytes();
-                    }
-                    ClassReader cr = new ClassReader(bytes);
+                for (org.objectweb.asm.tree.ClassNode cn : remapped.values()) {
                     ClassWriter cw = new ClassWriter(0);
-                    cr.accept(new ClassRemapper(new Widen(new OddGl(cw)), remapper), 0);
-                    byte[] outBytes = cw.toByteArray();
-                    String newName = remapper.map(cr.getClassName()) + ".class";
-                    out.putNextEntry(new ZipEntry(newName));
-                    out.write(outBytes);
+                    cn.accept(cw);
+                    out.putNextEntry(new ZipEntry(cn.name + ".class"));
+                    out.write(cw.toByteArray());
                     out.closeEntry();
                 }
             }

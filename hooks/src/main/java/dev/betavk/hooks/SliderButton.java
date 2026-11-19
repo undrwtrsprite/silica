@@ -1,5 +1,7 @@
 package dev.betavk.hooks;
 
+import dev.betavk.platform.Mouse;
+import dev.betavk.render.Gfx;
 import net.minecraft.client.Minecraft;
 import net.minecraft.src.GuiButton;
 
@@ -24,13 +26,15 @@ public final class SliderButton extends GuiButton {
 
     public SliderButton(int id, int x, int y, int w, int h, float value, Consumer<Float> apply, Supplier<String> label, Runnable onRelease) {
         super(id, x, y, w, h, label.get());
-        this.value = value;
+        this.value = Math.max(0.0F, Math.min(1.0F, value));
         this.apply = apply;
         this.label = label;
         this.onRelease = onRelease;
     }
 
-    @Override public int getHoverState(boolean over) {
+    private static final boolean HAS_MOUSE_DRAGGED = McCompat.hasMethod(GuiButton.class, "mouseDragged", Minecraft.class, int.class, int.class);
+
+    public int getHoverState(boolean over) {
         return 0;
     }
 
@@ -40,22 +44,42 @@ public final class SliderButton extends GuiButton {
         displayString = label.get();
     }
 
-    @Override public void mouseDragged(Minecraft mc, int mx, int my) {
+    @Override public void drawButton(Minecraft mc, int mx, int my) {
+        if (HAS_MOUSE_DRAGGED) {
+            super.drawButton(mc, mx, my);
+            return;
+        }
+        if (!enabled2) return;
+        if (dragging && !Mouse.isButtonDown(0)) mouseReleased(mx, my);
+        Gfx.glBindTexture(Gfx.GL_TEXTURE_2D, mc.renderEngine.getTexture("/gui/gui.png"));
+        Gfx.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        drawTexturedModalRect(xPosition, yPosition, 0, 46, width / 2, height);
+        drawTexturedModalRect(xPosition + width / 2, yPosition, 200 - width / 2, 46, width / 2, height);
+        mouseDragged(mc, mx, my);
+        int textColor = !enabled ? -6250336 : (mx >= xPosition && my >= yPosition && mx < xPosition + width && my < yPosition + height ? 0xFFFFA0 : 0xE0E0E0);
+        drawCenteredString(mc.fontRenderer, displayString, xPosition + width / 2, yPosition + (height - 8) / 2, textColor);
+    }
+
+    public void mouseDragged(Minecraft mc, int mx, int my) {
         if (!enabled || !enabled2) return;
         if (dragging) set(mx);
-        dev.betavk.render.Gfx.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        Gfx.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
         drawTexturedModalRect(xPosition + (int) (value * (float) (width - 8)), yPosition, 0, 66, 4, 20);
         drawTexturedModalRect(xPosition + (int) (value * (float) (width - 8)) + 4, yPosition, 196, 66, 4, 20);
     }
 
-    @Override public boolean mousePressed(Minecraft mc, int mx, int my) {
-        if (!super.mousePressed(mc, mx, my)) return false;
+    public boolean mousePressed(int mx, int my) {
+        return mousePressed(null, mx, my);
+    }
+
+    public boolean mousePressed(Minecraft mc, int mx, int my) {
+        if (!enabled || !enabled2 || mx < xPosition || my < yPosition || mx >= xPosition + width || my >= yPosition + height) return false;
         set(mx);
         dragging = true;
         return true;
     }
 
-    @Override public void mouseReleased(int mx, int my) {
+    public void mouseReleased(int mx, int my) {
         if (dragging) {
             dragging = false;
             if (onRelease != null) onRelease.run();

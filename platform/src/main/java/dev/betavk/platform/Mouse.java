@@ -30,6 +30,10 @@ public final class Mouse {
     public static void destroy() {
     }
 
+    public static dev.betavk.compat.Cursor setNativeCursor(dev.betavk.compat.Cursor c) {
+        return null;
+    }
+
     public static boolean next() {
         Event e = queue.poll();
         if (e == null) return false;

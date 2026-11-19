@@ -9,9 +9,33 @@ public final class LodHooks {
     private LodHooks() {
     }
 
+    private static java.lang.invoke.MethodHandle playerSortAndRender;
+
+    /** Alpha/early-Beta overload where RenderGlobal.sortAndRender takes EntityPlayer. */
+    public static int sortAndRenderPlayer(RenderGlobal rg, net.minecraft.src.EntityPlayer ent, int pass, double pt) {
+        int r;
+        try {
+            java.lang.invoke.MethodHandle mh = playerSortAndRender;
+            if (mh == null) {
+                mh = java.lang.invoke.MethodHandles.publicLookup().findVirtual(
+                        RenderGlobal.class, "sortAndRender",
+                        java.lang.invoke.MethodType.methodType(int.class, net.minecraft.src.EntityPlayer.class, int.class, double.class));
+                playerSortAndRender = mh;
+            }
+            r = (int) mh.invoke(rg, ent, pass, pt);
+        } catch (Throwable t) {
+            throw new RuntimeException(t);
+        }
+        return finishSortAndRender(rg, ent, pass, pt, r);
+    }
+
     /** redirectCall of RenderGlobal.sortAndRender inside EntityRenderer.renderWorld. */
     public static int sortAndRender(RenderGlobal rg, EntityLiving ent, int pass, double pt) {
         int r = rg.sortAndRender(ent, pass, pt);
+        return finishSortAndRender(rg, ent, pass, pt, r);
+    }
+
+    private static int finishSortAndRender(RenderGlobal rg, EntityLiving ent, int pass, double pt, int r) {
         if (pass == 0) {
             LodEngine.renderPass0(rg.mc, ent, (float) pt);
             return r;
@@ -33,7 +57,7 @@ public final class LodHooks {
     public static void renderAllRenderLists(RenderGlobal rg, int pass, double pt) {
         rg.renderAllRenderLists(pass, pt);
         if (pass == 1) {
-            LodEngine.renderPass1(rg.mc, rg.mc.renderViewEntity, (float) pt);
+            LodEngine.renderPass1(rg.mc, dev.betavk.hooks.McCompat.renderViewEntity(rg.mc), (float) pt);
         }
     }
 

@@ -23,6 +23,17 @@ import java.util.WeakHashMap;
  */
 public final class AsyncMesh {
     private static final boolean SPLIT_ALPHA = !"false".equalsIgnoreCase(System.getProperty("betavk.splitAlpha", "true"));
+    private static final boolean HAS_IS_CHUNK_LIT = dev.betavk.hooks.McCompat.hasField(WorldRenderer.class, "isChunkLit");
+    private static final boolean HAS_FANCY_GRASS = dev.betavk.hooks.McCompat.hasField(RenderBlocks.class, "fancyGrass");
+    private static final boolean HAS_IS_BLOCK_CONTAINER = dev.betavk.hooks.McCompat.hasField(Block.class, "isBlockContainer");
+
+    private static final class FancyGrassFlag {
+        static boolean isOn() { return RenderBlocks.fancyGrass; }
+    }
+
+    private static final class BlockContainerFlag {
+        static boolean is(int id) { return Block.isBlockContainer[id]; }
+    }
 
     private AsyncMesh() {
     }
@@ -99,7 +110,7 @@ public final class AsyncMesh {
                 for (int dx = -1; dx <= 1; dx++) {
                     WorldRenderer w = wrs[(gz * T + cy) * W + Math.floorMod(scx + dx, W)];
                     if (w.needsUpdate) {
-                        double ddx = w.posXPlus - vx, ddy = w.posYPlus - vy, ddz = w.posZPlus - vz;
+                        double ddx = (w.posX + 8) - vx, ddy = (w.posY + 8) - vy, ddz = (w.posZ + 8) - vz;
                         if (ddx * ddx + ddy * ddy + ddz * ddz <= 256.0) {
                             w.updateRenderer();
                             w.needsUpdate = false;
@@ -108,6 +119,11 @@ public final class AsyncMesh {
                 }
             }
         }
+    }
+
+    /** Alpha/early-Beta overload where RenderGlobal.updateRenderers takes EntityPlayer. */
+    public static boolean updateRenderersPlayer(RenderGlobal rg, net.minecraft.src.EntityPlayer viewer, boolean limit) {
+        return updateRenderers(rg, (EntityLiving) viewer, limit);
     }
 
     /** replaceBody of RenderGlobal.updateRenderers: periodic-sort + O(budget) tail-pop for large dirty queues, O(n) single-pass when small. */
@@ -132,7 +148,7 @@ public final class AsyncMesh {
                     if (!w.isInFrustum) {
                         dirtyBuckets[0].add(w);
                     } else {
-                        double dx = w.posXPlus - vx, dy = w.posYPlus - vy, dz = w.posZPlus - vz;
+                        double dx = (w.posX + 8) - vx, dy = (w.posY + 8) - vy, dz = (w.posZ + 8) - vz;
                         int d2 = (int) Math.min(1_000_000_000.0, dx * dx + dy * dy + dz * dz);
                         int log = 31 - Integer.numberOfLeadingZeros(Math.max(256, d2));
                         dirtyBuckets[16 - Math.max(0, Math.min(15, log - 8))].add(w);
@@ -153,8 +169,8 @@ public final class AsyncMesh {
                 int tailStart = Math.max(dirtyBuckets[0].size(), total - 256);
                 if (total - tailStart > 1) {
                     dirty.subList(tailStart, total).sort((a, b) -> {
-                        double dax = a.posXPlus - sortX, day = a.posYPlus - sortY, daz = a.posZPlus - sortZ;
-                        double dbx = b.posXPlus - sortX, dby = b.posYPlus - sortY, dbz = b.posZPlus - sortZ;
+                        double dax = (a.posX + 8) - sortX, day = (a.posY + 8) - sortY, daz = (a.posZ + 8) - sortZ;
+                        double dbx = (b.posX + 8) - sortX, dby = (b.posY + 8) - sortY, dbz = (b.posZ + 8) - sortZ;
                         int c = Double.compare(dbx * dbx + dby * dby + dbz * dbz, dax * dax + day * day + daz * daz);
                         return c != 0 ? c : Integer.compare(b.chunkIndex, a.chunkIndex);
                     });
@@ -172,7 +188,7 @@ public final class AsyncMesh {
                     dirty.add(w);
                     break;
                 }
-                double dx = w.posXPlus - vx, dy = w.posYPlus - vy, dz = w.posZPlus - vz;
+                double dx = (w.posX + 8) - vx, dy = (w.posY + 8) - vy, dz = (w.posZ + 8) - vz;
                 if (dx * dx + dy * dy + dz * dz <= 256.0) {
                     w.updateRenderer();
                     w.needsUpdate = false;
@@ -199,7 +215,7 @@ public final class AsyncMesh {
                 }
                 continue;
             }
-            double dx = w.posXPlus - vx, dy = w.posYPlus - vy, dz = w.posZPlus - vz;
+            double dx = (w.posX + 8) - vx, dy = (w.posY + 8) - vy, dz = (w.posZ + 8) - vz;
             float d2 = (float) (dx * dx + dy * dy + dz * dz);
             if (d2 <= 256.0F) {
                 nearWr.add(w);
@@ -345,7 +361,9 @@ public final class AsyncMesh {
                             if (id <= 0) continue;
                             if (pass == 0) {
                                 if (CaveCull.ENABLED && Block.opaqueCubeLookup[id]) vg.markOpaque(x - x0, y - y0, z - z0);
-                                if (Block.isBlockContainer[id]) res.tileEntityPositions.add(new int[]{x, y, z});
+                                if (HAS_IS_BLOCK_CONTAINER ? BlockContainerFlag.is(id) : (Block.blocksList[id] instanceof net.minecraft.src.BlockContainer)) {
+                                    res.tileEntityPositions.add(new int[]{x, y, z});
+                                }
                             }
                             Block b = worker.blocks[id];
                             int p = b.getRenderBlockPass();
@@ -353,7 +371,7 @@ public final class AsyncMesh {
                                 skipped = true;
                                 continue;
                             }
-                            if (pass == 1 && b != Block.waterMoving && b != Block.waterStill && b != Block.ice) {
+                            if (pass == 1 && id != 8 && id != 9 && id != 79) {
                                 res.pass1Alpha = true;
                             }
                             boolean splitCutout = SPLIT_ALPHA && pass == 0 && !b.isOpaqueCube() && !isOpaqueNonCube(b);
@@ -370,7 +388,7 @@ public final class AsyncMesh {
                                 cap.startDrawingQuads();
                                 cap.setTranslationD(-w.posX, -w.posY, -w.posZ);
                             }
-                            boolean guardGrass = SPLIT_ALPHA && pass == 0 && RenderBlocks.fancyGrass && id == Block.grass.blockID;
+                            boolean guardGrass = SPLIT_ALPHA && pass == 0 && HAS_FANCY_GRASS && FancyGrassFlag.isOn() && id == Block.grass.blockID;
                             if (guardGrass && cap.rawBufferIndex + 512 >= cap.bufferSize - 32) {
                                 cap.draw();
                                 cap.isDrawing = true;
@@ -409,9 +427,8 @@ public final class AsyncMesh {
     }
 
     private static boolean isOpaqueNonCube(Block b) {
-        return b == Block.snow || b == Block.stairSingle || b == Block.stairCompactCobblestone
-                || b == Block.stairCompactPlanks || b == Block.tilledField || b == Block.fence
-                || b == Block.pressurePlateStone || b == Block.pressurePlatePlanks || b == Block.button;
+        int id = b.blockID;
+        return id == 78 || id == 44 || id == 67 || id == 53 || id == 60 || id == 85 || id == 70 || id == 72 || id == 77;
     }
 
     /** Split fancy grass side overlay quads (terrain.png tile 38) from opaque grass blocks into the alpha-tested cutout buffer. */
@@ -499,7 +516,7 @@ public final class AsyncMesh {
         w.tileEntities.addAll(added);
         old.removeAll(w.tileEntityRenderers);
         w.tileEntities.removeAll(old);
-        w.isChunkLit = r.lit;
+        if (HAS_IS_CHUNK_LIT) w.isChunkLit = r.lit;
         w.isInitialized = true;
         CaveCull.set(w, r.visMask);
     }

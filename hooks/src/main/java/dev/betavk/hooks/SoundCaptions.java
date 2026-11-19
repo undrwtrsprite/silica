@@ -29,7 +29,7 @@ public final class SoundCaptions {
     }
 
     static void draw(GuiIngame gui, int width, int height) {
-        if (!Opts.soundCaptions || gui.mc.thePlayer == null || gui.mc.gameSettings.hideGUI) return;
+        if (!Opts.soundCaptions || gui.mc.thePlayer == null || McCompat.hideGui(gui.mc.gameSettings)) return;
         long now = System.nanoTime();
         recent.values().removeIf(caption -> now - caption.time() >= LIFETIME_NS);
         var font = gui.mc.fontRenderer;
@@ -38,7 +38,7 @@ public final class SoundCaptions {
             String label = entry.getKey();
             Caption caption = entry.getValue();
             int left = width - font.getStringWidth(label) - 23;
-            gui.drawRect(left, y, width - 3, y + 10, 0xB0000000);
+            gui.drawGradientRect(left, y, width - 3, y + 10, 0xB0000000, 0xB0000000);
             gui.drawString(font, label, left + 10, y + 1, 0xFFFFFF);
             int direction = direction(gui.mc.thePlayer, caption);
             if (direction < 0) gui.drawString(font, "<", left + 2, y + 1, 0xFFFFFF);

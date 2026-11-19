@@ -16,8 +16,18 @@ public final class VideoScreen {
     private VideoScreen() {
     }
 
-    private static final EnumOptions[] VANILLA = {EnumOptions.GRAPHICS, EnumOptions.RENDER_DISTANCE, EnumOptions.AMBIENT_OCCLUSION, EnumOptions.FRAMERATE_LIMIT,
-            EnumOptions.ANAGLYPH, EnumOptions.VIEW_BOBBING, EnumOptions.GUI_SCALE, EnumOptions.ADVANCED_OPENGL};
+    private static final EnumOptions[] VANILLA = buildVanilla();
+
+    private static EnumOptions[] buildVanilla() {
+        String[] names = {"GRAPHICS", "RENDER_DISTANCE", "AMBIENT_OCCLUSION", "FRAMERATE_LIMIT", "LIMIT_FRAMERATE", "ANAGLYPH", "VIEW_BOBBING", "GUI_SCALE", "ADVANCED_OPENGL"};
+        java.util.List<EnumOptions> list = new java.util.ArrayList<>();
+        for (String n : names) {
+            try {
+                list.add((EnumOptions) EnumOptions.class.getField(n).get(null));
+            } catch (Throwable ignored) {}
+        }
+        return list.toArray(new EnumOptions[0]);
+    }
     private static final int FOV = 301, FPS_CAP = 302, RENDER_DIST = 303, SHOW_FPS = 304, FULLSCREEN = 305, LOD_SETTINGS = 306, BETTER_GRASS = 307;
     private static final int MIN_CHUNKS = 2, MAX_CHUNKS = 32;
     private static int appliedChunks = -1;
@@ -31,10 +41,10 @@ public final class VideoScreen {
     }
 
     private static void applyRenderDistance(GuiVideoSettings gs) {
-        int cur = Opts.effectiveChunks(gs.guiGameSettings);
+        int cur = Opts.effectiveChunks(gs.mc.gameSettings);
         if (cur == appliedChunks) return;
         appliedChunks = cur;
-        Settings.save(gs.guiGameSettings);
+        Settings.save(gs.mc.gameSettings);
         if (gs.mc.theWorld != null && gs.mc.renderGlobal != null) gs.mc.renderGlobal.loadRenderers();
     }
 
@@ -51,7 +61,7 @@ public final class VideoScreen {
     }
 
     private static String fullscreenLabel(GuiVideoSettings gs) {
-        return "Fullscreen: " + (gs.mc.fullscreen ? "ON" : "OFF");
+        return "Fullscreen: " + (dev.betavk.platform.Display.isFullscreen() ? "ON" : "OFF");
     }
 
     private static String betterGrassLabel() {
@@ -65,7 +75,7 @@ public final class VideoScreen {
     /** replaceBody of GuiVideoSettings.initGui. */
     @SuppressWarnings("unchecked")
     public static void init(GuiVideoSettings gs) {
-        GameSettings opts = gs.guiGameSettings;
+        GameSettings opts = gs.mc.gameSettings;
         StringTranslate tr = StringTranslate.getInstance();
         gs.field_22107_a = tr.translateKey("options.videoTitle");
         appliedChunks = Opts.effectiveChunks(opts);
@@ -115,7 +125,7 @@ public final class VideoScreen {
     public static void action(GuiVideoSettings gs, GuiButton b) {
         if (!b.enabled) return;
         if (b instanceof SliderButton) return;   // no rebuild while dragging
-        GameSettings opts = gs.guiGameSettings;
+        GameSettings opts = gs.mc.gameSettings;
         if (b.id < 100 && b instanceof GuiSmallButton sb) {
             opts.setOptionValue(sb.returnEnumOptions(), 1);
             b.displayString = opts.getKeyBinding(EnumOptions.getEnumOptions(b.id));
@@ -147,6 +157,6 @@ public final class VideoScreen {
     /** addMethod GuiVideoSettings.onGuiClosed: slider changes are saved when the screen closes. */
     public static void closed(GuiVideoSettings gs) {
         applyRenderDistance(gs);
-        gs.guiGameSettings.saveOptions();
+        gs.mc.gameSettings.saveOptions();
     }
 }

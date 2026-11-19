@@ -13,15 +13,20 @@ import net.minecraft.src.MovementInputFromOptions;
  * and closing it picks up whichever movement keys are really held at that moment (as newer versions do).
  */
 public final class Keys {
+    private static final boolean HAS_SNEAK = McCompat.hasField(GameSettings.class, "keyBindSneak");
     private static MovementInputFromOptions toggledInput;
     private Keys() {
+    }
+
+    private static final class SneakKey {
+        static net.minecraft.src.KeyBinding get(GameSettings gs) { return gs.keyBindSneak; }
     }
 
     /** atStartCancelable of EntityPlayerSP.handleKeyPress(key, down): presses do not count while a screen is open (releases always do). */
     public static boolean press(EntityPlayerSP p, int key, boolean down) {
         if (down && p.mc != null && p.mc.currentScreen != null) return true;
-        if (Opts.toggleSneak && p.movementInput instanceof MovementInputFromOptions input
-                && key == input.gameSettings.keyBindSneak.keyCode) {
+        if (HAS_SNEAK && Opts.toggleSneak && p.movementInput instanceof MovementInputFromOptions input
+                && key == SneakKey.get(input.gameSettings).keyCode) {
             if (down) toggledInput = toggledInput == input ? null : input;
             return true;
         }
@@ -29,7 +34,7 @@ public final class Keys {
     }
 
     public static void applySneak(MovementInputFromOptions input, EntityPlayer player) {
-        if (Opts.toggleSneak) input.movementKeyStates[5] = toggledInput == input;
+        if (HAS_SNEAK && Opts.toggleSneak) input.movementKeyStates[5] = toggledInput == input;
     }
 
     static void clearSneak() {
@@ -40,9 +45,11 @@ public final class Keys {
     public static void focus(Minecraft mc) {
         if (!mc.inGameHasFocus || mc.thePlayer == null || mc.currentScreen != null) return;
         GameSettings gs = mc.gameSettings;
-        for (var b : new net.minecraft.src.KeyBinding[]{gs.keyBindForward, gs.keyBindBack, gs.keyBindLeft, gs.keyBindRight, gs.keyBindJump, gs.keyBindSneak}) {
-            if (Opts.toggleSneak && b.keyCode == gs.keyBindSneak.keyCode) continue;
-            mc.thePlayer.handleKeyPress(b.keyCode, Keyboard.isKeyDown(b.keyCode));
+        net.minecraft.src.KeyBinding sneak = HAS_SNEAK ? SneakKey.get(gs) : null;
+        for (var b : new net.minecraft.src.KeyBinding[]{gs.keyBindForward, gs.keyBindBack, gs.keyBindLeft, gs.keyBindRight, gs.keyBindJump, sneak}) {
+            if (b == null) continue;
+            if (sneak != null && Opts.toggleSneak && b.keyCode == sneak.keyCode) continue;
+            McCompat.setKeyBindState(mc, b.keyCode, Keyboard.isKeyDown(b.keyCode));
         }
     }
 }

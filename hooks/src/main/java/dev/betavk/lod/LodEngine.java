@@ -101,7 +101,8 @@ public final class LodEngine {
 
     public static boolean isActive(Minecraft mc) {
         if (mc == null || mc.theWorld == null || mc.theWorld != activeWorld) return false;
-        if (mc.theWorld.worldProvider.isNether) return false;
+        if (dev.betavk.hooks.McCompat.HAS_WORLD_SETTINGS) return false;
+        if (dev.betavk.hooks.McCompat.isNether(mc.theWorld)) return false;
         int lod = Opts.effectiveLodChunks(mc.gameSettings);
         int real = Opts.effectiveChunks(mc.gameSettings);
         return lod > real;
@@ -131,7 +132,7 @@ public final class LodEngine {
         nodes.clear();
         LodChunkSource.reset(w);
         activeWorld = w;
-        worldSeed = w == null ? 0L : w.getRandomSeed();
+        worldSeed = dev.betavk.hooks.McCompat.worldSeed(w);
         LodDiskCache.reset(LodChunkSource.saveDirectory(), worldSeed);
         lastRealChunks = -1;
         lastLodChunks = -1;
@@ -139,7 +140,7 @@ public final class LodEngine {
 
     /** Game thread: a chunk was explicitly edited or saved — capture it if changed and rebuild L0..L4 nodes. */
     public static void onChunkEdited(World w, Chunk c) {
-        if (w == null || c == null || w != activeWorld || w.worldProvider.isNether) return;
+        if (w == null || c == null || w != activeWorld || dev.betavk.hooks.McCompat.isNether(w)) return;
         if (!Opts.lodEnabled || Opts.lodChunks <= 0) return;
         if (!LodChunkSource.captureIfChanged(c)) return;
         invalidateChunk(c.xPosition, c.zPosition, 4);
@@ -147,7 +148,7 @@ public final class LodEngine {
 
     /** Game thread: minor live block change inside render distance — skip unchanged blocks and only refresh L0..L2. */
     public static void onBlockEdited(World w, Chunk c) {
-        if (w == null || c == null || w != activeWorld || w.worldProvider.isNether) return;
+        if (w == null || c == null || w != activeWorld || dev.betavk.hooks.McCompat.isNether(w)) return;
         if (!Opts.lodEnabled || Opts.lodChunks <= 0) return;
         if (!LodChunkSource.captureIfChanged(c)) return;
         invalidateChunk(c.xPosition, c.zPosition, 2);
@@ -262,9 +263,10 @@ public final class LodEngine {
                             readyNodes.get(key(node.level, node.gx, node.gz + 1))
                     };
                     int nbMask = neighborMask(node);
-                    float[] table = w.worldProvider.lightBrightnessTable;
+                    float[] table = dev.betavk.hooks.McCompat.lightBrightnessTable(w);
                     int skySub = w.skylightSubtracted;
-                    boolean fancy = Minecraft.isFancyGraphicsEnabled();
+                    var mcInst = dev.betavk.hooks.McCompat.minecraft;
+                    boolean fancy = mcInst == null || mcInst.gameSettings.fancyGraphics;
                     int bg = Opts.betterGrass;
                     LodMesher.Mesh m = LodMesher.mesh(node, nb, table, skySub, fancy, scratch);
                     done.add(new BuiltMesh(node, j.epoch, node.version, skySub, fancy, bg, nbMask, m));

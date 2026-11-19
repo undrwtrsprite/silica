@@ -73,6 +73,10 @@ public final class Display {
         return new DisplayMode(vm.width(), vm.height());
     }
 
+    public static boolean isFullscreen() {
+        return fullscreen;
+    }
+
     public static void setFullscreen(boolean fs) {
         fullscreen = fs;
         if (window == NULL) return;
@@ -95,12 +99,21 @@ public final class Display {
             glfwSetWindowMonitor(window, NULL, savedX > 0 ? savedX : 100, savedY > 0 ? savedY : 100, w, h, GLFW_DONT_CARE);
         }
         if (openGlContext) glfwSwapInterval(vsync() ? 1 : 0);
+        if (!Boolean.getBoolean("betavk.nograb")) {
+            glfwShowWindow(window);
+            glfwFocusWindow(window);
+            active = true;
+        }
         refreshSizes();
         updateRefreshRate();
     }
 
     private static boolean vsync() {
         return Boolean.getBoolean("betavk.vsync");
+    }
+
+    public static void create(dev.betavk.compat.PixelFormat fmt) throws LWJGLException {
+        create();
     }
 
     public static void create() throws LWJGLException {
@@ -296,7 +309,7 @@ public final class Display {
 
     public static boolean isActive() {
         if (ALWAYS_ACTIVE) return true;
-        return active;
+        return window != NULL && (active || glfwGetWindowAttrib(window, GLFW_FOCUSED) != 0);
     }
 
     public static boolean isCloseRequested() {

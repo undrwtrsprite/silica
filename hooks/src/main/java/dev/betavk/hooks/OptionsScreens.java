@@ -16,8 +16,13 @@ public final class OptionsScreens {
     private OptionsScreens() {
     }
 
-    private static final int FOV = 301, AUDIO = 310, WORLD = 311;
+    private static final int FOV = 301, AUDIO = 310, WORLD = 311, LEGACY_DIFFICULTY = 312;
     private static final int[] RENDER_STEPS = {2, 4, 8, 12, 16, 20, 24, 32};
+    private static final String[] DIFFICULTIES = {"Peaceful", "Easy", "Normal", "Hard"};
+
+    private static String legacyDifficultyLabel(GameSettings o) {
+        return "Difficulty: " + DIFFICULTIES[Math.floorMod(o.difficulty, DIFFICULTIES.length)];
+    }
 
     private static String fovLabel() {
         return "FOV: " + (int) Opts.fov + (Opts.fov == 70.0F ? " (default)" : "");
@@ -34,30 +39,38 @@ public final class OptionsScreens {
     /** replaceBody of GuiOptions.initGui. */
     @SuppressWarnings("unchecked")
     public static void init(GuiOptions go) {
-        StringTranslate tr = StringTranslate.getInstance();
+        go.controlList.clear();
         GameSettings o = go.options;
-        go.screenTitle = tr.translateKey("options.title");
+        go.screenTitle = McCompat.tr("options.title", "Options");
         go.controlList.add(new SliderButton(FOV, x(go, 0), y(go, 0), (Opts.fov - 30.0F) / 80.0F, v -> Opts.fov = 30.0F + Math.round(v * 80.0F), OptionsScreens::fovLabel));
-        go.controlList.add(new GuiSmallButton(EnumOptions.DIFFICULTY.returnEnumOrdinal(), x(go, 1), y(go, 0), EnumOptions.DIFFICULTY, o.getKeyBinding(EnumOptions.DIFFICULTY)));
-        go.controlList.add(new GuiButton(101, x(go, 0), y(go, 1), 150, 20, tr.translateKey("options.video")));
+        if (McCompat.HAS_ENUM_OPTIONS) {
+            BetaOptions.addDifficulty(go, o);
+        } else {
+            go.controlList.add(new GuiButton(LEGACY_DIFFICULTY, x(go, 1), y(go, 0), 150, 20, legacyDifficultyLabel(o)));
+        }
+        go.controlList.add(new GuiButton(101, x(go, 0), y(go, 1), 150, 20, McCompat.tr("options.video", "Video Settings...")));
         go.controlList.add(new GuiButton(AUDIO, x(go, 1), y(go, 1), 150, 20, "Music & Sounds..."));
-        go.controlList.add(new GuiButton(100, x(go, 0), y(go, 2), 150, 20, tr.translateKey("options.controls")));
+        go.controlList.add(new GuiButton(100, x(go, 0), y(go, 2), 150, 20, McCompat.tr("options.controls", "Controls...")));
         go.controlList.add(new GuiButton(WORLD, x(go, 1), y(go, 2), 150, 20, "World..."));
-        go.controlList.add(new GuiButton(200, go.width / 2 - 100, y(go, 4), tr.translateKey("gui.done")));
+        go.controlList.add(new GuiButton(200, go.width / 2 - 100, y(go, 4), McCompat.tr("gui.done", "Done")));
     }
 
     /** replaceBody of GuiOptions.actionPerformed. */
     public static void action(GuiOptions go, GuiButton b) {
         if (!b.enabled) return;
         GameSettings o = go.options;
-        if (b.id < 100 && b instanceof GuiSmallButton sb) {
-            o.setOptionValue(sb.returnEnumOptions(), 1);
-            b.displayString = o.getKeyBinding(EnumOptions.getEnumOptions(b.id));
+        if (McCompat.HAS_ENUM_OPTIONS && b.id < 100) {
+            BetaOptions.handleButton(o, b);
         }
         switch (b.id) {
+            case LEGACY_DIFFICULTY -> {
+                o.difficulty = (o.difficulty + 1) & 3;
+                b.displayString = legacyDifficultyLabel(o);
+                o.saveOptions();
+            }
             case 101 -> {
                 go.mc.gameSettings.saveOptions();
-                go.mc.displayGuiScreen(new net.minecraft.src.GuiVideoSettings(go, o));
+                go.mc.displayGuiScreen(McCompat.HAS_GUI_VIDEO_SETTINGS ? BetaVideoOptions.open(go, o) : new LegacyVideoScreen(go, o));
             }
             case 100 -> {
                 go.mc.gameSettings.saveOptions();
@@ -99,11 +112,21 @@ public final class OptionsScreens {
     }
 
     /** atStartReturnIfNotNull of GameSettings.getKeyBinding: the labels of the options we changed. */
+    private static final EnumOptions OPT_GUI_SCALE = enumOpt("GUI_SCALE");
+
+    private static EnumOptions enumOpt(String name) {
+        try {
+            return (EnumOptions) EnumOptions.class.getField(name).get(null);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
     public static String label(GameSettings gs, EnumOptions o) {
         if (o == EnumOptions.RENDER_DISTANCE) {
             return "Render Distance: " + Opts.effectiveChunks(gs) + " chunks";
         }
-        if (o == EnumOptions.GUI_SCALE) {
+        if (OPT_GUI_SCALE != null && o == OPT_GUI_SCALE) {
             int s = gs.guiScale;
             return "GUI Scale: " + (s <= 0 ? "Auto" : s + "x");
         }
@@ -129,9 +152,29 @@ public final class OptionsScreens {
             gs.saveOptions();
             return true;
         }
-        if (o != EnumOptions.GUI_SCALE) return false;
+        if (OPT_GUI_SCALE == null || o != OPT_GUI_SCALE) return false;
         gs.guiScale = Math.floorMod(gs.guiScale + dir, 5);
         gs.saveOptions();
         return true;
+    }
+
+    private static final class BetaOptions {
+        @SuppressWarnings("unchecked")
+        static void addDifficulty(GuiOptions go, GameSettings o) {
+            go.controlList.add(new GuiSmallButton(EnumOptions.DIFFICULTY.returnEnumOrdinal(), x(go, 1), y(go, 0), EnumOptions.DIFFICULTY, o.getKeyBinding(EnumOptions.DIFFICULTY)));
+        }
+
+        static void handleButton(GameSettings o, GuiButton b) {
+            if (b instanceof GuiSmallButton sb) {
+                o.setOptionValue(sb.returnEnumOptions(), 1);
+                b.displayString = o.getKeyBinding(EnumOptions.getEnumOptions(b.id));
+            }
+        }
+    }
+
+    private static final class BetaVideoOptions {
+        static GuiScreen open(GuiOptions go, GameSettings o) {
+            return new net.minecraft.src.GuiVideoSettings(go, o);
+        }
     }
 }

@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="docs/assets/banner.png" alt="Silica: The Minecraft Beta launcher, finally native." width="860">
+  <img src="docs/assets/banner.png" alt="Silica: Golden Age Minecraft, rebuilt in Vulkan." width="860">
 </p>
 
 <p align="center">
-  <b>The Minecraft Beta launcher and native Vulkan engine, built for Apple Silicon.</b><br>
-  Beta 1.7.3 natively without Rosetta — Vulkan 1.2 rendering, true-textured distant LODs, Better Grass, and isolated instances.
+  <b>The Golden Age Minecraft launcher and native Vulkan engine, built for Apple Silicon.</b><br>
+  Alpha 1.0 through Beta 1.7.3 — plus experimental Infdev and Beta 1.8 — natively without Rosetta: Vulkan 1.2 rendering, true-textured distant LODs, Better Grass, and isolated instances.
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/undrwtrsprite/silica/releases/latest"><img alt="Release v0.2.1" src="https://img.shields.io/badge/release-v0.2.1-7bc96f?style=flat-square&labelColor=0a0d11"></a>
+  <a href="https://github.com/undrwtrsprite/silica/releases/latest"><img alt="Release v0.3.0" src="https://img.shields.io/badge/release-v0.3.0-7bc96f?style=flat-square&labelColor=0a0d11"></a>
   <img alt="Apple Silicon arm64" src="https://img.shields.io/badge/Apple%20Silicon-arm64-0a0d11?style=flat-square&logo=apple&logoColor=white">
   <img alt="Vulkan on MoltenVK" src="https://img.shields.io/badge/Vulkan-MoltenVK-0a0d11?style=flat-square&logoColor=white">
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-0a0d11?style=flat-square&logo=apple&logoColor=white">
@@ -33,14 +33,14 @@
 <br>
 
 <p align="center">
-  <img src="docs/assets/shot-play.webp" alt="Silica v0.2.1 launcher Play view showing Beta 1.7.3 on Vulkan, instance selector, and recent worlds" width="880">
+  <img src="docs/assets/shot-play.webp" alt="Silica v0.3.0 launcher Play view showing Golden Age versions on Vulkan, instance selector, and recent worlds" width="880">
 </p>
 
 ## What it is
 
-Silica runs Minecraft Beta 1.7.3 natively on Apple Silicon on top of an `arm64` Java 21 runtime, LWJGL 3 (`GLFW` + `OpenAL Soft`), and a Vulkan 1.2 renderer over MoltenVK. Your saves stay 100% compatible with vanilla Beta 1.7.3 and servers, while a native SwiftUI launcher handles setup, Microsoft sign-in, isolated instances, worlds, settings, updates, and benchmarks.
+Silica runs **Golden Age Minecraft** — **Alpha 1.0 through Beta 1.7.3**, plus **experimental Infdev (`2010-06-30`) and Beta 1.8 / 1.8.1** — natively on Apple Silicon on top of an `arm64` Java 21 runtime, LWJGL 3 (`GLFW` + `OpenAL Soft`), and a Vulkan 1.2 renderer over MoltenVK. Your saves stay 100% compatible with original clients and servers, while a native SwiftUI launcher handles setup, Microsoft sign-in, isolated multi-version instances, worlds, settings, updates, and benchmarks.
 
-> **This repository contains no Mojang code, jars, or assets.** You need to own Minecraft: Java Edition. On first launch, Silica downloads the clean Beta 1.7.3 client from Mojang's servers (or verifies a copy you already have against Mojang's SHA-1 checksum), prepares it locally on your Mac, and applies Silica's hooks at launch without modifying your original jar.
+> **This repository contains no Mojang code, jars, or assets.** You need to own Minecraft: Java Edition. On first launch, Silica downloads the clean client jar from Mojang's servers (or verifies a copy you already have against Mojang's SHA-1 checksum), canonicalizes and prepares it locally on your Mac, and applies Silica's hooks at launch without modifying your original jar.
 
 ## How it's made
 
@@ -60,11 +60,13 @@ Same world, camera path, and seed (`1337`) on both renderers. Measured on an App
 
 On Far (`256` blocks), Vulkan runs at **9.3×** the frame rate (`2.6 ms` 99th-percentile frame vs `14.8 ms` on OpenGL). Title screen loads in ~1.5 s vs ~3.2 s under Rosetta. Extended sustained runs settle lower as the chip warms up.
 
-## What's in Silica (`v0.2.1`)
+## What's in Silica (`v0.3.0`)
 
 <p align="center">
-  <img src="docs/assets/shot-lod.jpg" alt="In-game Beta 1.7.3 with Vulkan real-block distant LODs stretching across snow mountains and water" width="880">
+  <img src="docs/assets/shot-lod.jpg" alt="In-game Golden Age Minecraft with Vulkan real-block distant LODs stretching across snow mountains and water" width="880">
 </p>
+
+- **61 Alpha & Beta Versions + Experimental Infdev & Beta 1.8:** One canonicalizing mapping pipeline (`mcprep`) and version-adaptive bytecode `PatchSet` verified across all 61 Alpha `1.0`–Beta `1.7.3` releases, plus opt-in experimental support for `inf-20100630-1340`, `inf-20100630-1835`, `b1.8`, and `b1.8.1`.
 
 - **True-textured tiled LODs & `.lod` cache:** A 5-tier real-block quadtree (`1×1×1` down to `16×4×16`) extends visibility up to `+128` chunks past Render Distance with hardware-tiled Vulkan terrain atlas shaders (`1:1` crisp block textures, zero stretching), cross-chunk border tree canopies, day/night emissive lighting, and persistent per-world region caches under `saves/<world>/lod/`.
 - **Better Grass (`Off`, `Fast`, `Fancy`):** Classic Better Grass toggle in Video Settings, extending full grass shading down side faces across both live chunks and distant LOD slopes.
@@ -104,15 +106,15 @@ Full interactive progression tree at [**silicalauncher.xyz/roadmap**](https://si
 
 | Feature | Status | Notes |
 |---|---|---|
-| Beta 1.7.3 on Apple Silicon | **Ready** | Native `arm64`, Vulkan 1.2, isolated instances, saves compatible with vanilla |
+| Golden Age Minecraft on Apple Silicon | **Ready** | Alpha 1.0–Beta 1.7.3 (+ experimental Infdev & Beta 1.8), native `arm64`, Vulkan 1.2, isolated instances |
 | Better performance | **Done** | Multithreaded meshing/gen, Vulkan batching, far-chunk eviction |
 | Better grass | **Done** | `Off`, `Fast`, and `Fancy` in Video Settings for chunks and LOD cliffs |
 | LODs | **Almost done** | 5-tier textured quadtree + `.lod` disk cache; polishing seam/edge blending |
-| Beta fixes | **In progress** | Frame pacing, drawable acquire sync, sustained thermal stability |
-| Our own mod library | **Not started** | First-party mod API (legacy Beta jar mod checker retired as Silica diverges into its own engine) |
-| Beta bugfix mod | **Not started** | Vanilla bugfixes shipped optionally inside our mod library so purists can keep vanilla untouched |
+| Golden Age & Beta fixes | **Done** | Full Alpha–Beta `PatchSet` & canonicalizer parity, input/inventory, sliders, instant fullscreen |
+| Our own mod library | **Not started** | First-party mod API (legacy jar mod checker retired as Silica diverges into its own engine) |
+| Golden Age bugfix mod | **Not started** | Vanilla bugfixes shipped optionally inside our mod library so purists can keep vanilla untouched |
 | Better texture support | **Not started** | Modern resource packs, higher-res textures, animations, per-tile streaming |
-| Unified Alpha–Beta system | **Not started** | One unified patch/mapping pipeline so every Silica feature works from Alpha through Beta |
+| Unified Alpha–Beta system | **Done** | Unified mapping canonicalizer, adaptive hooks, and multi-era instance catalog across 65+ versions |
 | Cross-platform support | **Not started** | Expand beyond Apple Silicon macOS to Windows, Linux, and Intel Macs |
 
 ## Layout
@@ -145,7 +147,7 @@ For local game testing, `/path/to/b1.7.3-client.jar` prep, and benchmark harness
 
 ## Download
 
-Get the latest signed macOS build (**v0.2.1**) at [**silicalauncher.xyz/download**](https://silicalauncher.xyz/download) or [**GitHub Releases**](https://github.com/undrwtrsprite/silica/releases/latest). The app is ad-hoc signed (not Apple notarized), so macOS asks for **Open Anyway** in *Privacy & Security* on first open.
+Get the latest signed macOS build (**v0.3.0**) at [**silicalauncher.xyz/download**](https://silicalauncher.xyz/download) or [**GitHub Releases**](https://github.com/undrwtrsprite/silica/releases/latest). The app is ad-hoc signed (not Apple notarized), so macOS asks for **Open Anyway** in *Privacy & Security* on first open.
 
 ## License
 

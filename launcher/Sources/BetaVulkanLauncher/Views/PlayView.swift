@@ -7,6 +7,7 @@ struct PlayView: View {
     @EnvironmentObject private var install: InstallManager
     @EnvironmentObject private var instances: InstanceStore
     @EnvironmentObject private var jars: JarLibrary
+    @EnvironmentObject private var versions: VersionCatalog
 
     let pointer: CGPoint
     let viewportHeight: CGFloat
@@ -15,6 +16,7 @@ struct PlayView: View {
     private var instance: GameInstance { state.activeInstance }
     private var effective: Settings { state.activeSettings }
     private var activeJar: CustomJar? { instance.jarID.flatMap { jars.jar($0) } }
+    private var activeVersion: VersionCatalog.McVersion? { versions.version(for: instance.effectiveVersionID) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -75,6 +77,15 @@ struct PlayView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 8) {
                     statusPill
+                    if activeJar == nil, activeVersion?.isExperimental == true {
+                        Text("Experimental")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.orange)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(Color.orange.opacity(0.16), in: Capsule())
+                            .overlay(Capsule().strokeBorder(Color.orange.opacity(0.35), lineWidth: 1))
+                    }
                     Spacer()
                 }
                 Spacer(minLength: 14)
@@ -119,10 +130,11 @@ struct PlayView: View {
     }
 
     private var specLine: String {
+        let verLabel = activeJar?.name ?? activeVersion?.displayName ?? instance.effectiveVersionID
         let renderer = effective.backend == .vulkan ? "Vulkan (MoltenVK)" : "OpenGL 2.1"
         let screen = effective.fullscreen ? "Fullscreen" : "\(effective.width)×\(effective.height)"
         let mem = String(format: "%.1f GB", Double(effective.memoryMB) / 1024.0)
-        return "\(renderer) · \(screen) · \(mem)"
+        return "\(verLabel) · \(renderer) · \(screen) · \(mem)"
     }
 
     // MARK: - Bindings & Pickers

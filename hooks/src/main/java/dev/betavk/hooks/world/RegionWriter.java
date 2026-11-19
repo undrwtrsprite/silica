@@ -25,6 +25,8 @@ public final class RegionWriter {
     private RegionWriter() {
     }
 
+    private static final boolean HAS_SIZE_DELTA = dev.betavk.hooks.McCompat.hasMethod(RegionFileCache.class, "getSizeDelta", java.io.File.class, int.class, int.class);
+
     private static final boolean ASYNC = !"0".equals(System.getProperty("betavk.asyncsave", "1"));
     private static final String[] ARRAYS = {"Blocks", "Data", "SkyLight", "BlockLight", "HeightMap"};
 
@@ -80,7 +82,7 @@ public final class RegionWriter {
         }
         final int x = chunk.xPosition, z = chunk.zPosition;
         final long key = pack(x, z);
-        final WorldInfo info = world.getWorldInfo();
+        final WorldInfo info = world.worldInfo;
         final Writer w = writer(l);
         w.pending.put(key, root);
         Runnable task = () -> {
@@ -89,7 +91,9 @@ public final class RegionWriter {
                     DataOutputStream out = RegionFileCache.getChunkOutputStream(l.worldDir, x, z);
                     CompressedStreamTools.func_1139_a(root, out);
                     out.close();
-                    info.setSizeOnDisk(info.getSizeOnDisk() + (long) RegionFileCache.getSizeDelta(l.worldDir, x, z));
+                    if (HAS_SIZE_DELTA && info != null) {
+                        info.setSizeOnDisk(info.getSizeOnDisk() + (long) RegionFileCache.getSizeDelta(l.worldDir, x, z));
+                    }
                 }
             } catch (Exception e) {
                 e.printStackTrace();

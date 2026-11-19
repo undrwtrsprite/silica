@@ -146,6 +146,7 @@ public final class MainLoop {
         if ("boot".equals(System.getProperty("betavk.test"))) McCompat.bootFrame(mc);
         else if ("compat".equals(System.getProperty("betavk.test"))) McCompat.compatFrame(mc);
         else if ("diag".equals(System.getProperty("betavk.test"))) McCompat.diagFrame(mc);
+        else if ("walk".equals(System.getProperty("betavk.test"))) WalkTest.frame(mc);
         else if (System.getProperty("betavk.test") != null) TestHarness.frame(mc);
         if (Display.wasResized()) {
             mc.displayWidth = Math.max(1, Display.getWidth());

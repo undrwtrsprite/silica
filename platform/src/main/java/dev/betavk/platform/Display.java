@@ -168,6 +168,8 @@ public final class Display {
             if (!focused) {
                 Keyboard.clear();
                 Mouse.clear();
+            } else {
+                Keyboard.sync(win);
             }
         });
         refreshSizes();

@@ -4,6 +4,12 @@
 
 Every migrated or rewritten class is listed below alongside release history.
 
+## v0.3.2 — Reliable Walking Across Every Era & Seamless Focus Key Sync
+
+- **Pre-Beta 1.6 walking & chunk stability (`WorldHooks`, `PatchSet`):** Prevented `ChunkProviderLoadOrGenerate.provideChunk`'s `32×32` modulo ring eviction from calling `Chunk.onChunkUnload()` on chunks retained in `loadOrGenCaches` — which previously removed `thePlayer` from `world.loadedEntityList` (freezing movement permanently) whenever distant or wide-render-distance chunks collided with the player's chunk — and skipped redundant disk writes on unmodified evicted slots (`keepLoadOrGenChunk`, `saveLoadOrGenSlotChunk`, `saveLoadOrGenSlotExtra`).
+- **Held-key sync across focus & fullscreen transitions (`Keyboard`, `Display`):** `Keyboard.clear()` now emits release events for previously held keys so keys released off-window cannot stick, `GLFW_REPEAT` refreshes `down[]`, and regaining window focus calls `Keyboard.sync(window)` via `glfwGetKey` to resume physically held movement keys seamlessly.
+- **Experimental Beta 1.8 menu & sustained walk test (`Gfx`, `WalkTest`, `MainLoop`):** Added `Gfx.glCopyTexSubImage2D` for `b1.8`/`b1.8.1` main menu panorama rendering and a multi-version `-Dbetavk.test=walk` harness verifying movement across `ChunkProviderLoadOrGenerate` collisions, menus, and focus transitions.
+
 ## v0.3.1 — Seamless Updates, 128-Chunk LOD Visibility Across Eras & Multi-Version Online Counter
 
 - **No more Setup popup on updates (`InstallManager`, `AppState`, `PlayView`):** Added automatic migration of legacy v0.2.x root jars (`client.jar`, `readable.jar`, `resources/`) into `versions/b1.7.3/`, gated first-run setup and launch readiness on `baseReady` (`jdk && client && assets`), kept existing `client.jar` intact when re-running setup, and let `Play` silently re-prepare missing or bumped version jars.

@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/undrwtrsprite/silica/releases/latest"><img alt="Release v0.3.1" src="https://img.shields.io/badge/release-v0.3.1-7bc96f?style=flat-square&labelColor=0a0d11"></a>
+  <a href="https://github.com/undrwtrsprite/silica/releases/latest"><img alt="Release v0.3.2" src="https://img.shields.io/badge/release-v0.3.2-7bc96f?style=flat-square&labelColor=0a0d11"></a>
   <img alt="Apple Silicon arm64" src="https://img.shields.io/badge/Apple%20Silicon-arm64-0a0d11?style=flat-square&logo=apple&logoColor=white">
   <img alt="Vulkan on MoltenVK" src="https://img.shields.io/badge/Vulkan-MoltenVK-0a0d11?style=flat-square&logoColor=white">
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-0a0d11?style=flat-square&logo=apple&logoColor=white">
@@ -33,7 +33,7 @@
 <br>
 
 <p align="center">
-  <img src="docs/assets/shot-play.webp" alt="Silica v0.3.1 launcher Play view showing Golden Age versions on Vulkan, instance selector, and recent worlds" width="880">
+  <img src="docs/assets/shot-play.webp" alt="Silica v0.3.2 launcher Play view showing Golden Age versions on Vulkan, instance selector, and recent worlds" width="880">
 </p>
 
 ## What it is
@@ -60,7 +60,7 @@ Same world, camera path, and seed (`1337`) on both renderers. Measured on an App
 
 On Far (`256` blocks), Vulkan runs at **9.3×** the frame rate (`2.6 ms` 99th-percentile frame vs `14.8 ms` on OpenGL). Title screen loads in ~1.5 s vs ~3.2 s under Rosetta. Extended sustained runs settle lower as the chip warms up.
 
-## What's in Silica (`v0.3.1`)
+## What's in Silica (`v0.3.2`)
 
 <p align="center">
   <img src="docs/assets/shot-lod.jpg" alt="In-game Golden Age Minecraft with Vulkan real-block distant LODs stretching across snow mountains and water" width="880">
@@ -147,7 +147,7 @@ For local game testing, `/path/to/b1.7.3-client.jar` prep, and benchmark harness
 
 ## Download
 
-Get the latest signed macOS build (**v0.3.1**) at [**silicalauncher.xyz/download**](https://silicalauncher.xyz/download) or [**GitHub Releases**](https://github.com/undrwtrsprite/silica/releases/latest). The app is ad-hoc signed (not Apple notarized), so macOS asks for **Open Anyway** in *Privacy & Security* on first open.
+Get the latest signed macOS build (**v0.3.2**) at [**silicalauncher.xyz/download**](https://silicalauncher.xyz/download) or [**GitHub Releases**](https://github.com/undrwtrsprite/silica/releases/latest). The app is ad-hoc signed (not Apple notarized), so macOS asks for **Open Anyway** in *Privacy & Security* on first open.
 
 ## License
 

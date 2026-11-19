@@ -233,6 +233,7 @@ public final class Gfx {
     public static void glTexSubImage2D(int p0, int p1, int p2, int p3, int p4, int p5, int p6, int p7, java.nio.IntBuffer p8) { if (activeTexUnit == 33984) r.glTexSubImage2D(p0, p1, p2, p3, p4, p5, p6, p7, p8); }
     public static void glTexSubImage2D(int p0, int p1, int p2, int p3, int p4, int p5, int p6, int p7, java.nio.ShortBuffer p8) { if (activeTexUnit == 33984) r.glTexSubImage2D(p0, p1, p2, p3, p4, p5, p6, p7, p8); }
     public static void glTexSubImage2D(int p0, int p1, int p2, int p3, int p4, int p5, int p6, int p7, long p8) { if (activeTexUnit == 33984) r.glTexSubImage2D(p0, p1, p2, p3, p4, p5, p6, p7, p8); }
+    public static void glCopyTexSubImage2D(int p0, int p1, int p2, int p3, int p4, int p5, int p6, int p7) {}
     public static void glTranslatef(float p0, float p1, float p2) { r.glTranslatef(p0, p1, p2); }
     public static void glVertexPointer(int p0, int p1, int p2, java.nio.ByteBuffer p3) { r.glVertexPointer(p0, p1, p2, p3); }
     public static void glVertexPointer(int p0, int p1, int p2, java.nio.FloatBuffer p3) { r.glVertexPointer(p0, p1, p2, p3); }

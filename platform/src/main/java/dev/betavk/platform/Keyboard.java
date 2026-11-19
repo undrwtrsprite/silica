@@ -148,6 +148,7 @@ public final class Keyboard {
         Integer code = GLFW_TO_LWJGL2.get(glfwKey);
         if (code == null) return;
         if (action == GLFW_REPEAT) {
+            down[code] = true;
             if (repeatEvents) queue.add(new Event(code, true, '\0'));
             return;
         }
@@ -168,7 +169,23 @@ public final class Keyboard {
     }
 
     static void clear() {
-        java.util.Arrays.fill(down, false);
         queue.clear();
+        for (int k = 0; k < down.length; k++) {
+            if (down[k]) {
+                down[k] = false;
+                queue.add(new Event(k, false, '\0'));
+            }
+        }
+    }
+
+    static void sync(long window) {
+        if (window == 0L) return;
+        for (var e : GLFW_TO_LWJGL2.entrySet()) {
+            int code = e.getValue();
+            if (glfwGetKey(window, e.getKey()) == GLFW_PRESS && !down[code]) {
+                down[code] = true;
+                if (Mouse.isGrabbed()) queue.add(new Event(code, true, '\0'));
+            }
+        }
     }
 }

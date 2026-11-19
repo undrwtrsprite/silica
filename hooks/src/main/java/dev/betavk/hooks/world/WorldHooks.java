@@ -86,6 +86,25 @@ public final class WorldHooks {
         return c;
     }
 
+    /** redirectCall of Chunk.onChunkUnload inside ChunkProviderLoadOrGenerate.provideChunk: chunks stay live in loadOrGenCaches even when their 32x32 ring slot aliases, so never unload the player's or active chunks' entities/tile entities. */
+    public static void keepLoadOrGenChunk(Chunk c) {
+    }
+
+    /** redirectCall of saveChunk inside ChunkProviderLoadOrGenerate.provideChunk: only save an evicted ring-slot chunk if it actually has unsaved changes. */
+    public static void saveLoadOrGenSlotChunk(net.minecraft.src.ChunkProviderLoadOrGenerate cp, Chunk c) {
+        if (c != null && c != cp.blankChunk && c.needsSaving(false)) {
+            cp.saveChunk(c);
+        }
+    }
+
+    /** redirectCall of saveExtraChunkData inside ChunkProviderLoadOrGenerate.provideChunk: only save extra data for modified chunks. */
+    public static void saveLoadOrGenSlotExtra(net.minecraft.src.ChunkProviderLoadOrGenerate cp, Chunk c) {
+        if (c != null && c != cp.blankChunk && c.needsSaving(false)) {
+            if (!c.neverSave) cp.saveExtraChunkData(c);
+            c.isModified = false;
+        }
+    }
+
     /** replaceBody of ChunkProviderLoadOrGenerate.chunkExists: check unbounded cache before the 1024-slot ring that aliases beyond +/-15 chunks. */
     public static boolean loadOrGenExistsFast(net.minecraft.src.ChunkProviderLoadOrGenerate cp, int x, int z) {
         if (x == cp.lastQueriedChunkXPos && z == cp.lastQueriedChunkZPos && cp.lastQueriedChunk != null) return true;

@@ -157,12 +157,17 @@ public final class MainLoop {
 
     // ---- input ---------------------------------------------------------------------------
 
-    /** redirect of Keyboard.next() in runTick: F6 toggles the FPS counter. */
+    /** redirect of Keyboard.next() in runTick: F6 toggles the FPS counter and b1.8+ tracks toggle-sneak edges. */
     public static boolean nextKey() {
         boolean r = Keyboard.next();
-        if (r && Keyboard.getEventKeyState() && Keyboard.getEventKey() == Keyboard.KEY_F6) {
-            Opts.showFps = !Opts.showFps;
-            Settings.save();
+        if (r) {
+            int key = Keyboard.getEventKey();
+            boolean down = Keyboard.getEventKeyState();
+            if (down && key == Keyboard.KEY_F6) {
+                Opts.showFps = !Opts.showFps;
+                Settings.save();
+            }
+            Keys.modernToggleSneak(McCompat.minecraft, key, down);
         }
         return r;
     }

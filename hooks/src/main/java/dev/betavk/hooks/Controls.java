@@ -42,9 +42,32 @@ public final class Controls {
             controls.controlList.add(new GuiButton(INVERT_MOUSE, OptionsScreens.x(controls, 1), OptionsScreens.y(controls, row),
                     150, 20, "Invert Mouse: " + (options.invertMouse ? "ON" : "OFF")));
         }
-        if (bindings % 2 != 0) {
+        boolean putSneakWithDone = Keys.HAS_SNEAK && bindings % 2 == 0;
+        if (Keys.HAS_SNEAK && bindings % 2 != 0) {
             controls.controlList.add(new GuiButton(SNEAK_MODE, OptionsScreens.x(controls, 1), OptionsScreens.y(controls, row - 1),
                     150, 20, sneakLabel()));
+        } else if (putSneakWithDone) {
+            int doneY = Math.min(OptionsScreens.y(controls, row + 1), Math.max(OptionsScreens.y(controls, row) + 21, controls.height - 21));
+            controls.controlList.add(new GuiButton(SNEAK_MODE, OptionsScreens.x(controls, 0), doneY,
+                    150, 20, sneakLabel()));
+            for (Object o : controls.controlList) {
+                GuiButton b = (GuiButton) o;
+                if (b.id == 200) {
+                    b.xPosition = OptionsScreens.x(controls, 1);
+                    b.width = 150;
+                    b.yPosition = doneY;
+                    break;
+                }
+            }
+            return;
+        }
+        int minDoneY = OptionsScreens.y(controls, row + 1);
+        for (Object o : controls.controlList) {
+            GuiButton b = (GuiButton) o;
+            if (b.id == 200) {
+                if (b.yPosition < minDoneY) b.yPosition = minDoneY;
+                break;
+            }
         }
     }
 

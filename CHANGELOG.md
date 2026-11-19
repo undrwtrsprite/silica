@@ -4,6 +4,12 @@
 
 Every migrated or rewritten class is listed below alongside release history.
 
+## v0.3.3 — Cross-Era Bugfixes & Clear Mod Compatibility Policy
+
+- **Experimental Beta 1.8 / 1.8.1 inventory, Creative, UI & controls fixes (`McCompat`, `Inventory`, `InventoryPlus`, `PickBlock`, `VideoScreen`, `Zoom`, `Controls`, `Keys`, `Hud`):** Dispatched `PlayerController.windowClick` vs `func_27174_a`, skipped custom drag/sort/key/wheel conveniences inside `GuiContainerCreative`, routed `GuiVideoSettings` `Done` through `parentGuiScreen` vs `field_22110_h` and `EntityRenderer.getFOVModifier(float, boolean)` vs `getFOVModifier(float)`, fixed `Keys.applySneak` + edge-tracked toggle sneak (`KeyBinding.field_35965_e`) without `handleKeyPress`, guarded `Sneak: Hold/Toggle` on `Keys.HAS_SNEAK` and aligned `Done` beside `Sneak` on 14-binding screens without overlapping Sensitivity/Invert, raised held-item HUD text above the XP/food bar (`HAS_WORLD_SETTINGS`), and supported Right Shift on double-click gather.
+- **Infdev Better Grass, Alpha `/fly` & chunk-mesh safety (`McCompat`, `Hooks`, `Commands`, `AsyncMesh`):** Guarded `Block.colorMultiplier` for Infdev Better Grass (`Fast`/`Fancy`), added MCP v2.4 legacy walk/step/flight fallbacks (`field_9290_aS`, `field_9291_aR`, `field_863_b`, `func_351_a`) for `/fly` in `a1.2.3`–`a1.2.6`, and skipped `null` blocks safely in `AsyncMesh.buildMesh`.
+- **Mod compatibility notice (`README`, website, launcher):** Added prominent notices across the README, website, setup wizard, and Instances view explaining that heavy engine modifications mean external/third-party mods are not supported outside what will be released with Silica's own mod API.
+
 ## v0.3.2 — Reliable Walking Across Every Era & Seamless Focus Key Sync
 
 - **Pre-Beta 1.6 walking & chunk stability (`WorldHooks`, `PatchSet`):** Prevented `ChunkProviderLoadOrGenerate.provideChunk`'s `32×32` modulo ring eviction from calling `Chunk.onChunkUnload()` on chunks retained in `loadOrGenCaches` — which previously removed `thePlayer` from `world.loadedEntityList` (freezing movement permanently) whenever distant or wide-render-distance chunks collided with the player's chunk — and skipped redundant disk writes on unmodified evicted slots (`keepLoadOrGenChunk`, `saveLoadOrGenSlotChunk`, `saveLoadOrGenSlotExtra`).

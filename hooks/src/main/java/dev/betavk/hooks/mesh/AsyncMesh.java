@@ -366,6 +366,7 @@ public final class AsyncMesh {
                                 }
                             }
                             Block b = worker.blocks[id];
+                            if (b == null) continue;
                             int p = b.getRenderBlockPass();
                             if (p != pass) {
                                 skipped = true;

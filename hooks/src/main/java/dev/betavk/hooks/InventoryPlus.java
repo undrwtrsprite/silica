@@ -37,7 +37,7 @@ public final class InventoryPlus {
     }
 
     private static void click(GuiContainer g, Slot s, int button) {
-        g.mc.playerController.func_27174_a(g.inventorySlots.windowId, s == null ? -999 : s.slotNumber, button, false, g.mc.thePlayer);
+        McCompat.windowClick(g.mc, g.inventorySlots.windowId, s == null ? -999 : s.slotNumber, button, false, g.mc.thePlayer);
     }
 
     private static Slot hovered(GuiContainer g) {
@@ -58,6 +58,7 @@ public final class InventoryPlus {
 
     /** atStartCancelable of GuiContainer.keyTyped: true when the key was used here. */
     public static boolean key(GuiContainer g, char c, int key) {
+        if (McCompat.isCreativeContainer(g)) return false;
         Minecraft mc = g.mc;
         boolean number = key >= 2 && key <= 10;
         boolean drop = key == mc.gameSettings.keyBindDrop.keyCode;
@@ -121,7 +122,7 @@ public final class InventoryPlus {
             for (int i = 0; i < g.inventorySlots.slots.size(); i++) {
                 Slot o = (Slot) g.inventorySlots.slots.get(i);
                 if (o.inventory == s.inventory && !isOutput(o) && sameKind(o.getStack(), kind)) {
-                    g.mc.playerController.func_27174_a(g.inventorySlots.windowId, o.slotNumber, 0, true, g.mc.thePlayer);
+                    McCompat.windowClick(g.mc, g.inventorySlots.windowId, o.slotNumber, 0, true, g.mc.thePlayer);
                 }
             }
             return true;
@@ -136,7 +137,7 @@ public final class InventoryPlus {
 
     /** atStart of GuiScreen.handleMouseInput: scroll over a slot. Down moves one item of the hovered stack to the other side, up pulls one of the same item from it. */
     public static void wheel(GuiScreen screen) {
-        if (!(screen instanceof GuiContainer g)) return;
+        if (!(screen instanceof GuiContainer g) || McCompat.isCreativeContainer(g)) return;
         int d = Mouse.getEventDWheel();
         if (d == 0 || !cursorEmpty(g)) return;
         int mx = Mouse.getEventX() * g.width / g.mc.displayWidth;
@@ -261,6 +262,7 @@ public final class InventoryPlus {
 
     /** Drawn after the container background so items, held stacks, and item tooltips render cleanly on top. */
     public static void drawSortButtons(GuiContainer g) {
+        if (McCompat.isCreativeContainer(g)) return;
         List<SortButton> list = buttonsFor(g);
         if (list.isEmpty()) return;
         int mx = Mouse.getX() * g.width / g.mc.displayWidth;
@@ -284,6 +286,7 @@ public final class InventoryPlus {
 
     /** The sort button under the mouse, if the click is on one. */
     static boolean sortClicked(GuiContainer g, int mx, int my) {
+        if (McCompat.isCreativeContainer(g)) return false;
         List<SortButton> list = buttonsFor(g);
         for (int i = 0; i < list.size(); i++) {
             SortButton b = list.get(i);

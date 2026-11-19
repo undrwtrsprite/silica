@@ -13,13 +13,27 @@ import net.minecraft.src.MovementInputFromOptions;
  * and closing it picks up whichever movement keys are really held at that moment (as newer versions do).
  */
 public final class Keys {
-    private static final boolean HAS_SNEAK = McCompat.hasField(GameSettings.class, "keyBindSneak");
+    static final boolean HAS_SNEAK = McCompat.hasField(GameSettings.class, "keyBindSneak");
+    private static final boolean HAS_KEY_STATES = McCompat.hasField(MovementInputFromOptions.class, "movementKeyStates");
     private static MovementInputFromOptions toggledInput;
     private Keys() {
     }
 
     private static final class SneakKey {
         static net.minecraft.src.KeyBinding get(GameSettings gs) { return gs.keyBindSneak; }
+    }
+
+    private static final class ModernSneak {
+        private static final java.lang.reflect.Field PRESSED;
+        static {
+            java.lang.reflect.Field f = null;
+            try { f = net.minecraft.src.KeyBinding.class.getField("field_35965_e"); } catch (Throwable ignored) {}
+            PRESSED = f;
+        }
+        static void set(GameSettings gs, boolean down) {
+            if (PRESSED == null) return;
+            try { PRESSED.setBoolean(gs.keyBindSneak, down); } catch (Throwable ignored) {}
+        }
     }
 
     /** atStartCancelable of EntityPlayerSP.handleKeyPress(key, down): presses do not count while a screen is open (releases always do). */
@@ -34,7 +48,29 @@ public final class Keys {
     }
 
     public static void applySneak(MovementInputFromOptions input, EntityPlayer player) {
-        if (HAS_SNEAK && Opts.toggleSneak) input.movementKeyStates[5] = toggledInput == input;
+        if (!HAS_SNEAK || !Opts.toggleSneak) return;
+        boolean sneaked = toggledInput == input;
+        if (HAS_KEY_STATES) {
+            input.movementKeyStates[5] = sneaked;
+        } else {
+            ModernSneak.set(input.gameSettings, sneaked);
+        }
+    }
+
+    private static boolean modernSneakWasDown;
+
+    /** Handles toggle-sneak key presses on versions without EntityPlayerSP.handleKeyPress (e.g. b1.8+). */
+    public static void modernToggleSneak(Minecraft mc, int key, boolean down) {
+        if (McCompat.HAS_HANDLE_KEY_PRESS || !HAS_SNEAK || !Opts.toggleSneak || mc == null) {
+            modernSneakWasDown = false;
+            return;
+        }
+        if (mc.thePlayer == null || key != SneakKey.get(mc.gameSettings).keyCode) return;
+        if (down && !modernSneakWasDown && mc.currentScreen == null && mc.inGameHasFocus
+                && mc.thePlayer.movementInput instanceof MovementInputFromOptions input) {
+            toggledInput = toggledInput == input ? null : input;
+        }
+        modernSneakWasDown = down;
     }
 
     static void clearSneak() {

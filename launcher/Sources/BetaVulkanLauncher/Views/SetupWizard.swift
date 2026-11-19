@@ -170,9 +170,9 @@ struct SetupWizard: View {
                     .font(.system(size: 17))
                     .foregroundStyle(modJar == nil ? AnyShapeStyle(Color.secondary) : AnyShapeStyle(Theme.accent))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(modJar.map { "Add instance for \($0.lastPathComponent)" } ?? "Create a modded instance too? (optional)")
+                    Text(modJar.map { "Add instance for \($0.lastPathComponent)" } ?? "Use a custom jar too? (optional, unsupported)")
                         .font(.system(size: 13, weight: .semibold))
-                    Text("Adds a separate instance alongside official Beta 1.7.3 without modifying your jar.")
+                    Text("Silica changes the game heavily — external mods aren't supported outside our upcoming mod API.")
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                 }

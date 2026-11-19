@@ -154,6 +154,7 @@ public final class Inventory {
 
     /** atStartCancelable of GuiContainer.mouseClicked: returns true when it handled the click itself. */
     public static boolean mouseClicked(GuiContainer g, int mx, int my, int btn) {
+        if (!bypass && McCompat.isCreativeContainer(g)) return false;
         Slot s = g.getSlotAtPosition(mx, my);
         int slotNum = s == null ? -1 : s.slotNumber;
         long now = System.currentTimeMillis();
@@ -167,9 +168,9 @@ public final class Inventory {
         ItemStack cur = g.mc.thePlayer.inventory.getItemStack();
         boolean shift = shiftDown();
         if (btn == 0 && shift && cur == null && InventoryPlus.shiftClick(g, s, now)) return true;   // second click of a shift + double-click: move every matching stack
-        if (btn == 0 && slotNum >= 0 && slotNum == lastClickSlot && now - lastClickTime < 300L && cur != null && !Keyboard.isKeyDown(Keyboard.KEY_LSHIFT)) {
+        if (btn == 0 && slotNum >= 0 && slotNum == lastClickSlot && now - lastClickTime < 300L && cur != null && !shift) {
             superClick(g, mx, my, btn);
-            g.mc.playerController.func_27174_a(g.inventorySlots.windowId, slotNum, 6, false, g.mc.thePlayer);   // double-click: gather
+            McCompat.windowClick(g.mc, g.inventorySlots.windowId, slotNum, 6, false, g.mc.thePlayer);   // double-click: gather
             lastClickSlot = -1;
             return true;
         }
@@ -220,6 +221,7 @@ public final class Inventory {
 
     /** atStart of GuiContainer.drawScreen: follows an active drag. */
     public static void poll(GuiContainer g, int mx, int my, float partial) {
+        if (McCompat.isCreativeContainer(g)) return;
         if (dragButton < 0) return;
         if (!Mouse.isButtonDown(dragButton)) {
             finishDrag(g);
@@ -228,7 +230,7 @@ public final class Inventory {
         Slot s = g.getSlotAtPosition(mx, my);
         if (s == null || dragSlots.contains(s)) return;
         if (dragShift) {
-            if (s.getHasStack() && !(s instanceof SlotCrafting)) g.mc.playerController.func_27174_a(g.inventorySlots.windowId, s.slotNumber, 0, true, g.mc.thePlayer);
+            if (s.getHasStack() && !(s instanceof SlotCrafting)) McCompat.windowClick(g.mc, g.inventorySlots.windowId, s.slotNumber, 0, true, g.mc.thePlayer);
             dragSlots.add(s);
         } else {
             ItemStack cur = g.mc.thePlayer.inventory.getItemStack();
@@ -239,7 +241,7 @@ public final class Inventory {
     /** atEnd of GuiContainer.drawScreen: while dragging, show the item that each slot is about to get (a ghost icon in empty slots), tint the slots and show how many. */
     public static void preview(GuiContainer g, int mx, int my, float partial) {
         durabilityTooltip(g, mx, my);
-        if (dragButton < 0 || dragShift || dragSlots.size() < 2) return;
+        if (McCompat.isCreativeContainer(g) || dragButton < 0 || dragShift || dragSlots.size() < 2) return;
         ItemStack cursor = g.mc.thePlayer.inventory.getItemStack();
         int[] plan = planDrag(dragSlots, dragButton, cursor);
         // the item icons need the same lighting set-up the screen uses for its slots (drawScreen switched it off again before this runs)

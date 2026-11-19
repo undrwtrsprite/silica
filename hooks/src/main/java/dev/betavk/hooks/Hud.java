@@ -53,8 +53,10 @@ public final class Hud {
             int a = Math.min(255, (int) (hp * 255.0F / 20.0F));   // fades out over the last second
             if (a > 8) {
                 boolean hasHud = McCompat.shouldDrawHud(mc.playerController);
-                // just above the hearts, clear of the armor row and the air bubbles when they are showing
-                int y = h - (hasHud ? (mc.thePlayer.getPlayerArmorValue() > 0 || mc.thePlayer.isInsideOfMaterial(Material.water) ? 52 : 41) : 34);
+                // just above the hearts, clear of the armor row, air bubbles, and b1.8+ XP bar when showing
+                int hudOffset = (mc.thePlayer.getPlayerArmorValue() > 0 || mc.thePlayer.isInsideOfMaterial(Material.water) ? 52 : 41)
+                        + (McCompat.HAS_WORLD_SETTINGS ? 6 : 0);
+                int y = h - (hasHud ? hudOffset : 34);
                 Gfx.glEnable(Gfx.GL_BLEND);   // the HUD leaves blending off; without it the text alpha is ignored and the name vanishes without fading
                 Gfx.glBlendFunc(Gfx.GL_SRC_ALPHA, Gfx.GL_ONE_MINUS_SRC_ALPHA);
                 font.drawStringWithShadow(heldName, (w - font.getStringWidth(heldName)) / 2, y, 0xFFFFFF | a << 24);

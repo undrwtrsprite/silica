@@ -67,7 +67,7 @@ public final class PickBlock {
         }
         int target = inv.currentItem;
         for (int h = 0; h < 9; h++) if (inv.mainInventory[h] == null) { target = h; break; }
-        if (McCompat.HAS_WINDOW_CLICK) {
+        if (McCompat.HAS_ANY_WINDOW_CLICK) {
             BetaPick.swap(mc, found, target);
         } else {
             ItemStack tmp = inv.mainInventory[target];
@@ -84,11 +84,10 @@ public final class PickBlock {
         }
 
         static void swap(Minecraft mc, int found, int target) {
-            var pc = mc.playerController;
             var player = mc.thePlayer;
-            pc.func_27174_a(0, found, 0, false, player);
-            pc.func_27174_a(0, 36 + target, 0, false, player);
-            pc.func_27174_a(0, found, 0, false, player);
+            McCompat.windowClick(mc, 0, found, 0, false, player);
+            McCompat.windowClick(mc, 0, 36 + target, 0, false, player);
+            McCompat.windowClick(mc, 0, found, 0, false, player);
         }
     }
 }

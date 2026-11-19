@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/undrwtrsprite/silica/releases/latest"><img alt="Release v0.3.2" src="https://img.shields.io/badge/release-v0.3.2-7bc96f?style=flat-square&labelColor=0a0d11"></a>
+  <a href="https://github.com/undrwtrsprite/silica/releases/latest"><img alt="Release v0.3.3" src="https://img.shields.io/badge/release-v0.3.3-7bc96f?style=flat-square&labelColor=0a0d11"></a>
   <img alt="Apple Silicon arm64" src="https://img.shields.io/badge/Apple%20Silicon-arm64-0a0d11?style=flat-square&logo=apple&logoColor=white">
   <img alt="Vulkan on MoltenVK" src="https://img.shields.io/badge/Vulkan-MoltenVK-0a0d11?style=flat-square&logoColor=white">
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-0a0d11?style=flat-square&logo=apple&logoColor=white">
@@ -33,7 +33,7 @@
 <br>
 
 <p align="center">
-  <img src="docs/assets/shot-play.webp" alt="Silica v0.3.2 launcher Play view showing Golden Age versions on Vulkan, instance selector, and recent worlds" width="880">
+  <img src="docs/assets/shot-play.webp" alt="Silica v0.3.3 launcher Play view showing Golden Age versions on Vulkan, instance selector, and recent worlds" width="880">
 </p>
 
 ## What it is
@@ -41,6 +41,8 @@
 Silica runs **Golden Age Minecraft** — **Alpha 1.0 through Beta 1.7.3**, plus **experimental Infdev (`2010-06-30`) and Beta 1.8 / 1.8.1** — natively on Apple Silicon on top of an `arm64` Java 21 runtime, LWJGL 3 (`GLFW` + `OpenAL Soft`), and a Vulkan 1.2 renderer over MoltenVK. Your saves stay 100% compatible with original clients and servers, while a native SwiftUI launcher handles setup, Microsoft sign-in, isolated multi-version instances, worlds, settings, updates, and benchmarks.
 
 > **This repository contains no Mojang code, jars, or assets.** You need to own Minecraft: Java Edition. On first launch, Silica downloads the clean client jar from Mojang's servers (or verifies a copy you already have against Mojang's SHA-1 checksum), canonicalizes and prepares it locally on your Mac, and applies Silica's hooks at launch without modifying your original jar.
+
+> **Mod support:** Because Silica changes the game engine so heavily (Vulkan rendering, chunk workers, LODs, input, and UI), external/third-party mods are **not supported** outside of what will be released with Silica's own mod API.
 
 ## How it's made
 
@@ -60,7 +62,7 @@ Same world, camera path, and seed (`1337`) on both renderers. Measured on an App
 
 On Far (`256` blocks), Vulkan runs at **9.3×** the frame rate (`2.6 ms` 99th-percentile frame vs `14.8 ms` on OpenGL). Title screen loads in ~1.5 s vs ~3.2 s under Rosetta. Extended sustained runs settle lower as the chip warms up.
 
-## What's in Silica (`v0.3.2`)
+## What's in Silica (`v0.3.3`)
 
 <p align="center">
   <img src="docs/assets/shot-lod.jpg" alt="In-game Golden Age Minecraft with Vulkan real-block distant LODs stretching across snow mountains and water" width="880">
@@ -147,7 +149,7 @@ For local game testing, `/path/to/b1.7.3-client.jar` prep, and benchmark harness
 
 ## Download
 
-Get the latest signed macOS build (**v0.3.2**) at [**silicalauncher.xyz/download**](https://silicalauncher.xyz/download) or [**GitHub Releases**](https://github.com/undrwtrsprite/silica/releases/latest). The app is ad-hoc signed (not Apple notarized), so macOS asks for **Open Anyway** in *Privacy & Security* on first open.
+Get the latest signed macOS build (**v0.3.3**) at [**silicalauncher.xyz/download**](https://silicalauncher.xyz/download) or [**GitHub Releases**](https://github.com/undrwtrsprite/silica/releases/latest). The app is ad-hoc signed (not Apple notarized), so macOS asks for **Open Anyway** in *Privacy & Security* on first open.
 
 ## License
 

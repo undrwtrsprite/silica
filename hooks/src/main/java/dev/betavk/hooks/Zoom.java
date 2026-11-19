@@ -69,7 +69,7 @@ public final class Zoom {
         Gfx.glMatrixMode(Gfx.GL_PROJECTION);
         Gfx.glLoadIdentity();
         if (er.mc.gameSettings.anaglyph) Gfx.glTranslatef((-(pass * 2 - 1)) * 0.07F, 0.0F, 0.0F);
-        Gfx.gluPerspective(er.getFOVModifier(partial), (float) er.mc.displayWidth / (float) er.mc.displayHeight, 0.05F, er.farPlaneDistance * 2.0F);
+        Gfx.gluPerspective(McCompat.getFovModifier(er, partial), (float) er.mc.displayWidth / (float) er.mc.displayHeight, 0.05F, er.farPlaneDistance * 2.0F);
         Gfx.glMatrixMode(Gfx.GL_MODELVIEW);
         handPass = false;
     }

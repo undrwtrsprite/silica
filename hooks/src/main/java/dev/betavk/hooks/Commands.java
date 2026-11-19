@@ -108,8 +108,7 @@ public final class Commands {
         EntityPlayerSP p = mc.thePlayer;
         if (p != null) {
             p.fallDistance = 0.0F;
-            p.prevDistanceWalkedModified = p.distanceWalkedModified;
-            p.nextStepDistance = (int) p.distanceWalkedModified + 1;
+            McCompat.entityResetPrevWalk(p);
         }
     }
 
@@ -174,14 +173,12 @@ public final class Commands {
         boolean sneak = HAS_SNEAK_FIELD && p.movementInput != null && SneakInputFlag.is(p);
         float s = sneak ? strafe / 0.3F : strafe;
         float f = sneak ? forward / 0.3F : forward;
-        p.moveFlying(s, f, 0.14F * flySpeed);
+        McCompat.entityMoveFlying(p, s, f, 0.14F * flySpeed);
         double targetY = ((jump ? 1 : 0) - (sneak ? 1 : 0)) * (0.45D * flySpeed);
         p.motionY = p.motionY * 0.55D + targetY * 0.45D;
-        float savedWalk = p.distanceWalkedModified;
+        float savedWalk = McCompat.entityWalkDistance(p);
         p.moveEntity(p.motionX, p.motionY, p.motionZ);
-        p.distanceWalkedModified = savedWalk;
-        p.prevDistanceWalkedModified = savedWalk;
-        p.nextStepDistance = (int) savedWalk + 1;
+        McCompat.entitySyncStep(p, savedWalk);
         p.motionX *= 0.78D;
         p.motionZ *= 0.78D;
         if (Math.abs(p.motionX) < 0.003D) p.motionX = 0.0D;

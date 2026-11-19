@@ -143,7 +143,7 @@ public final class VideoScreen {
             }
             case 200 -> {
                 opts.saveOptions();
-                gs.mc.displayGuiScreen(gs.field_22110_h);
+                gs.mc.displayGuiScreen(McCompat.videoParentScreen(gs));
                 return;
             }
             default -> {

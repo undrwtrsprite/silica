@@ -26,7 +26,7 @@ struct InstancesView: View {
                 PageHeader(
                     eyebrow: "Profiles",
                     title: "Instances",
-                    subtitle: "Each instance keeps its own worlds, configs, and optional custom jar."
+                    subtitle: "Each instance keeps its own worlds and configs. External mods aren't supported outside Silica's upcoming mod API."
                 )
                 Spacer()
                 Button { creating = true } label: {
@@ -356,7 +356,7 @@ private struct NewInstanceSheet: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(jarURL.lastPathComponent)
                                 .font(.system(size: 13, weight: .medium))
-                            Text("Modded client jar checked cleanly against Silica's patches.")
+                            Text("Unsupported: Silica heavily modifies the engine — external mods aren't supported outside our upcoming mod API.")
                                 .font(.system(size: 11.5))
                                 .foregroundStyle(.secondary)
                         }

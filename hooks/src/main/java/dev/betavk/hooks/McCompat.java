@@ -38,6 +38,16 @@ public final class McCompat {
     public static final boolean HAS_CONTAINER = hasClass(SRC + "Container");
     public static final boolean HAS_WINDOW_CLICK = hasMethod(net.minecraft.src.PlayerController.class, "func_27174_a",
             int.class, int.class, int.class, boolean.class, net.minecraft.src.EntityPlayer.class);
+    public static final boolean HAS_NAMED_WINDOW_CLICK = hasMethod(net.minecraft.src.PlayerController.class, "windowClick",
+            int.class, int.class, int.class, boolean.class, net.minecraft.src.EntityPlayer.class);
+    public static final boolean HAS_ANY_WINDOW_CLICK = HAS_WINDOW_CLICK || HAS_NAMED_WINDOW_CLICK;
+    public static final boolean HAS_PARENT_GUI = HAS_GUI_VIDEO_SETTINGS
+            && hasField(net.minecraft.src.GuiVideoSettings.class, "parentGuiScreen");
+    public static final boolean HAS_FOV_FLAG = hasMethod(net.minecraft.src.EntityRenderer.class, "getFOVModifier",
+            float.class, boolean.class);
+    public static final boolean HAS_COLOR_MULTIPLIER = hasMethod(net.minecraft.src.Block.class, "colorMultiplier",
+            net.minecraft.src.IBlockAccess.class, int.class, int.class, int.class);
+    public static final boolean HAS_CANONICAL_WALK = hasField(net.minecraft.src.Entity.class, "distanceWalkedModified");
     public static final boolean HAS_ITEM_NAME = hasMethod(net.minecraft.src.ItemStack.class, "getItemName");
     public static final boolean HAS_ITEM_SUBTYPES = hasMethod(net.minecraft.src.ItemStack.class, "getHasSubtypes");
     public static final boolean HAS_ITEM_DAMAGE_METHOD = hasMethod(net.minecraft.src.ItemStack.class, "getItemDamage");
@@ -134,6 +144,142 @@ public final class McCompat {
         }
     }
 
+    public static boolean isCreativeContainer(Object screen) {
+        return screen != null && screen.getClass().getName().endsWith("GuiContainerCreative");
+    }
+
+    public static void windowClick(net.minecraft.client.Minecraft mc, int windowId, int slot, int button, boolean shift, net.minecraft.src.EntityPlayer player) {
+        if (HAS_NAMED_WINDOW_CLICK) {
+            NamedWindowClick.call(mc.playerController, windowId, slot, button, shift, player);
+        } else if (HAS_WINDOW_CLICK) {
+            LegacyWindowClick.call(mc.playerController, windowId, slot, button, shift, player);
+        }
+    }
+
+    public static net.minecraft.src.GuiScreen videoParentScreen(net.minecraft.src.GuiVideoSettings gs) {
+        return HAS_PARENT_GUI ? ModernVideoParent.get(gs) : gs.field_22110_h;
+    }
+
+    public static float getFovModifier(net.minecraft.src.EntityRenderer er, float partial) {
+        return HAS_FOV_FLAG ? ModernFov.get(er, partial) : er.getFOVModifier(partial);
+    }
+
+    public static int blockColorMultiplier(net.minecraft.src.Block b, net.minecraft.src.IBlockAccess access, int x, int y, int z) {
+        return HAS_COLOR_MULTIPLIER ? ModernColor.get(b, access, x, y, z) : 0xFFFFFF;
+    }
+
+    public static float entityWalkDistance(net.minecraft.src.Entity e) {
+        return HAS_CANONICAL_WALK ? e.distanceWalkedModified : LegacyWalk.getWalk(e);
+    }
+
+    public static void entitySyncStep(net.minecraft.src.Entity e, float dist) {
+        if (HAS_CANONICAL_WALK) {
+            e.distanceWalkedModified = dist;
+            e.prevDistanceWalkedModified = dist;
+            e.nextStepDistance = (int) dist + 1;
+        } else {
+            LegacyWalk.syncStep(e, dist);
+        }
+    }
+
+    public static void entityResetPrevWalk(net.minecraft.src.Entity e) {
+        entitySyncStep(e, entityWalkDistance(e));
+    }
+
+    public static void entityMoveFlying(net.minecraft.src.Entity e, float strafe, float forward, float friction) {
+        if (HAS_CANONICAL_WALK) {
+            e.moveFlying(strafe, forward, friction);
+        } else {
+            LegacyWalk.moveFlying(e, strafe, forward, friction);
+        }
+    }
+
+    private static final class NamedWindowClick {
+        private static final java.lang.reflect.Method METHOD;
+        static {
+            java.lang.reflect.Method m = null;
+            try {
+                m = net.minecraft.src.PlayerController.class.getMethod("windowClick",
+                        int.class, int.class, int.class, boolean.class, net.minecraft.src.EntityPlayer.class);
+            } catch (Throwable ignored) {}
+            METHOD = m;
+        }
+        static void call(net.minecraft.src.PlayerController pc, int windowId, int slot, int button, boolean shift, net.minecraft.src.EntityPlayer player) {
+            if (METHOD == null) return;
+            try { METHOD.invoke(pc, windowId, slot, button, shift, player); } catch (Throwable t) { throw new RuntimeException(t); }
+        }
+    }
+
+    private static final class LegacyWindowClick {
+        static void call(net.minecraft.src.PlayerController pc, int windowId, int slot, int button, boolean shift, net.minecraft.src.EntityPlayer player) {
+            pc.func_27174_a(windowId, slot, button, shift, player);
+        }
+    }
+
+    private static final class ModernVideoParent {
+        private static final Field FIELD;
+        static {
+            Field f = null;
+            try { f = net.minecraft.src.GuiVideoSettings.class.getField("parentGuiScreen"); } catch (Throwable ignored) {}
+            FIELD = f;
+        }
+        static net.minecraft.src.GuiScreen get(net.minecraft.src.GuiVideoSettings gs) {
+            if (FIELD == null) return null;
+            try { return (net.minecraft.src.GuiScreen) FIELD.get(gs); } catch (Throwable t) { throw new RuntimeException(t); }
+        }
+    }
+
+    private static final class ModernFov {
+        private static final java.lang.reflect.Method METHOD;
+        static {
+            java.lang.reflect.Method m = null;
+            try { m = net.minecraft.src.EntityRenderer.class.getMethod("getFOVModifier", float.class, boolean.class); } catch (Throwable ignored) {}
+            METHOD = m;
+        }
+        static float get(net.minecraft.src.EntityRenderer er, float partial) {
+            if (METHOD == null) return 70.0F;
+            try { return (float) METHOD.invoke(er, partial, false); } catch (Throwable t) { throw new RuntimeException(t); }
+        }
+    }
+
+    private static final class ModernColor {
+        static int get(net.minecraft.src.Block b, net.minecraft.src.IBlockAccess access, int x, int y, int z) {
+            return b.colorMultiplier(access, x, y, z);
+        }
+    }
+
+    private static final class LegacyWalk {
+        private static final Field WALK, PREV_WALK, NEXT_STEP;
+        private static final java.lang.reflect.Method MOVE_FLYING;
+        static {
+            Field w = null, pw = null, ns = null;
+            java.lang.reflect.Method mf = null;
+            try { w = net.minecraft.src.Entity.class.getField("field_9290_aS"); } catch (Throwable ignored) {}
+            try { pw = net.minecraft.src.Entity.class.getField("field_9291_aR"); } catch (Throwable ignored) {}
+            try { ns = net.minecraft.src.Entity.class.getField("field_863_b"); } catch (Throwable ignored) {}
+            try { mf = net.minecraft.src.Entity.class.getMethod("func_351_a", float.class, float.class, float.class); } catch (Throwable ignored) {}
+            WALK = w; PREV_WALK = pw; NEXT_STEP = ns; MOVE_FLYING = mf;
+        }
+
+        static float getWalk(net.minecraft.src.Entity e) {
+            if (WALK == null) return 0.0F;
+            try { return WALK.getFloat(e); } catch (Throwable ignored) { return 0.0F; }
+        }
+
+        static void syncStep(net.minecraft.src.Entity e, float dist) {
+            try {
+                if (WALK != null) WALK.setFloat(e, dist);
+                if (PREV_WALK != null) PREV_WALK.setFloat(e, dist);
+                if (NEXT_STEP != null) NEXT_STEP.setInt(e, (int) dist + 1);
+            } catch (Throwable ignored) {}
+        }
+
+        static void moveFlying(net.minecraft.src.Entity e, float strafe, float forward, float friction) {
+            if (MOVE_FLYING == null) return;
+            try { MOVE_FLYING.invoke(e, strafe, forward, friction); } catch (Throwable ignored) {}
+        }
+    }
+
     private static int diagStage, diagTicks, diagShotTick = -1;
 
     /** Diagnostic probe verifying wide render distance, LOD distance, and far-plane/fog behavior across eras. */
@@ -214,6 +360,7 @@ public final class McCompat {
             testSliders(mc, go);
             var gc = new net.minecraft.src.GuiControls(go, mc.gameSettings);
             mc.displayGuiScreen(gc);
+            testNoButtonOverlap(gc);
             testSliders(mc, gc);
             var as = new AudioScreen(go, mc.gameSettings);
             mc.displayGuiScreen(as);
@@ -230,6 +377,8 @@ public final class McCompat {
             } else {
                 BetaVideo.open(mc, go);
                 testSliders(mc, mc.currentScreen);
+                clickDone(mc.currentScreen);
+                if (mc.currentScreen != go) throw new AssertionError("GuiVideoSettings Done did not return to GuiOptions");
             }
             long fsStart = System.nanoTime();
             mc.toggleFullscreen();
@@ -237,6 +386,9 @@ public final class McCompat {
             long fsMs = (System.nanoTime() - fsStart) / 1_000_000L;
             if (fsMs > 500) throw new AssertionError("Fullscreen toggle paused too long: " + fsMs + " ms");
             Opts.lodEnabled = true;
+            Opts.betterGrass = 2;
+            Opts.fov = 95.0F;
+            Opts.toggleSneak = true;
             System.out.println("[compat] PASS UI screens & sliders initialized (fullscreen toggle=" + fsMs + " ms)");
             // Enter a world
             try {
@@ -265,14 +417,23 @@ public final class McCompat {
                     compatStartX = mc.thePlayer.posX;
                     compatStartZ = mc.thePlayer.posZ;
                     setKeyBindState(mc, mc.gameSettings.keyBindForward.keyCode, true);
+                    if (HAS_GUI_CHAT) {
+                        if (!Commands.enabled(mc)) Commands.toggle(mc);
+                        Commands.run(mc, "/fly on");
+                    }
                 } else if (!compatInvOpened && compatMoveStartNs > 0) {
                     compatMoveFrames++;
+                    if (compatMoveFrames == 5 && Commands.isFlying(mc)) {
+                        Commands.run(mc, "/fly off");
+                        if (Commands.enabled(mc)) Commands.toggle(mc);
+                    }
                     if (compatMoveFrames >= 20 && now - compatMoveStartNs >= 600_000_000L) {
                         setKeyBindState(mc, mc.gameSettings.keyBindForward.keyCode, false);
                         compatMoved = Math.hypot(mc.thePlayer.posX - compatStartX, mc.thePlayer.posZ - compatStartZ);
                         mc.clickMouse(0);
                         mc.clickMouse(1);
                         CompatGuiInventory.open(mc);
+                        if (HAS_ANY_WINDOW_CLICK) CompatContainerOps.exercise(mc);
                         compatInvOpened = true;
                     }
                 } else if (compatInvOpened && mc.currentScreen != null && now - compatMoveStartNs >= 750_000_000L) {
@@ -281,12 +442,51 @@ public final class McCompat {
                 String shot = System.getProperty("betavk.test.shot");
                 if (compatTicks == 40 && shot != null) dev.betavk.platform.Display.captureNextFrame(shot);
                 if (compatInvOpened && mc.currentScreen == null && compatTicks >= 45) {
+                    Opts.betterGrass = 0;
+                    Opts.fov = 70.0F;
+                    Opts.toggleSneak = false;
                     System.out.println("[compat] PASS in-world ticks=" + compatTicks + " seed=" + worldSeed(mc.theWorld)
                             + " moved=" + String.format("%.3f", compatMoved));
                     mc.shutdown();
                     compatStage = 2;
                 }
             }
+        }
+    }
+
+    private static void testNoButtonOverlap(net.minecraft.src.GuiScreen s) {
+        java.util.List<?> list = s.controlList;
+        for (int i = 0; i < list.size(); i++) {
+            if (!(list.get(i) instanceof net.minecraft.src.GuiButton a)) continue;
+            for (int j = i + 1; j < list.size(); j++) {
+                if (!(list.get(j) instanceof net.minecraft.src.GuiButton b)) continue;
+                boolean overlapX = a.xPosition < b.xPosition + b.width && a.xPosition + a.width > b.xPosition;
+                boolean overlapY = a.yPosition < b.yPosition + b.height && a.yPosition + a.height > b.yPosition;
+                if (overlapX && overlapY) {
+                    throw new AssertionError("Overlapping buttons on " + s.getClass().getSimpleName()
+                            + ": id=" + a.id + " (" + a.displayString + ") and id=" + b.id + " (" + b.displayString + ")");
+                }
+            }
+        }
+    }
+
+    private static void clickDone(net.minecraft.src.GuiScreen s) {
+        for (Object o : s.controlList) {
+            if (o instanceof net.minecraft.src.GuiButton b && b.id == 200) {
+                s.mouseClicked(b.xPosition + b.width / 2, b.yPosition + b.height / 2, 0);
+                return;
+            }
+        }
+        throw new AssertionError("Done button (200) missing on " + s.getClass().getSimpleName());
+    }
+
+    private static final class CompatContainerOps {
+        static void exercise(net.minecraft.client.Minecraft mc) {
+            if (!(mc.currentScreen instanceof net.minecraft.src.GuiContainer g) || isCreativeContainer(g)) return;
+            InventoryPlus.drawSortButtons(g);
+            InventoryPlus.key(g, '1', 2);
+            windowClick(mc, g.inventorySlots.windowId, 36, 0, false, mc.thePlayer);
+            windowClick(mc, g.inventorySlots.windowId, 36, 0, false, mc.thePlayer);
         }
     }
 

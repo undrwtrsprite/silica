@@ -234,7 +234,7 @@ public final class Hooks {
         }
         if (tex == 38) return false;
 
-        int col = b.colorMultiplier(rb.blockAccess, bx, by, bz);
+        int col = dev.betavk.hooks.McCompat.blockColorMultiplier(b, rb.blockAccess, bx, by, bz);
         float cr = ((col >>> 16) & 255) / 255.0F;
         float cg = ((col >>> 8) & 255) / 255.0F;
         float cb = (col & 255) / 255.0F;
